@@ -40,7 +40,7 @@ unsafe_code = "forbid"
 all = "warn"
 
 [workspace.metadata.worldwright]
-stage = "json-content-loader-and-validation-cli"
+stage = "local-play-runtime-backed-terminal"
 proposed-license = "MIT OR Apache-2.0"
 license-approved = false
 production-ready = false

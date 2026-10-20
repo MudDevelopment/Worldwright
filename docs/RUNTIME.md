@@ -22,7 +22,7 @@ PowerShell users can use `./scripts/dev.ps1 bootstrap` and `./scripts/dev.ps1 ch
 
 The walkthrough creates an Atrium and Observatory with explicit exits in both directions. Alice starts in the Atrium; Bob starts in the Observatory. Alice looks, moves to the Observatory, looks again, and speaks to both attached characters there. No files, sockets, credentials, database, or ambient random source are used.
 
-No interactive terminal parser or new application subcommand is included. The server binary still refuses default service startup; its help now distinguishes the available local SDK runtime from the absent network service.
+The CLI now provides [Local Play](LOCAL_PLAY.md) through `worldwright play <path>`, with a bounded terminal parser and runtime-backed actions. The server binary still refuses default service startup; local play is not a network service.
 
 ## Source Map
 
@@ -122,4 +122,4 @@ The original 24 runtime integration tests remain, and the content increment adds
 
 ## Next Work
 
-The [content loader](content/SCHEMA_V1.md) now produces validated builders while keeping descriptive content separate from mutable state. Next add a local interactive adapter and then authenticated transport. Durable persistence must preserve the execution/validation boundary rather than turning a returned in-memory result into a misleading durable receipt.
+The [content loader](content/SCHEMA_V1.md) produces validated builders, and [Local Play](LOCAL_PLAY.md) now connects them to terminal Look/Move/Say. Next design and implement authenticated transport without weakening these runtime boundaries. Durable persistence must preserve the execution/validation boundary rather than turning a returned in-memory result into a misleading durable receipt.

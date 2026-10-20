@@ -1,0 +1,386 @@
+rustc 1.85.1 (4eb161250 2025-03-15)
+cargo 1.85.1 (d73d2caf9 2024-12-31)
+   Compiling proc-macro2 v1.0.101
+   Compiling serde_core v1.0.228
+   Compiling unicode-ident v1.0.19
+    Checking worldwright-core v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-core)
+   Compiling syn v2.0.106
+   Compiling ryu v1.0.20
+   Compiling serde_derive v1.0.228
+   Compiling serde_json v1.0.145
+    Checking itoa v1.0.15
+   Compiling serde v1.0.228
+    Checking memchr v2.7.6
+    Checking worldwright-protocol v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-protocol)
+    Checking worldwright-persistence v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-persistence)
+    Checking worldwright-console v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-console)
+   Compiling quote v1.0.40
+    Checking serde_path_to_error v0.1.20
+    Checking worldwright-content v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-content)
+    Checking worldwright-sdk v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-sdk)
+    Checking worldwright-studio v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-studio)
+    Checking worldwright-testkit v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-testkit)
+    Checking worldwright v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright)
+    Checking worldwright-server v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-server)
+    Finished `dev` profile [unoptimized] target(s) in 18.70s
+    Checking worldwright-core v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-core)
+    Checking worldwright-protocol v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-protocol)
+    Checking worldwright-console v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-console)
+    Checking worldwright-content v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-content)
+    Checking worldwright-persistence v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-persistence)
+    Checking worldwright-sdk v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-sdk)
+    Checking worldwright-studio v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-studio)
+    Checking worldwright-testkit v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-testkit)
+    Checking worldwright v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright)
+    Checking worldwright-server v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-server)
+    Finished `dev` profile [unoptimized] target(s) in 9.70s
+   Compiling worldwright-core v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-core)
+   Compiling itoa v1.0.15
+   Compiling serde_core v1.0.228
+   Compiling ryu v1.0.20
+   Compiling memchr v2.7.6
+   Compiling worldwright-protocol v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-protocol)
+   Compiling worldwright-console v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-console)
+   Compiling worldwright-persistence v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-persistence)
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.145
+   Compiling serde_path_to_error v0.1.20
+   Compiling worldwright-content v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-content)
+   Compiling worldwright-sdk v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-sdk)
+   Compiling worldwright-studio v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-studio)
+   Compiling worldwright-testkit v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-testkit)
+   Compiling worldwright-server v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-server)
+   Compiling worldwright v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright)
+    Finished `test` profile [unoptimized] target(s) in 25.59s
+     Running unittests src/main.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright-16ca925dec46f645)
+
+running 13 tests
+test commands::play::tests::rendering_preserves_full_text_unicode_and_escapes_controls ... ok
+test commands::play::tests::only_current_exact_attachment_receives_messages ... ok
+test commands::play::tests::corrupt_lookup_cannot_bypass_directed_runtime_edges ... ok
+test commands::play::tests::unknown_exit_help_and_blank_do_not_mutate_world ... ok
+test commands::play::tests::counter_exhaustion_does_not_wrap_or_execute ... ok
+test commands::play::tests::actions_use_runtime_and_time_never_regresses ... ok
+test commands::play::tests::input_and_output_errors_still_detach ... ok
+test commands::play::tests::terminal_prompt_mode_is_explicit ... ok
+test commands::play_input::tests::invalid_utf8_is_rejected_without_losing_next_line ... ok
+test commands::play::tests::quit_eof_and_final_line_detach_without_piped_prompts ... ok
+test commands::play_input::tests::parsing_aliases_whitespace_and_payload ... ok
+test commands::play_input::tests::oversized_line_drains_without_executing_suffix ... ok
+test commands::play_input::tests::framing_limits_crlf_and_unterminated_eof ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/content_validate.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/content_validate-cb06957bc3afe14c)
+
+running 5 tests
+test bad_reference_has_actionable_pointer ... ok
+test non_utf8_path_and_terminal_controls_are_handled ... ok
+test valid_file_with_spaces_from_outside_repository ... ok
+test oversized_file_is_rejected_before_parsing ... ok
+test errors_use_stderr_and_exit_one ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/play.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/play-910fe3f9bd4c71bd)
+
+running 11 tests
+test crlf_and_unterminated_unicode_say_at_eof ... ok
+test honors_declared_entry_room ... ok
+test non_utf8_content_path_is_supported ... ok
+test full_size_say_is_not_truncated ... ok
+test initial_view_does_not_dump_other_rooms_or_ids ... ok
+test complete_script_runs_from_outside_repository ... ok
+test one_way_reverse_and_invalid_input_do_not_move_player ... ok
+test quit_ignores_following_commands ... ok
+test oversized_invalid_encoding_and_control_lines_are_discarded ... ok
+test play_help_and_usage ... ok
+test malformed_missing_and_directory_content_fail_before_session ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/smoke.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/smoke-88ba920138e57f49)
+
+running 4 tests
+test help_and_status_describe_implemented_local_scope ... ok
+test version_is_package_version ... ok
+test command_help_succeeds ... ok
+test invalid_usage_is_rejected ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running unittests src/main.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_console-a97e04927fbb8878)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/smoke.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/smoke-5cc1cb8a3a0a219d)
+
+running 5 tests
+test default_startup_fails_closed ... ok
+test status_does_not_claim_operational_readiness ... ok
+test version_comes_from_the_package ... ok
+test unsupported_operations_and_extra_arguments_are_rejected ... ok
+test help_is_successful_and_explicit_about_scaffold_status ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src/lib.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_content-04694f630106a7de)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/instantiation.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/instantiation-e6f7ce73dee3e04f)
+
+running 4 tests
+test adding_definitions_is_not_a_persistent_id_guarantee ... ok
+test mapping_is_independent_of_source_order ... ok
+test labels_and_entry_are_retained_and_builder_is_real ... ok
+test isolated_and_forward_referenced_rooms_instantiate ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/loading.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/loading-2201616241b2cd56)
+
+running 10 tests
+test malformed_encoding_syntax_and_trailing_data ... ok
+test duplicate_keys_are_never_overwritten ... ok
+test strict_fields_and_types ... ok
+test nesting_including_unknown_data_is_bounded ... ok
+test byte_limits_are_exact_and_cannot_be_relaxed ... ok
+test file_errors_are_typed ... ok
+test reference_file_loads ... ok
+test syntax_diagnostics_have_locations_and_safe_display ... ok
+test version_dispatch_is_independent_of_v1_shape ... ok
+test parser_container_and_total_value_budgets ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/record_shape.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/record_shape-9ee48930952c3282)
+
+running 1 test
+test records_must_be_objects_not_positional_arrays ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/validation.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/validation-180dd223700be3d7)
+
+running 10 tests
+test bad_graph_does_not_produce_reachability_cascades ... ok
+test identity_namespace_and_duplicates ... ok
+test exit_labels_and_pointer_escaping ... ok
+test diagnostic_cap_is_explicit_and_nonempty ... ok
+test entry_and_exit_reference_errors ... ok
+test one_way_is_valid_and_unreachable_requires_explicit_declaration ... ok
+test exit_capacity ... ok
+test text_and_unicode_byte_boundaries ... ok
+test room_capacity ... ok
+test maximum_room_text_and_count_fit_loader_budget ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+     Running unittests src/lib.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_core-42c54e2a23ba0ebb)
+
+running 2 tests
+test world::tests::world_startup_is_explicitly_unimplemented ... ok
+test error::tests::error_names_the_missing_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/scheduling.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/scheduling-856a80756a475ecd)
+
+running 4 tests
+test backwards_poll_is_rejected_without_removing_work ... ok
+test capacity_and_cancel_are_explicit ... ok
+test overdue_insert_is_due_without_resetting_clock ... ok
+test queue_orders_deadlines_and_equal_deadlines_fifo ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/value_contracts.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/value_contracts-655fb4974aa36b7f)
+
+running 9 tests
+test generations_cannot_be_zero ... ok
+test ids_round_trip_and_reject_zero ... ok
+test definitions_validate_namespace_and_segments ... ok
+test ids_reject_unbounded_or_noncanonical_input ... ok
+test logical_time_checks_overflow ... ok
+test plans_are_bounded_without_partial_append_on_failure ... ok
+test text_limits_are_bytes_not_character_counts ... ok
+test text_preserves_unicode_but_is_not_html_escaping ... ok
+test text_rejects_empty_and_control_sequences ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_persistence-046cd2b288e30589)
+
+running 1 test
+test tests::database_connection_is_not_faked ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_protocol-a9576e8679a2c32e)
+
+running 1 test
+test tests::protocol_support_is_not_advertised ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_sdk-64a2c6b0380bd57a)
+
+running 1 test
+test tests::game_metadata_can_be_implemented_through_the_facade ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_server-d3bc9fd8e55821cf)
+
+running 1 test
+test application::tests::startup_refuses_to_advertise_a_working_server ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/smoke.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/smoke-4dec12ba85d703bb)
+
+running 5 tests
+test default_startup_fails_closed ... ok
+test status_does_not_claim_operational_readiness ... ok
+test help_is_successful_and_explicit_about_scaffold_status ... ok
+test version_comes_from_the_package ... ok
+test unsupported_operations_and_extra_arguments_are_rejected ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src/main.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_studio-109ed1caaf8755bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/smoke.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/smoke-09f10971e82cf90e)
+
+running 5 tests
+test status_does_not_claim_operational_readiness ... ok
+test default_startup_fails_closed ... ok
+test version_comes_from_the_package ... ok
+test help_is_successful_and_explicit_about_scaffold_status ... ok
+test unsupported_operations_and_extra_arguments_are_rejected ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src/lib.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/worldwright_testkit-5093c2ddd9bf105d)
+
+running 1 test
+test tests::scenario_execution_is_not_faked ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/content_runtime.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/content_runtime-c5d962a82e7eb4cb)
+
+running 2 tests
+test loaded_one_way_world_rejects_reverse_movement_without_mutation ... ok
+test json_two_room_look_move_look_say_and_exact_recipients ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/module_registration.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/module_registration-475ef88d833facb0)
+
+running 1 test
+test game_registers_rules_and_reports_duplicate_errors ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rules.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/rules-d44fec57884e4d81)
+
+running 5 tests
+test metadata_only_game_does_not_claim_rule_registration ... ok
+test fake_clock_rejects_regression_and_overflow_without_mutation ... ok
+test sequence_rng_is_deterministic_and_exhaustion_is_visible ... ok
+test sdk_rule_registration_and_planning_do_not_mutate_world ... ok
+test wrong_world_and_missing_rule_fail_before_evaluation ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/runtime.rs (/tmp/worldwright-work/Worldwright/target/debug/deps/runtime-788e6ef72590d449)
+
+running 24 tests
+test boundaries::maximum_length_room_fields_do_not_require_unsafe_concatenation ... ok
+test boundaries::builder_rejects_duplicates_unknown_references_and_self_exits ... ok
+test boundaries::absent_rule_does_not_change_world ... ok
+test boundaries::last_successful_time_is_monotonic_and_failures_do_not_advance_it ... ok
+test boundaries::item_and_schedule_effects_are_explicitly_unsupported_not_ignored ... ok
+test boundaries::late_invalid_effect_rolls_back_movement_revision_time_and_messages ... ok
+test boundaries::rejected_rule_rolls_back_world_but_not_caller_rng ... ok
+test flow::audiences_follow_each_staged_effect_not_original_locations ... ok
+test flow::detached_characters_are_not_message_recipients ... ok
+test flow::operation_ids_are_correlation_not_duplicate_suppression ... ok
+test flow::identical_inputs_clock_and_fixture_produce_identical_results ... ok
+test flow::say_does_not_reach_a_different_room ... ok
+test flow::snapshots_are_detached_and_results_pin_recipient_generation ... ok
+test flow::two_room_look_move_say_walkthrough ... ok
+test policy::exits_are_directed_and_self_movement_is_not_teleportation ... ok
+test policy::move_requires_exactly_one_movement ... ok
+test policy::forged_contexts_and_bad_destinations_fail_before_rule_evaluation ... ok
+test policy::remote_direct_and_room_messages_and_look_broadcasts_are_denied ... ok
+test policy::ownership_and_connection_collisions_cannot_change_attachments ... ok
+test policy::rule_cannot_move_someone_else_change_destination_or_move_under_look ... ok
+test policy::replacement_attachment_invalidates_commands_and_stale_disconnects ... ok
+test policy::rule_view_filters_other_characters_distant_rooms_and_descriptions ... ok
+test boundaries::builder_enforces_room_character_and_exit_capacity ... ok
+test boundaries::fanout_limit_accepts_exact_boundary_and_rejects_overflow_atomically ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests worldwright_content
+
+running 1 test
+test crates/worldwright-content/src/validated.rs - validated::ValidatedWorldContent (line 24) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+   Doc-tests worldwright_core
+
+running 1 test
+test crates/worldwright-core/src/ids.rs - ids (line 4) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+   Doc-tests worldwright_persistence
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests worldwright_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests worldwright_sdk
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests worldwright_testkit
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Finished `dev` profile [unoptimized] target(s) in 0.09s
+ Documenting worldwright-persistence v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-persistence)
+ Documenting worldwright-console v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-console)
+ Documenting worldwright-protocol v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-protocol)
+ Documenting worldwright-core v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-core)
+ Documenting worldwright-content v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-content)
+ Documenting worldwright-studio v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-studio)
+ Documenting worldwright-sdk v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-sdk)
+ Documenting worldwright-testkit v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/crates/worldwright-testkit)
+ Documenting worldwright-server v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright-server)
+ Documenting worldwright v0.1.0-dev.0 (/tmp/worldwright-play/Worldwright/apps/worldwright)
+    Finished `dev` profile [unoptimized] target(s) in 5.31s
+   Generated /tmp/worldwright-work/Worldwright/target/doc/worldwright/index.html and 9 other files

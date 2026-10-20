@@ -1,0 +1,14 @@
+Linux PTY prompt/movement/quit: PASS
+Worldwright Local Play v0.1 — one local player; no login, network, or persistence.
+Commands: look (l), go <exit-label>, say <text>, help, quit (exit)
+Atrium
+Sunlight fills a quiet entry hall.
+Exits: north
+> go north
+quit
+You move to the next room.
+Observatory
+A telescope points toward the stars.
+Exits: south
+> Goodbye.
+

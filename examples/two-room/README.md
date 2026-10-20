@@ -7,7 +7,10 @@ From the repository root, after bootstrap:
 ```bash
 cargo run -p worldwright --locked --offline -- content validate examples/two-room/world.json
 cargo test -p worldwright-testkit --test content_runtime --locked --offline
+cargo run -p worldwright --locked --offline -- play examples/two-room/world.json
 ```
+
+Local Play starts one player in the Atrium. Try `look`, `go north`, `say Hello from the observatory`, `go south`, and `quit`. A successful move automatically describes the destination. `help`, `l`, `exit`, piped input, and EOF are supported; no world state is saved. See [Local Play](../../docs/LOCAL_PLAY.md) for the full contract.
 
 The runtime test loads this exact file, creates Alice/Bob through the trusted builder API, and verifies Look, Move, Look, Say, exact recipients, and rejection/rollback for reverse movement in a one-way variant. The original programmatic fixture remains independent of JSON loading.
 

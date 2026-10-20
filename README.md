@@ -8,7 +8,7 @@ The effort brings together an authoritative game engine, reusable Rust libraries
 
 Worldwright is **a toolkit for building games, not a single game or setting**. A science-fiction frontier, a fantasy realm, and a roleplay-focused social world should be able to share the same technical foundation while retaining their own rules, content, and identity.
 
-> **Project status:** Content Loading v0.1 adds a bounded, strict JSON schema v1 loader, diagnostics, validated builder conversion, named-exit lookup, and the `worldwright content validate <path>` CLI. The local Look/Move/Say runtime remains in-memory and trusted-host only. There is no login service, networking, UI, or persistence. See [content schema](docs/content/SCHEMA_V1.md), [runtime guide](docs/RUNTIME.md), [Getting Started](#getting-started), and [verification](docs/VERIFICATION.md) for actual checks and dependency-source/platform limitations.
+> **Project status:** Local Play v0.1 adds `worldwright play <path>`: load a validated JSON world and explore it through runtime-backed Look/Move/Say in a single-player terminal session. Content validation remains available separately. There is no login service, networking, graphical/web UI, or persistence. See [Local Play](docs/LOCAL_PLAY.md), [content schema](docs/content/SCHEMA_V1.md), [runtime guide](docs/RUNTIME.md), and [verification](docs/VERIFICATION.md) for supported behavior and verification limits.
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
@@ -318,7 +318,13 @@ cargo test -p worldwright-testkit --test runtime --locked --offline
 cargo test -p worldwright-testkit --test runtime --locked --offline two_room_look_move_say_walkthrough -- --nocapture
 ```
 
-This is a programmatic in-memory game slice, not an interactive or network service. See [RUNTIME.md](docs/RUNTIME.md) for APIs, atomicity, policy, limits, and the explicit trusted-host attachment boundary.
+Play the same JSON world interactively:
+
+```bash
+cargo run -p worldwright --locked --offline -- play examples/two-room/world.json
+```
+
+Use `look` (`l`), `go north`, `say Hello`, `help`, and `quit` (`exit`). EOF also ends cleanly. The starting room appears automatically; successful movement is followed by a runtime-backed Look. Piped input is supported without prompts. This is a single-player, in-memory terminal host—not a network service or login system. See [LOCAL_PLAY.md](docs/LOCAL_PLAY.md) for input limits, exit codes, and the exact local trust boundary.
 
 Inspect application status separately:
 
@@ -329,9 +335,9 @@ cargo run -p worldwright-studio --locked --offline -- status
 cargo run -p worldwright-console --locked --offline -- status
 ```
 
-All four applications support `--help`/`-h`, `--version`/`-V`, and `status`. The developer CLI additionally supports `content validate <path>` and command-specific help. No arguments or invalid command shapes exit with code 2. Default server startup refuses to run. No port is opened, UI displayed, or database contacted. `status` is not a service-readiness check.
+All four applications support `--help`/`-h`, `--version`/`-V`, and `status`. The developer CLI additionally supports `content validate <path>`, `play <path>`, and command-specific help. No arguments or invalid command shapes exit with code 2. Default server startup refuses to run. No port is opened, graphical/web UI displayed, or database contacted. `status` is not a service-readiness check.
 
-See [docs/RUNTIME.md](docs/RUNTIME.md) for the implemented local game slice, [docs/SCAFFOLD.md](docs/SCAFFOLD.md) for remaining integrations, and [docs/VERIFICATION.md](docs/VERIFICATION.md) for checks actually performed. Approve ownership/licensing before public distribution. The next component is a local interactive play adapter using the validated content loader, not deployment.
+See [docs/RUNTIME.md](docs/RUNTIME.md) for the implemented local game slice, [docs/SCAFFOLD.md](docs/SCAFFOLD.md) for remaining integrations, and [docs/VERIFICATION.md](docs/VERIFICATION.md) for checks actually performed. Approve ownership/licensing before public distribution. The next major component is separately designed authenticated transport, not deployment of the local terminal host as a server.
 
 ## Contributing
 

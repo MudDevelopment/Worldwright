@@ -1,6 +1,15 @@
 # Worldwright Changes
 
-## Unreleased — Content Loading v0.1
+## Unreleased — Local Play v0.1
+
+- Added `worldwright play <path>` with runtime-backed Look/Move/Say, help, quit/exit, and EOF handling. Initial and post-movement room descriptions also execute Look.
+- Added one trusted local actor at the declared entry room, ReferenceGame registration, checked operation counters, elapsed monotonic time, exact-attachment output filtering, and detach attempts on normal/error shutdown.
+- Added bounded UTF-8 line framing, CRLF/final-line support, whole-line overflow rejection, safe complete Unicode output, and TTY-only prompts.
+- Added unit and subprocess tests for command flows, directed-edge enforcement (including tampered lookup), invalid input, I/O cleanup, rendering, paths, and limits.
+- Updated CLI help/status, README, design/architecture/security, Local Play guide, example instructions, and verification evidence.
+- No core/content behavior, JSON schema, dependency lockfile, package version, or toolchain pin changes. No networking, authentication, persistence, or Ctrl-C handler.
+
+## Previous increment — Content Loading v0.1
 
 Implemented the six-step content milestone in the unpublished `0.1.0-dev.0` workspace:
 

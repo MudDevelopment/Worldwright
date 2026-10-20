@@ -8,6 +8,7 @@ fn help_and_status_describe_implemented_local_scope() {
         assert!(output.status.success());
         let text = String::from_utf8_lossy(&output.stdout);
         assert!(text.contains("content"));
+        assert!(text.contains("play"));
         assert!(text.contains("no network service"));
         assert!(!text.contains("scaffold only"));
     }

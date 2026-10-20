@@ -9,17 +9,17 @@ This document describes the files actually supplied in this package. The larger 
 - Rust 1.85.1 selected in `rust-toolchain.toml`, edition 2024, resolver 3, manifest minimum 1.85. This is a bootstrap choice, not a verified MSRV/support matrix or latest-version claim.
 - Core remains standard-library-only. Content uses pinned Serde/JSON dependencies. Bootstrap fetches the committed lockfile before offline checks.
 - Shared unsafe-code prohibition and Clippy configuration.
-- Developer CLI content validation; remaining application metadata commands and explicit errors for missing functionality.
+- Developer CLI content validation and single-player terminal play; remaining application metadata commands and explicit errors for missing functionality.
 - Core/runtime tests, content/CLI tests, and application smoke tests; see the current verification record for results and provenance.
 - Original project documentation retained and updated to distinguish scaffolding from future behavior.
 
-The local runtime supports Look/Move/Say, authoritative attachments, and atomic in-memory effects. JSON content schema v1, a strict loader, builder conversion, and CLI validation are implemented. No network game server, UI, database schema, account login, TLS, migration, or deployment is included. See [RUNTIME.md](RUNTIME.md), [CORE_INTERFACES.md](CORE_INTERFACES.md), and [DEVELOPMENT.md](DEVELOPMENT.md).
+The local runtime supports Look/Move/Say, authoritative attachments, and atomic in-memory effects. JSON content schema v1, a strict loader, builder conversion, CLI validation, and single-player terminal play are implemented. No network game server, graphical/web UI, database schema, account login, TLS, migration, or deployment is included. See [RUNTIME.md](RUNTIME.md), [CORE_INTERFACES.md](CORE_INTERFACES.md), and [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Workspace Map
 
 | Package | Source entry | Present behavior |
 |---|---|---|
-| `worldwright` | `apps/worldwright/src/main.rs` | Help/version/status and `content validate <path>` with typed diagnostics |
+| `worldwright` | `apps/worldwright/src/main.rs` | Help/version/status, `content validate <path>`, and runtime-backed `play <path>` |
 | `worldwright-server` | `apps/worldwright-server/src/main.rs` | Metadata commands; default startup explicitly fails |
 | `worldwright-studio` | `apps/worldwright-studio/src/main.rs` | Metadata-only builder placeholder; no window or web UI |
 | `worldwright-console` | `apps/worldwright-console/src/main.rs` | Metadata-only operator placeholder; no administration |
@@ -70,7 +70,7 @@ cargo test-all
 
 ## Application Behavior
 
-Server, Studio, and Console retain the following single-argument metadata contract. The developer CLI additionally accepts `content validate <path>` and command-specific help; see [content guide](content/README.md).
+Server, Studio, and Console retain the following single-argument metadata contract. The developer CLI additionally accepts `content validate <path>`, `play <path>`, and command-specific help; see [content guide](content/README.md) and [Local Play](LOCAL_PLAY.md).
 
 | Argument | Expected exit code | Meaning |
 |---|---|---|
@@ -105,7 +105,7 @@ These tests are intended to change as actual features replace stubs. A test requ
 2. Approve ownership, outbound licensing, and inbound contribution terms before public distribution.
 3. Build on the implemented local runtime; review its trusted-host, in-memory-only boundary.
 4. Build on the implemented JSON v1 content loader and validated builder conversion; preserve its untrusted-input boundary.
-5. Add a local interactive adapter to the existing tested Look/Move/Say slice.
+5. Exercise the implemented Local Play adapter; preserve runtime-backed actions and bounded terminal input/output.
 6. Add transport and persistence integrations separately with reviewed dependencies and failure tests.
 
 Do not start by adding all planned dependencies or implementing several incomplete service stacks at once.

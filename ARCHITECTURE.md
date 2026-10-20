@@ -7,7 +7,7 @@
 | Document version | 0.1 — proposed baseline |
 | Prepared | October 20, 2026 |
 | Architecture style | Modular monolith; one authoritative world per server process initially |
-| Implementation status | In-memory Look/Move/Say runtime plus strict JSON content loading and local CLI validation; see verification for actual checks and source-provenance limits; no network deployment |
+| Implementation status | In-memory Look/Move/Say runtime, strict JSON content loading, CLI validation, and single-player terminal play; see verification for actual checks and provenance limits; no network deployment |
 | Companion documents | [README.md](README.md) · [DESIGN.md](DESIGN.md) |
 
 > **Reading guide:** This file maps the target system, with rationale in [DESIGN.md](DESIGN.md). [RUNTIME.md](docs/RUNTIME.md) documents the implemented local subset: the core runtime owns state and attachment records, evaluates scoped rules, stages changes, and resolves message recipients before returning a committed in-memory result. Testkit builds a two-room world through its public builder. No network service or database participates. The wider diagrams remain proposed infrastructure, with prose explanations for readers without Mermaid support.
@@ -419,7 +419,7 @@ See [Persistence and Recovery](DESIGN.md#persistence-and-recovery) for commit un
 
 The developer CLI delegates to `worldwright-content`: bounded file/byte read -> streaming duplicate/depth guard -> version dispatch -> private schema records -> semantic/reference validation -> immutable validated definitions -> deterministic room mapping -> `WorldBuilder`. Core remains independent of Serde, JSON, and filesystem APIs.
 
-`WorldInstantiation::into_parts()` separates the builder and `WorldLookup`. The host supplies world identity, characters, rule registry, and attachments. Named exit lookup resolves syntax without weakening core movement checks. CLI preflight builds a character-free world with an empty rule registry and never executes commands or starts a listener. SDK exposes the content crate as `worldwright_sdk::content`.
+`WorldInstantiation::into_parts()` separates the builder and `WorldLookup`. The host supplies world identity, characters, rule registry, and attachments. Named exit lookup resolves syntax without weakening core movement checks. The `content validate` preflight builds a character-free world with an empty rule registry and never executes commands or starts a listener. The separate `play` command consumes the same builder/lookup, supplies one local actor and ReferenceGame, and executes typed commands in-process. Its input framer and terminal renderer live under `apps/worldwright/src/commands/`; the core runtime and content loader remain unchanged. No socket or database is opened. SDK exposes the content crate as `worldwright_sdk::content`.
 
 Source responsibilities and limits are in [schema v1](docs/content/SCHEMA_V1.md); the runnable reference is [examples/two-room](examples/two-room/README.md). Release digests, activation, persistence, browser transport, and Studio remain future work.
 

@@ -1,0 +1,4 @@
+rustup is absent; using installed tools. Verify their versions against rust-toolchain.toml.
+rustc 1.85.1 (4eb161250 2025-03-15)
+cargo 1.85.1 (d73d2caf9 2024-12-31)
+Bootstrap complete. Dependencies fetched from Cargo.lock; check runs offline.

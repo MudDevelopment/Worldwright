@@ -8,7 +8,7 @@
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
-| Implementation status | Local two-room runtime, JSON schema v1 loading, builder conversion, and validation CLI implemented; see verification for evidence and dependency-source limits; network authentication, persistence, and hosted CI remain unverified |
+| Implementation status | Local runtime, JSON content loading/validation, and single-player terminal play implemented; see verification for evidence and provenance limits; network authentication, persistence, and hosted CI remain unverified |
 | Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 > **Scope and authority:** This document describes the target system; “Must” is a requirement, not evidence of implementation. [RUNTIME.md](docs/RUNTIME.md) defines the implemented single-owner local execution subset: validated construction, current attachment checks, scoped rule queries, staged atomic effects, and addressed messages. This is not login authentication, database commitment, exactly-once delivery, or deployed capacity. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) and [VERIFICATION.md](docs/VERIFICATION.md) describe the supporting contracts and successful Linux checks. The broader network/persistence/recovery design remains future work.
@@ -391,6 +391,14 @@ Do not promise ABI-compatible hot loading of Rust libraries. The baseline extens
 Use a small fantasy reference world and a small science-fiction reference world to validate reusable abstractions. Both should implement movement, interaction, one encounter, and one progression outcome without changing core ownership or persistence logic.
 
 Differences in combat vocabulary, resources, and content belong in game packages. If every new game requires modifying transport handlers or core tables, revisit the abstraction before declaring the SDK stable.
+
+## Implemented Local Play Host
+
+`worldwright play <path>` is an additive developer command, not a change to the JSON schema or core authority. It loads validated content, creates one ephemeral local actor at `entry_room`, registers ReferenceGame, and owns a WorldRuntime until quit/EOF. All Look/Move/Say actions go through `execute`; named-exit resolution only considers the actor's current room and cannot authorize a missing edge. Successful Move is followed by a separate Look execution, not an expanded transaction.
+
+The adapter uses checked operation IDs and elapsed monotonic time. It displays only messages addressed to the exact current attachment and only that room's exit labels. It does not print host snapshots or lookup maps. Bounded line framing drains oversized input without executing its suffix, supports LF/CRLF and final lines at EOF, and preserves full valid Unicode text while escaping terminal controls. Input mistakes are recoverable; I/O and runtime invariant failures stop the session and attempt detach. See [Local Play](docs/LOCAL_PLAY.md) for exact semantics.
+
+No accounts are authenticated and no state is saved. Fixed process-local IDs are not durable identities. The reference rules do not consume randomness; unexpected requests fail rather than receiving fabricated random values. The implementation is in the CLI application, with no new library dependency or core/content API change.
 
 ## Implemented Content Schema and Conversion
 

@@ -60,7 +60,14 @@ cargo doc --workspace --no-deps --locked --offline
 
 For the final command, the scripts add `-D warnings` to `RUSTDOCFLAGS` and preserve the caller's original value. This is a debug/development build; release performance and production deployment are not tested here.
 
-Useful focused commands:
+Local play and focused tests (after bootstrap):
+
+```bash
+cargo run -p worldwright --locked --offline -- play examples/two-room/world.json
+cargo test -p worldwright --test play --locked --offline
+```
+
+See [Local Play](LOCAL_PLAY.md) for commands, EOF handling, input limits, and local-only scope. Other useful focused commands:
 
 ```bash
 cargo test -p worldwright-core --locked --offline

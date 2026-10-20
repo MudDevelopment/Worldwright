@@ -1,4 +1,14 @@
-# Content Loading v0.1 implementation handoff
+# Implementation handoff
+
+## Current increment: Local Play v0.1
+
+Implemented `worldwright play <path>` on top of the unchanged content loader and core runtime. New application modules are `commands/play.rs`, `commands/play_input.rs`, and `commands/play/tests.rs`; subprocess coverage lives in `apps/worldwright/tests/play.rs`. Argument parsing, dispatch/help/status, and stage metadata are updated.
+
+Run `cargo run -p worldwright --locked --offline -- play examples/two-room/world.json` after bootstrap. Use look/l, go, say, help, quit/exit, or EOF. The session is single-player and in-memory, with no login, listener, or saved state. See [Local Play](docs/LOCAL_PLAY.md) and [current verification](docs/VERIFICATION.md).
+
+Core/content source, Cargo.lock, package versions, and the toolchain pin are unchanged from Content Loading v0.1. The following section records that earlier increment.
+
+## Previous increment: Content Loading v0.1
 
 All six requested implementation steps are complete in this source snapshot:
 

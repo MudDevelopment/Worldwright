@@ -265,6 +265,14 @@ The JSON loader enforces a 32 MiB input ceiling, 32 container levels, 200,000 va
 
 Diagnostics escape control and non-ASCII characters and bound each displayed component to 512 input characters. Raw diagnostics remain data: future HTML or network adapters must apply context-specific escaping. Loading executes no scripts, includes no other files, contacts no URLs, and grants no account/attachment authority. Supplied local file paths should be trusted regular files; the synchronous reader has no timeout or sandbox for device/FIFO paths. Validation is not immutable release approval, live activation, authentication, or a security certification.
 
+### Implemented local terminal play
+
+`worldwright play <path>` is a trusted single-user development host, not authentication. Local world/account/character/connection IDs are ephemeral and never derived from user commands. Gameplay uses the existing runtime authorization/movement checks; host lookup metadata is not authority. Output is filtered by exact current attachment and current-room labels; administrative snapshots are never rendered.
+
+The input framer retains at most 4101 bytes plus bounded stdin buffering, drains oversized lines, and rejects invalid UTF-8/control-bearing input. This is memory bounding, not a deadline on local stdin. The renderer preserves full valid text and ordinary Unicode while escaping control, bidi-direction, and Unicode line/paragraph characters. Runtime actions are not rolled back when terminal delivery fails; Move and its automatic Look are separate executions. Cleanup attempts detach on quit, EOF, or session error. Ctrl-C retains ordinary OS termination behavior.
+
+No network listener, credential handling, durable session, persistent state, or random generator is introduced. See [Local Play](docs/LOCAL_PLAY.md).
+
 ### Content and publication
 
 Content is untrusted input until validated, even when submitted by a familiar builder.

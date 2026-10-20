@@ -4,6 +4,8 @@ use std::{ffi::OsString, path::PathBuf};
 pub enum Command {
     Help,
     ContentHelp,
+    PlayHelp,
+    Play(PathBuf),
     Version,
     Status,
     Validate(PathBuf),
@@ -33,6 +35,11 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, &'stat
         (Some("content"), Some("validate"), Some(path)) if !path.is_empty() => {
             Ok(Command::Validate(path.into()))
         }
-        _ => Err("expected --help, --version, status, or content validate <path>"),
+        (Some("play"), Some("--help" | "-h"), None) => Ok(Command::PlayHelp),
+        (Some("play"), _, None) => second
+            .filter(|p| !p.is_empty())
+            .map(|p| Command::Play(p.into()))
+            .ok_or("expected play <path>"),
+        _ => Err("expected --help, --version, status, content validate <path>, or play <path>"),
     }
 }

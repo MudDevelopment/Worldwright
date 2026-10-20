@@ -1,10 +1,18 @@
 # Verification
 
-## Current: Content Loading v0.1
+## Current: Local Play v0.1
+
+**127 tests passed (125 unit/integration + 2 compile-fail doctests)** on Linux Rust 1.85.1 after a clean rebuild. Formatting, all-target checks, Clippy, debug build, and API documentation passed. A real Linux pseudo-terminal smoke test verified prompts, movement, and quit.
+
+See the [Local Play verification report](verification/local-play-report.md) and captured logs for actual results and provenance limits. Windows/hosted CI and approved registry-artifact acceptance remain pending; verification still uses the temporary dependency-source cache described there.
+
+---
+
+## Historical: Content Loading v0.1
 
 **103 tests passed (101 unit/integration + 2 compile-fail doctests), with formatting, all-target compilation, Clippy, debug build, and API documentation passing on Linux Rust 1.85.1.** The Bash bootstrap/check tasks also passed from outside the workspace.
 
-Read the [current detailed verification report](verification/content-report.md) for exact evidence and important provenance limits: dependencies were built from temporary upstream GitHub source snapshots because registry DNS was unavailable. Normal registry-artifact acceptance, Windows, and hosted CI remain unverified. No temporary source replacement ships in the project.
+Read the [historical content verification report](verification/content-report.md) for exact evidence and important provenance limits: dependencies were built from temporary upstream GitHub source snapshots because registry DNS was unavailable. Normal registry-artifact acceptance, Windows, and hosted CI remain unverified. No temporary source replacement ships in the project.
 
 ---
 
