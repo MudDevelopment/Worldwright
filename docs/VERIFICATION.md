@@ -1,44 +1,44 @@
-# Initial Scaffold Verification
+# Core Interfaces and Workflow Verification
 
-**Scope:** Source-generation checks for the initial Worldwright framework, not verification of a running MUD or production toolkit.
+**Scope:** Real Linux development checks for this source snapshot. This is not verification of a deployed MUD, authorization system, or production service.
 
-## Environment
+## Environment and Toolchain Provenance
 
-- Rust compiler / Cargo / rustfmt / Clippy: not available in the generation sandbox.
-- Selected target toolchain: Rust 1.85.1; edition 2024; resolver 3.
-- Validation tools: Python TOML/JSON parsing, dependency/path checks, and Tree-sitter Rust syntax parsing.
-- No registry runtime dependencies are declared in the scaffold.
+- Actual compiler: `rustc 1.85.0 (4d91de4e4 2025-02-17)` on x86_64 Linux.
+- Actual Cargo: `cargo 1.85.0 (d73d2caf9 2024-12-31)`.
+- Rustfmt, Clippy, compiler, Cargo, and standard library came from the matching third-party `@rustbin/*-1.85.0-x86_64-unknown-linux-gnu` npm packages in a temporary sandbox toolchain. Package install scripts were disabled.
+- Those tools were used only for local checks, not adopted as the project's approved distribution channel. Their binary provenance was not independently signature-verified. The toolchain and npm packages are not included in the archive.
+- The project still pins **Rust 1.85.1**, edition 2024, resolver 3. Exact pinned-toolchain and Windows acceptance remain pending.
+- The workspace has no external Rust dependencies. Cargo generated the supplied lockfile and checked it with offline metadata resolution.
 
-## Results
+## Observed Results
 
-The following static checks passed in the generation sandbox:
+The shared Bash `bootstrap` and `check` tasks completed successfully. See the captured [Linux workflow log](verification/linux-rust-1.85.0.log).
 
-| Check | Observed result |
+| Check | Result |
 |---|---|
-| Workspace inventory | 10 members: 4 application binaries and 6 library crates |
-| Names and targets | Application directory/package/binary names align; source entry points exist |
-| Manifest syntax | All 13 TOML files parse |
-| Dependency graph | Local-only, acyclic, and matches the documented allowed boundaries |
-| Workspace inheritance | Version, edition, manifest Rust minimum, publish guard, and lint inheritance present |
-| License guard | No approved license claimed; no invented LICENSE files; all packages non-publishable |
-| Rust syntax | 19 Rust files parse with Tree-sitter; module/include paths resolve |
-| Documentation | 18 Markdown files checked; 201 local links/anchors resolve; fences and JSON examples validate |
-| Test inventory | 8 unit tests plus 5 shared smoke cases included by each of 4 apps: 28 intended tests, not executed |
+| Cargo lock generation and locked metadata | Passed; Cargo.lock is included |
+| `cargo fmt --all -- --check` | Passed after applying rustfmt |
+| `cargo check --workspace --all-targets --locked --offline` | Passed |
+| Clippy, all targets/features, warnings denied | Passed |
+| Workspace tests | 47 unit/integration tests passed; zero failures |
+| Rustdoc compile-fail test | 1 passed, confirming typed-ID separation |
+| Total tests | **48 passed; 0 failed** |
+| Workspace debug build | Passed |
+| API documentation, warnings denied | Passed |
+| Application smoke tests | Passed for all four binaries; metadata succeeds and unsupported/default startup fails explicitly |
+| Bash workflow | Actual bootstrap/full check passed; help, doctor, invalid task/argument, and outside-workspace invocation checked |
+| Workspace/package structure | 10 members; local acyclic dependencies; aligned application names; lockfile package set matches |
+| CI configuration | YAML parsed; Linux/Windows jobs, pinned checkout, time limit, and read-only permissions checked |
+| Documentation | 20 Markdown documents checked; 222 local links/anchors resolve; fenced JSON examples parse |
 
-These results establish structural consistency only. The package was not compiled, run, or security-tested.
+The original scaffold refusal tests remain meaningful: no content validator, database adapter, authenticated executor, or running world was silently replaced with fake success.
 
-## Not Performed
+## CI and Platform Limits
 
-- `cargo generate-lockfile`: Cargo absent; no lockfile was invented.
-- `cargo fmt --all -- --check`: rustfmt absent; formatting compliance unverified.
-- `cargo check` and `cargo build`: compiler/Cargo absent; type checking and linking unverified.
-- `cargo clippy`: Clippy absent; lint compliance unverified.
-- `cargo test`: tests authored, not executed.
-- Executable smoke tests: authored, not executed.
-- Any networking, authentication, database, gameplay, benchmark, UI, deployment, or security-control test: features unimplemented.
+- GitHub Actions configuration is supplied for Linux and Windows, but no remote workflow run is claimed.
+- The PowerShell script was inspected, not executed in this Linux environment.
+- Rust 1.85.1, Windows builds, release-mode behavior, benchmarks, authentication, networking, SQL migrations, persistence recovery, UI, and deployed security controls were not tested here.
+- Successful native rule planning is not evidence of command authorization or durable execution.
 
-Syntax parsing and manifest inspection do not resolve Rust names, expand macros, enforce borrow checking, run lints, or establish Cargo compatibility. They must not be reported as a passing Rust build.
-
-## Local Verification Required
-
-Follow [README setup](../README.md#getting-started) and [the scaffold guide](SCAFFOLD.md). Generate and commit Cargo.lock, run formatting/check/lint/test/build, and replace this record with actual compiler versions and observed results. No CI service or public release support has been established.
+Run [DEVELOPMENT.md](DEVELOPMENT.md) with the approved pinned toolchain and inspect both remote jobs before establishing a merge/release gate. No operational support commitment, license approval, or production-readiness claim is created by these checks.
