@@ -10,7 +10,7 @@
 | Applies to | Worldwright code, tools, reference content, documentation, and project infrastructure |
 | Related documents | [README](README.md), [Design](DESIGN.md), [Architecture](ARCHITECTURE.md), [Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md), [Definitions](DEFINITIONS.md) |
 
-> Worldwright remains a planning-stage toolkit. No repository URL, default branch, maintainer roster, CI service, or working release is established by this document. Procedures below become operational when authorized owners adopt them and publish the corresponding project details.
+> Worldwright now has core interfaces and developer workflows; see [setup](README.md#getting-started), [development](docs/DEVELOPMENT.md), and [verification](docs/VERIFICATION.md). Linux checks passed; GitHub Actions configuration is supplied but no remote CI run, public repository URL, default branch, maintainer roster, or operational release is established. Governance procedures become operational when authorized owners adopt them and publish the corresponding project details.
 >
 > **License decision remains open.** The proposed outbound software expression is `MIT OR Apache-2.0`. Do not treat submitting a pull request to an unlicensed project as a substitute for explicit contribution terms or copyright-owner approval.
 
@@ -52,7 +52,7 @@ A useful contribution solves a defined problem, includes provenance, and provide
 2. Read [DEFINITIONS.md](DEFINITIONS.md) for MU* terminology and Worldwright's compatibility boundaries.
 3. Review the affected contracts in [DESIGN.md](DESIGN.md) and component ownership in [ARCHITECTURE.md](ARCHITECTURE.md).
 4. Review [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md).
-5. Once a repository exists, inspect its actual tree, manifests, supported toolchain, tests, and issue history before proposing code.
+5. Inspect the supplied workspace tree, manifests, selected toolchain, and tests before proposing code. Consult the real repository history and issue tracker once hosting is established.
 6. Discuss large changes before implementing them. Offer a small design note with the problem, alternatives, compatibility impact, and test plan.
 
 ### Route the issue correctly
@@ -241,7 +241,7 @@ Avoid real player information in fixtures. Use synthetic accounts, invented conv
 
 ## Verification
 
-No commands in this section are claimed to have passed against a Worldwright codebase. Once the workspace exists, follow its actual CI and toolchain configuration.
+Use the shared Bash/PowerShell tasks in [DEVELOPMENT.md](docs/DEVELOPMENT.md); Cargo.lock is supplied and should remain committed. Linux Rust 1.85.0 checks passed as recorded in [VERIFICATION.md](docs/VERIFICATION.md). GitHub Actions jobs for pinned Rust 1.85.1 on Linux/Windows are supplied, not remotely verified. The workspace still has no registry dependencies. The commands below summarize the check sequence; the shared tasks also build binaries and API documentation.
 
 A proposed Rust baseline, from the workspace root, is:
 
