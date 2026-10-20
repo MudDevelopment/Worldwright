@@ -139,7 +139,8 @@ These are proposed starting choices, subject to architecture review and implemen
 | Relational persistence | PostgreSQL |
 | Database access | SQLx |
 | Server-rendered web surfaces | Askama and HTML, with focused client-side interaction |
-| World content | Versioned structured files with explicit schemas |
+| World content | Proposed versioned JSON definitions and immutable content-release artifacts |
+| Server configuration | Proposed versioned TOML with validated settings and secret references |
 | Deployment | Initially a single authoritative server deployment with a private database |
 | Packaging | Reproducible binaries or containers, selected during implementation |
 
@@ -196,6 +197,7 @@ worldwright/
 ├── Cargo.lock
 ├── README.md
 ├── DESIGN.md
+├── ARCHITECTURE.md
 ├── SECURITY.md
 ├── CONTRIBUTING.md
 ├── apps/
@@ -324,12 +326,13 @@ Do not use a public issue to disclose credentials, sensitive player information,
 
 ## Documentation
 
-Only this README is delivered here. The following are planned documentation responsibilities, not links to files asserted to exist.
+This planning package contains README.md, DESIGN.md, and ARCHITECTURE.md. The design and architecture are proposed baselines, not verified implementations. Other documentation areas below remain planned; they are not asserted to exist.
 
 | Document or area | Intended purpose |
 |---|---|
-| `README.md` | Project overview and verified contributor/developer entry points |
-| `DESIGN.md` | Architecture, state ownership, contracts, and design rationale |
+| [README.md](README.md) | Project overview and contributor/developer entry points; runnable instructions remain pending |
+| [DESIGN.md](DESIGN.md) | Design decisions, invariants, state ownership, subsystem contracts, and compatibility |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Component boundaries, crate dependencies, runtime flows, deployment topology, and lifecycle |
 | `SECURITY.md` | Security model, supported versions, and private reporting instructions |
 | `CONTRIBUTING.md` | Contribution workflow, checks, review standards, and inbound licensing |
 | `docs/decisions/` | Architecture decision records |
