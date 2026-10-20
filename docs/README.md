@@ -1,6 +1,8 @@
 # Developer Documentation
 
-- [Initial scaffold guide](SCAFFOLD.md): exact package boundaries, entry points, and next steps.
+- [Scaffold and integration status](SCAFFOLD.md): package boundaries, entry points, and next steps.
+- [Core interfaces](CORE_INTERFACES.md): implemented value types, rule planning, scheduling, and fixture contracts.
+- [Development workflow](DEVELOPMENT.md): local tasks, pinned toolchain, and CI configuration.
 - [Verification record](VERIFICATION.md): performed checks and explicit limits.
 - [Project README](../README.md): setup and project overview.
 - [Design](../DESIGN.md): target behavior and invariants.
