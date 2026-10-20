@@ -1,0 +1,21 @@
+[package]
+name = "worldwright-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Worldwright server composition-root scaffold"
+
+[[bin]]
+name = "worldwright-server"
+path = "src/main.rs"
+
+[dependencies]
+worldwright-core.workspace = true
+worldwright-content.workspace = true
+worldwright-protocol.workspace = true
+worldwright-persistence.workspace = true
+worldwright-sdk.workspace = true
+
+[lints]
+workspace = true
