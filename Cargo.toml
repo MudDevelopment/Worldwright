@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/worldwright",
+    "apps/worldwright-server",
+    "apps/worldwright-studio",
+    "apps/worldwright-console",
+    "crates/worldwright-core",
+    "crates/worldwright-content",
+    "crates/worldwright-protocol",
+    "crates/worldwright-persistence",
+    "crates/worldwright-sdk",
+    "crates/worldwright-testkit",
+]
+
+[workspace.package]
+version = "0.1.0-dev.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+# Licensing has not been approved. Do not add a license grant by implication.
+# After owner approval, add the selected license here and inherit it in members.
+
+[workspace.dependencies]
+worldwright-core = { path = "crates/worldwright-core", version = "=0.1.0-dev.0" }
+worldwright-content = { path = "crates/worldwright-content", version = "=0.1.0-dev.0" }
+worldwright-protocol = { path = "crates/worldwright-protocol", version = "=0.1.0-dev.0" }
+worldwright-persistence = { path = "crates/worldwright-persistence", version = "=0.1.0-dev.0" }
+worldwright-sdk = { path = "crates/worldwright-sdk", version = "=0.1.0-dev.0" }
+worldwright-testkit = { path = "crates/worldwright-testkit", version = "=0.1.0-dev.0" }
+# Add Tokio, Axum, SQLx, Askama, Serde, and other external dependencies only
+# alongside their first working integration. The scaffold has no registry deps.
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[workspace.metadata.worldwright]
+stage = "initial-framework-and-stubs"
+proposed-license = "MIT OR Apache-2.0"
+license-approved = false
+production-ready = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
