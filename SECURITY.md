@@ -76,12 +76,12 @@ Do not include live tokens, passwords, private keys, full production databases, 
 
 ## Supported Versions
 
-There are **no verified supported software versions** at this planning stage.
+There are **no verified supported software versions**. The supplied `0.1.0-dev.0` scaffold has no network listener, authentication, database, or game runtime; it is not a supported security release. See [scaffold scope](docs/SCAFFOLD.md) and [verification limits](docs/VERIFICATION.md).
 
 | Artifact | Security support status |
 |---|---|
 | This documentation package | Planning material; corrections can be reviewed through established project channels once available |
-| Unreleased code or example snippets | No production support or security assurance established |
+| Unreleased `0.1.0-dev.0` core-interface snapshot | Linux Rust 1.85.0 compilation/tests passed; no authenticated executor, networking, or persistence; no production support or security assurance |
 | Future tagged releases | Support policy must be announced with actual versions and end-of-support dates |
 | Independent games and modified deployments | Operator responsibility; upstream applicability assessed case by case |
 
