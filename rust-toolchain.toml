@@ -1,0 +1,5 @@
+[toolchain]
+# Conservative bootstrap pin; not a claim that this is the latest Rust release.
+channel = "1.85.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
