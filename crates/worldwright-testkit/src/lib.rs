@@ -1,6 +1,9 @@
-//! Place future deterministic fixtures, clocks, and scenario helpers here.
+//! Deterministic fixtures and explicit placeholder for a future scenario runner.
 //!
-//! No simulator, fake database, replay, or working scenario runner exists yet.
+//! No simulator, fake database, production replay, or working scenario runner exists.
+
+pub mod fixtures;
+pub use fixtures::{FakeClock, SequenceRandom, WorldFixture};
 
 pub use worldwright_content::ContentPipelineStub;
 pub use worldwright_core::NotImplemented;
