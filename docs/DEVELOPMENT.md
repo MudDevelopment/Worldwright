@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - The repository's `rust-toolchain.toml` pins Rust **1.85.1**, rustfmt, and Clippy.
-- Use an approved Rust installation, preferably rustup. Package dependencies are currently local workspace paths only.
+- Use an approved Rust installation, preferably rustup. Registry dependencies are Serde, serde_json, serde_path_to_error, and their locked transitive dependencies. Bootstrap needs registry access or an approved prepopulated cache.
 - Bash is supported for the Unix workflow; the parallel Windows workflow targets PowerShell 7.
 - No database, container runtime, credentials, environment file, or running service is required.
 
@@ -32,7 +32,7 @@ Both scripts resolve the repository relative to their own location, so calling e
 | Task | Behavior |
 |---|---|
 | `help` | Show supported tasks; also the no-argument default |
-| `bootstrap` | Install the pin through rustup when available; verify tools and locked metadata; generate a lockfile only if absent |
+| `bootstrap` | Install the pin through rustup when available; require the committed lockfile; fetch dependencies with `cargo fetch --locked`; verify locked metadata |
 | `doctor` | Print actual Rust/Cargo versions, workspace path, and declared toolchain pin |
 | `check` | Formatting check, all-target compilation, Clippy, tests/doctests, debug build, and API documentation |
 | `fmt` | Apply rustfmt changes; review the source diff afterwards |
@@ -41,7 +41,9 @@ Both scripts resolve the repository relative to their own location, so calling e
 
 Bootstrap can require network access for toolchain installation. If rustup is absent, bootstrap uses installed native tools and explicitly asks you to verify their versions. Neither script silently upgrades a manually installed toolchain. Overrides such as `RUSTUP_TOOLCHAIN` can also affect selection: check `doctor` output rather than inferring the compiler from a filename.
 
-The project currently has no registry dependencies. When introducing one, update the dependency policy and CI bootstrap to populate the approved cache before offline checks; do not casually remove `--locked` or download arbitrary build scripts.
+Content loading now brings registry dependencies. Bootstrap runs `cargo fetch --locked` and fails if the committed lockfile is absent; dependency changes require deliberate `cargo generate-lockfile`, review, and commit. Air-gapped builders need an approved prepopulated cache or vendor source. Checks remain `--locked --offline`.
+
+Cargo now defaults to the native host target; the old unconditional Windows MSVC target has been removed. Cross-compilation is explicit using `--target` and requires that target's approved standard library and linker. Linux CI must not silently target Windows.
 
 ## Check Sequence
 
@@ -88,6 +90,6 @@ For GitHub Enterprise or restricted organizational hosting, confirm approved run
 
 ## Local Evidence and Limits
 
-The generation sandbox used a temporary **Rust 1.85.0 Linux** toolchain obtained from third-party npm repackages. That permitted real local compilation and tests, but is not proof of execution with pinned Rust 1.85.1, Windows, or hosted CI. The temporary toolchain is not a project dependency and is not included in the delivered archive.
+The content increment was checked using temporary **Rust 1.85.1 Linux** tools from third-party npm repackages, with install scripts disabled. crates.io DNS was unavailable; verification used matching upstream GitHub source tags in a temporary source replacement, not registry tarballs. The lockfile retains normal registry identities/checksums. No sandbox-specific configuration, source replacements, toolchain, or dependency snapshots ship in the archive; captured logs retain their original paths. Re-run bootstrap/check with approved Rust and registry artifacts before release acceptance; Windows/hosted CI are not claimed.
 
 See [VERIFICATION.md](VERIFICATION.md) for exact results. Use the approved pinned toolchain and both remote CI jobs for the final acceptance gate.

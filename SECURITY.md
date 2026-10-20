@@ -259,6 +259,12 @@ Administrative repair requires the same integrity rules. Do not quietly fix inco
 
 ## Content and Extension Security
 
+### Implemented local content-input boundary
+
+The JSON loader enforces a 32 MiB input ceiling, 32 container levels, 200,000 values, bounded collections, and at most 100 semantic diagnostics. Duplicate object keys are rejected before map conversion; unknown fields, unsupported versions, unresolved references, invalid text, and invalid directed graphs cannot yield validated content. Core room/exit/text limits remain authoritative. Record objects cannot be supplied as positional arrays. See [schema v1](docs/content/SCHEMA_V1.md).
+
+Diagnostics escape control and non-ASCII characters and bound each displayed component to 512 input characters. Raw diagnostics remain data: future HTML or network adapters must apply context-specific escaping. Loading executes no scripts, includes no other files, contacts no URLs, and grants no account/attachment authority. Supplied local file paths should be trusted regular files; the synchronous reader has no timeout or sandbox for device/FIFO paths. Validation is not immutable release approval, live activation, authentication, or a security certification.
+
 ### Content and publication
 
 Content is untrusted input until validated, even when submitted by a familiar builder.

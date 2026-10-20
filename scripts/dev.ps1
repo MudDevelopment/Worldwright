@@ -36,7 +36,7 @@ try {
     switch ($Task) {
         'help' {
             Write-Output 'Usage: ./scripts/dev.ps1 <bootstrap|doctor|check|fmt|test|docs>'
-            Write-Output 'bootstrap may install the pinned toolchain. fmt changes source formatting.'
+            Write-Output 'bootstrap may install the pinned toolchain and fetch locked dependencies. fmt changes source formatting.'
         }
         'bootstrap' {
             $match = [regex]::Match((Get-Content rust-toolchain.toml -Raw), '(?m)^channel = "([^"]+)"\r?$')
@@ -50,10 +50,11 @@ try {
             Invoke-Checked 'rustc' @('--version')
             Invoke-Checked 'cargo' @('--version')
             if (-not (Test-Path Cargo.lock)) {
-                Invoke-Checked 'cargo' @('generate-lockfile', '--offline')
+                throw 'Cargo.lock is missing; restore the committed lockfile or regenerate deliberately with cargo generate-lockfile.'
             }
+            Invoke-Checked 'cargo' @('fetch', '--locked')
             Invoke-Checked 'cargo' @('metadata', '--format-version', '1', '--no-deps', '--locked', '--offline') | Out-Null
-            Write-Output 'Bootstrap complete. Review and commit Cargo.lock.'
+            Write-Output 'Bootstrap complete. Dependencies fetched from Cargo.lock; check runs offline.'
         }
         'doctor' {
             Assert-Cargo

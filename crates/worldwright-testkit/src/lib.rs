@@ -8,7 +8,7 @@ pub mod two_room;
 pub use fixtures::{FakeClock, SequenceRandom, WorldFixture};
 pub use two_room::{TwoRoomWorld, two_room_world};
 
-pub use worldwright_content::ContentPipelineStub;
+pub use worldwright_content as content;
 pub use worldwright_core::NotImplemented;
 pub use worldwright_sdk::GameModule;
 

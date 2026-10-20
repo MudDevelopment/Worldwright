@@ -1,7 +1,7 @@
 # Shared Test Support
 
-`app_smoke.rs` is included by each application's `tests/smoke.rs`. A virtual Cargo workspace does not discover root-level integration tests automatically; the application wrappers make these tests part of each package's integration-test target.
+`app_smoke.rs` is included by Server, Studio, and Console through `tests/smoke.rs`. Console's previously undiscovered `test/smoke.rs` has been moved into `tests/`. The developer CLI uses feature-specific smoke and content-validation tests. A virtual workspace does not discover root-level integration tests automatically.
 
-The tests check help/version/status output and fail-closed startup/unsupported operations. Library tests check explicit stub errors and the provisional SDK metadata facade. They do not test networking, authentication, persistence, gameplay, or operational readiness.
+Content tests exercise strict input/shape/version validation, resource limits, graph checks, diagnostics, mapping, and named exits. Testkit exercises both the independent programmatic fixture and JSON-loaded Look/Move/Look/Say scenarios. No networking, account login, persistence, or operational readiness is claimed.
 
-Run `cargo test --workspace --locked --offline` using the supplied Cargo.lock, or the shared developer workflow. Local Linux Rust 1.85.0 tests passed. Core tests additionally cover IDs, bounded values, scheduling, and rule planning; Testkit tests cover fixtures and registration. See [verification](../docs/VERIFICATION.md) for exact results and platform limits.
+Run `cargo test --workspace --locked --offline` after bootstrap. See [verification](../docs/VERIFICATION.md) for observed totals, dependency/toolchain provenance, and platform limits.

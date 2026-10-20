@@ -3,7 +3,7 @@
 //! This scaffold is not a stable SDK. Core owns the traits; this facade exports
 //! them without introducing a core-to-SDK dependency or a database dependency.
 
-pub use worldwright_content::ContentPipelineStub;
+pub use worldwright_content as content;
 pub use worldwright_core::world::RoomDescription;
 pub use worldwright_core::{
     GameModule, ModuleRegistrationError, NotImplemented, WorldStub, WorldView,
@@ -11,8 +11,7 @@ pub use worldwright_core::{
 pub use worldwright_core::{command, effect, ids, rule, runtime, scheduler, time};
 
 /// Human-readable scaffold status, not an SDK compatibility promise.
-pub const STATUS: &str =
-    "unstable SDK; local world execution only, no network service or durability";
+pub const STATUS: &str = "unstable SDK; JSON content loading and local world execution, no network service or durability";
 
 #[cfg(test)]
 mod tests {

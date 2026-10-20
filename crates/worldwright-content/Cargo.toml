@@ -4,10 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-description = "Worldwright content pipeline scaffold"
+description = "Versioned Worldwright JSON content validation and instantiation"
 
 [dependencies]
 worldwright-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
 
 [lints]
 workspace = true

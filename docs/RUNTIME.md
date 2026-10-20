@@ -18,7 +18,7 @@ cargo test -p worldwright-testkit --test runtime --locked --offline
 cargo test -p worldwright-testkit --test runtime --locked --offline two_room_look_move_say_walkthrough -- --nocapture
 ```
 
-PowerShell users can use `./scripts/dev.ps1 bootstrap` and `./scripts/dev.ps1 check`. The Linux run used Rust 1.85.0; exact pinned Rust 1.85.1 and Windows/hosted CI acceptance remain pending. See [VERIFICATION.md](VERIFICATION.md).
+PowerShell users can use `./scripts/dev.ps1 bootstrap` and `./scripts/dev.ps1 check`. The current Linux run used Rust 1.85.1 with temporary GitHub dependency source snapshots; Windows/hosted CI and approved registry-artifact acceptance remain pending. See [VERIFICATION.md](VERIFICATION.md).
 
 The walkthrough creates an Atrium and Observatory with explicit exits in both directions. Alice starts in the Atrium; Bob starts in the Observatory. Alice looks, moves to the Observatory, looks again, and speaks to both attached characters there. No files, sockets, credentials, database, or ambient random source are used.
 
@@ -38,7 +38,7 @@ No interactive terminal parser or new application subcommand is included. The se
 | `crates/worldwright-testkit/tests/runtime.rs` | Entry point for the 24 end-to-end runtime tests |
 | `crates/worldwright-testkit/tests/runtime_cases/` | Flow, policy, rollback, capacity, and helper tests |
 
-All code still uses only Rust's standard library and local workspace dependencies. There is no new Cargo package or external dependency.
+The core runtime still uses only Rust's standard library. JSON parsing dependencies live in `worldwright-content`, not core. See [content schema](content/SCHEMA_V1.md) for the loader-to-builder boundary.
 
 ## Ownership and Construction
 
@@ -118,8 +118,8 @@ A delivery-limit failure discards the entire command. Room title and description
 
 The 24 new tests cover the reference walkthrough, room-only speech, detached recipients, staged audience resolution, detached snapshots, deterministic replay of fixtures, repeated operation-ID behavior, forged contexts, stale reconnect/disconnect cases, ownership and connection collisions, directed/unreachable movement, malformed movement plans, unauthorized audiences, filtered rule views, late-effect rollback, unsupported effects, missing/rejecting rules, clock behavior, fan-out limits, builder validation/capacities, and maximum-length descriptions.
 
-The full workspace now has 72 passing tests on the recorded Linux toolchain: 71 unit/integration tests plus one compile-fail doctest. These are not login, network, database, or production-recovery tests.
+The original 24 runtime integration tests remain, and the content increment adds a loader-backed Look/Move/Look/Say scenario and one-way movement rejection. See [VERIFICATION.md](VERIFICATION.md) for current totals and provenance; these are not login, network, database, or production-recovery tests.
 
 ## Next Work
 
-Add a small, versioned content schema and loader that produces a validated `WorldBuilder`, keeping descriptive content separate from mutable runtime state. After that, add a local interactive adapter and then authenticated transport. Durable persistence must preserve the execution/validation boundary rather than turning a returned in-memory result into a misleading durable receipt.
+The [content loader](content/SCHEMA_V1.md) now produces validated builders while keeping descriptive content separate from mutable state. Next add a local interactive adapter and then authenticated transport. Durable persistence must preserve the execution/validation boundary rather than turning a returned in-memory result into a misleading durable receipt.

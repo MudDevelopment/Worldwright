@@ -1,6 +1,16 @@
-# World Runtime v0.1 Verification
+# Verification
 
-**Scope:** Real Linux development checks for this source snapshot. This is not verification of a deployed MUD, authorization system, or production service.
+## Current: Content Loading v0.1
+
+**103 tests passed (101 unit/integration + 2 compile-fail doctests), with formatting, all-target compilation, Clippy, debug build, and API documentation passing on Linux Rust 1.85.1.** The Bash bootstrap/check tasks also passed from outside the workspace.
+
+Read the [current detailed verification report](verification/content-report.md) for exact evidence and important provenance limits: dependencies were built from temporary upstream GitHub source snapshots because registry DNS was unavailable. Normal registry-artifact acceptance, Windows, and hosted CI remain unverified. No temporary source replacement ships in the project.
+
+---
+
+## Historical: World Runtime v0.1
+
+The remainder is retained verbatim as the preceding snapshot's report, not current verification. Its toolchain, dependency, and test-count claims do not describe Content Loading v0.1.
 
 ## Environment and Toolchain Provenance
 

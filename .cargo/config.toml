@@ -1,4 +1,4 @@
-# Generate Cargo.lock first: cargo generate-lockfile --offline
+# Bootstrap fetches the committed lockfile; checks remain locked and offline.
 [alias]
 check-all = "check --workspace --all-targets --locked --offline"
 test-all = "test --workspace --locked --offline"

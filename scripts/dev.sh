@@ -17,7 +17,7 @@ docs() {
 case "$TASK" in
     help)
         echo "Usage: bash scripts/dev.sh <bootstrap|doctor|check|fmt|test|docs>"
-        echo "bootstrap may install the pinned toolchain. fmt changes source formatting."
+        echo "bootstrap may install the pinned toolchain and fetch locked dependencies. fmt changes source formatting."
         ;;
     bootstrap)
         CHANNEL="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' rust-toolchain.toml)"
@@ -31,9 +31,10 @@ case "$TASK" in
         need rustc
         rustc --version
         cargo --version
-        if [[ ! -f Cargo.lock ]]; then cargo generate-lockfile --offline; fi
+        [[ -f Cargo.lock ]] || { echo "Cargo.lock is missing; restore the committed lockfile or regenerate it deliberately with cargo generate-lockfile." >&2; exit 1; }
+        cargo fetch --locked
         cargo metadata --format-version 1 --no-deps --locked --offline >/dev/null
-        echo "Bootstrap complete. Review and commit Cargo.lock."
+        echo "Bootstrap complete. Dependencies fetched from Cargo.lock; check runs offline."
         ;;
     doctor)
         need cargo

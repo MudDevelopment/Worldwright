@@ -1,6 +1,27 @@
 # Worldwright Changes
 
-## Unreleased — World Runtime v0.1
+## Unreleased — Content Loading v0.1
+
+Implemented the six-step content milestone in the unpublished `0.1.0-dev.0` workspace:
+
+1. Defined strict JSON schema v1 and diagnostic contracts in `docs/content/SCHEMA_V1.md`.
+2. Added bounded file/byte loading, duplicate-key/depth guards, version dispatch, semantic/reference/graph checks, and capped safe diagnostics.
+3. Added private validated types, deterministic definition-to-room mapping, named-exit lookup, and all-or-nothing `WorldBuilder` conversion.
+4. Added SDK/Testkit content exports and JSON-backed Look/Move/Look/Say plus one-way movement rejection tests. The original programmatic fixture and core runtime are unchanged.
+5. Added `worldwright content validate <path>`, command help, output/exit-code contracts, and executable tests including outside-workspace and path handling.
+6. Added committed registry dependency resolution, bootstrap fetch before offline checks, native-host default targets, documentation, and captured verification.
+
+### Breaking unpublished API change
+
+Removed `ContentPipelineStub` and its SDK/Testkit re-exports. Use `load_file`/`load_bytes`, then `instantiate`; SDK/Testkit expose the content crate as `content`. JSON v1 is the first implemented schema; missing/unsupported versions fail explicitly. No legacy format is silently migrated or guessed.
+
+### Build and verification fixes
+
+Console's smoke wrapper was under `test/`, which Cargo does not discover. Moved it to `tests/` without changing its assertions. The default Windows MSVC target was removed so the supplied Linux/Windows matrix uses native hosts. Root package versions and the Rust 1.85.1 pin are unchanged. Source/provenance and platform limits are recorded in [verification](docs/VERIFICATION.md).
+
+No listener, UI, database, live activation, release signing, or authentication is added.
+
+## Historical — World Runtime v0.1
 
 This is an increment to the unpublished `0.1.0-dev.0` workspace, not a tagged release or stable SDK promise.
 

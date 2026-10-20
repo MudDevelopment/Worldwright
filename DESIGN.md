@@ -8,7 +8,7 @@
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
-| Implementation status | Local two-room command runtime implemented and checked on Linux Rust 1.85.0; network authentication, persistence, and pinned remote CI remain unverified |
+| Implementation status | Local two-room runtime, JSON schema v1 loading, builder conversion, and validation CLI implemented; see verification for evidence and dependency-source limits; network authentication, persistence, and hosted CI remain unverified |
 | Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 > **Scope and authority:** This document describes the target system; “Must” is a requirement, not evidence of implementation. [RUNTIME.md](docs/RUNTIME.md) defines the implemented single-owner local execution subset: validated construction, current attachment checks, scoped rule queries, staged atomic effects, and addressed messages. This is not login authentication, database commitment, exactly-once delivery, or deployed capacity. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) and [VERIFICATION.md](docs/VERIFICATION.md) describe the supporting contracts and successful Linux checks. The broader network/persistence/recovery design remains future work.
@@ -87,7 +87,7 @@ All entries below are **proposed**, awaiting review and implementation evidence.
 | WW-D03 | PostgreSQL for durable operational state | Transactions, constraints, established backup tooling | Requires database operations discipline; not an embedded-only runtime |
 | WW-D04 | Commit-before-success for valuable changes | Prevent acknowledged rewards or transfers from existing only in RAM | Adds persistence latency; batching cannot weaken guarantees silently |
 | WW-D05 | Browser-first HTTPS and secure WebSockets | Accessible deployment and a controllable client contract | Traditional-client gateway becomes a separate adapter later |
-| WW-D06 | JSON content definitions; TOML server configuration | Clear structured content validation and readable operator settings | Exact schemas remain to be implemented and versioned |
+| WW-D06 | JSON content definitions; TOML server configuration | Clear structured content validation and readable operator settings | Room content schema v1 implemented; server configuration remains proposed |
 | WW-D07 | Compile-time Rust game extensions | Type checking and ordinary build/test tooling | Extensions are trusted code; no stable dynamic Rust ABI |
 | WW-D08 | Pure core with explicit effects and adapter boundaries | Testable rules without network or database dependencies | The composition root must translate and execute effect plans |
 | WW-D09 | Immutable content artifacts; maintenance activation initially | Avoid complex live-reference migration in the first release | Content updates initially interrupt world service |
@@ -392,18 +392,33 @@ Use a small fantasy reference world and a small science-fiction reference world 
 
 Differences in combat vocabulary, resources, and content belong in game packages. If every new game requires modifying transport handlers or core tables, revisit the abstraction before declaring the SDK stable.
 
+## Implemented Content Schema and Conversion
+
+The normative local loader contract is [Schema v1](docs/content/SCHEMA_V1.md). Its fields, strict record shapes, duplicate-key policy, graph checks, input limits, and diagnostics override illustrative content examples elsewhere in this target-system design.
+
+| Version | Change | Breaking? | Migration |
+|---|---|---|---|
+| Initial v1 | First implemented single-file room content loader; required version, namespace, entry room, rooms, text, explicit directed exits | No previous supported file format; earlier examples were illustrative | Missing/unsupported versions fail with a schema-document pointer; manually update drafts after review |
+
+The unpublished Rust `ContentPipelineStub` API and re-exports are removed. Replace them with `load_file`/`load_bytes`, then `instantiate`; SDK exposes `content`. This is an explicit Rust API break, not an automatic file migration. Future version changes must classify compatibility and supply a migration or actionable refusal.
+
+Validation produces private immutable types. No partially valid definitions or builders escape. Definitions are sorted by their validated namespaced IDs; instance room IDs are checked nonzero sequential values independent of JSON ordering. They are not stable across content-set changes and must not be used as durable identity. Named exits and the entry-room lookup are retained beside the builder. The host still supplies world identity, characters, rule registration, and attachments.
+
+One-way edges are intentional; no reverse edge is synthesized. Unreachable rooms require `allow_unreachable: true`. Multiple labels targeting the same room are rejected to preserve the current unique-edge runtime contract. Diagnostics are capped, terminal-safe on display, and use JSON pointers for semantic errors. A valid file is neither an approved immutable release nor authority to activate a live world.
+
 ## Content Lifecycle
 
 ### Representation
 
 Use JSON definitions with an explicit schema version and namespaced identifiers. TOML is reserved for operator configuration in this proposal; it is not a second competing content format.
 
-Example content document, **illustrative rather than a validated published schema**:
+Example content document following implemented schema v1 (not a published/approved release):
 
 ```json
 {
   "schema_version": 1,
   "namespace": "frontier",
+  "entry_room": "frontier:rooms.arrival",
   "rooms": [
     {
       "id": "frontier:rooms.arrival",

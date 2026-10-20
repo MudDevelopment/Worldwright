@@ -29,11 +29,12 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Bootstrap Linux toolchain
+      # Bootstrap fetches committed registry dependencies before offline checks.
+      - name: Bootstrap Linux toolchain and dependencies
         if: runner.os != 'Windows'
         shell: bash
         run: bash scripts/dev.sh bootstrap
-      - name: Bootstrap Windows toolchain
+      - name: Bootstrap Windows toolchain and dependencies
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/dev.ps1 bootstrap

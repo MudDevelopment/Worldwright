@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "namespace": "reference",
+  "entry_room": "reference:rooms.atrium",
+  "rooms": [
+    {
+      "id": "reference:rooms.atrium",
+      "title": "Atrium",
+      "description": "Sunlight fills a quiet entry hall.",
+      "exits": { "north": "reference:rooms.observatory" }
+    },
+    {
+      "id": "reference:rooms.observatory",
+      "title": "Observatory",
+      "description": "A telescope points toward the stars.",
+      "exits": { "south": "reference:rooms.atrium" }
+    }
+  ]
+}

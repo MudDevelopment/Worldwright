@@ -7,7 +7,7 @@
 | Document version | 0.1 — proposed baseline |
 | Prepared | October 20, 2026 |
 | Architecture style | Modular monolith; one authoritative world per server process initially |
-| Implementation status | Single-owner in-memory Look/Move/Say runtime and workflows supplied; Linux Rust 1.85.0 checks passed; no network game deployment |
+| Implementation status | In-memory Look/Move/Say runtime plus strict JSON content loading and local CLI validation; see verification for actual checks and source-provenance limits; no network deployment |
 | Companion documents | [README.md](README.md) · [DESIGN.md](DESIGN.md) |
 
 > **Reading guide:** This file maps the target system, with rationale in [DESIGN.md](DESIGN.md). [RUNTIME.md](docs/RUNTIME.md) documents the implemented local subset: the core runtime owns state and attachment records, evaluates scoped rules, stages changes, and resolves message recipients before returning a committed in-memory result. Testkit builds a two-room world through its public builder. No network service or database participates. The wider diagrams remain proposed infrastructure, with prose explanations for readers without Mermaid support.
@@ -52,7 +52,7 @@ Worldwright separates reusable engine infrastructure, developer tools, and indiv
 | Server configuration | Versioned TOML with secret references | Validated deployment behavior |
 | Packaging | Reproducible binaries or containers | Exact code/content release identification |
 
-The scaffold selects Rust 1.85.1 / edition 2024 and local package version 0.1.0-dev.0. External library versions remain deferred until their integrations are implemented. Those libraries do not automatically provide the game's authorization, consistency, or recovery guarantees; those belong to the application design.
+The workspace selects Rust 1.85.1 / edition 2024 and package version 0.1.0-dev.0. Serde, serde_json, and serde_path_to_error are pinned for the content integration; other external stacks remain deferred. Those libraries do not automatically provide the game's authorization, consistency, or recovery guarantees; those belong to the application design.
 
 ### Architectural commitments
 
@@ -414,6 +414,14 @@ Live staff interfaces must not hold long database transactions or run arbitrary 
 A database backup without its compatible content release may be insufficient to restore a game. Preserve the release manifest and content artifacts referenced by the recovery point. Restored services must not load whichever content file happens to be newest on disk.
 
 See [Persistence and Recovery](DESIGN.md#persistence-and-recovery) for commit uncertainty, fencing, and the distinction between process recovery and disaster recovery.
+
+## Implemented Content Loading v0.1
+
+The developer CLI delegates to `worldwright-content`: bounded file/byte read -> streaming duplicate/depth guard -> version dispatch -> private schema records -> semantic/reference validation -> immutable validated definitions -> deterministic room mapping -> `WorldBuilder`. Core remains independent of Serde, JSON, and filesystem APIs.
+
+`WorldInstantiation::into_parts()` separates the builder and `WorldLookup`. The host supplies world identity, characters, rule registry, and attachments. Named exit lookup resolves syntax without weakening core movement checks. CLI preflight builds a character-free world with an empty rule registry and never executes commands or starts a listener. SDK exposes the content crate as `worldwright_sdk::content`.
+
+Source responsibilities and limits are in [schema v1](docs/content/SCHEMA_V1.md); the runnable reference is [examples/two-room](examples/two-room/README.md). Release digests, activation, persistence, browser transport, and Studio remain future work.
 
 ## Content and Tooling Architecture
 
