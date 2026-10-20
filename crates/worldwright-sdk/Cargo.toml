@@ -1,0 +1,14 @@
+[package]
+name = "worldwright-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Unstable Worldwright game-development facade scaffold"
+
+[dependencies]
+worldwright-core.workspace = true
+worldwright-content.workspace = true
+
+[lints]
+workspace = true
