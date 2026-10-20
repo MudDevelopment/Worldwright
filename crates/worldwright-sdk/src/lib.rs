@@ -4,13 +4,15 @@
 //! them without introducing a core-to-SDK dependency or a database dependency.
 
 pub use worldwright_content::ContentPipelineStub;
+pub use worldwright_core::world::RoomDescription;
 pub use worldwright_core::{
     GameModule, ModuleRegistrationError, NotImplemented, WorldStub, WorldView,
 };
-pub use worldwright_core::{command, effect, ids, rule, scheduler, time};
+pub use worldwright_core::{command, effect, ids, rule, runtime, scheduler, time};
 
 /// Human-readable scaffold status, not an SDK compatibility promise.
-pub const STATUS: &str = "unstable scaffold; no game execution implemented";
+pub const STATUS: &str =
+    "unstable SDK; local world execution only, no network service or durability";
 
 #[cfg(test)]
 mod tests {

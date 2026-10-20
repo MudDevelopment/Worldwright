@@ -8,10 +8,10 @@
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
-| Implementation status | Core interfaces/primitives and local workflow implemented; Linux Rust 1.85.0 checks passed; complete runtime and pinned remote CI remain unverified |
+| Implementation status | Local two-room command runtime implemented and checked on Linux Rust 1.85.0; network authentication, persistence, and pinned remote CI remain unverified |
 | Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) |
 
-> **Scope and authority:** This document defines target behavior, invariants, contracts, and design rationale. “Must” is a requirement, not evidence of implementation. The [current interface inventory](docs/CORE_INTERFACES.md) identifies implemented typed values, planning, registration, scheduling, and fixtures; it does not claim an authenticated executor or durable world. [Verification](docs/VERIFICATION.md) records the successful Linux Rust 1.85.0 checks. Database migrations, deployed capacity, and operational recovery remain unimplemented/unverified.
+> **Scope and authority:** This document describes the target system; “Must” is a requirement, not evidence of implementation. [RUNTIME.md](docs/RUNTIME.md) defines the implemented single-owner local execution subset: validated construction, current attachment checks, scoped rule queries, staged atomic effects, and addressed messages. This is not login authentication, database commitment, exactly-once delivery, or deployed capacity. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) and [VERIFICATION.md](docs/VERIFICATION.md) describe the supporting contracts and successful Linux checks. The broader network/persistence/recovery design remains future work.
 >
 > **Document boundary:** The README explains the product. This file explains the decisions and behavioral contracts. ARCHITECTURE maps those decisions to components, processes, interfaces, and deployment. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) provide proposed policies, pending operational adoption; [DEFINITIONS.md](DEFINITIONS.md) explains MU* terminology and compatibility limits. Detailed operating runbooks remain future work.
 

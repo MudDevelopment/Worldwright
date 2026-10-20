@@ -13,7 +13,7 @@ This document describes the files actually supplied in this package. The larger 
 - Core contract tests, deterministic fixture tests, and shared application smoke tests, passing locally under Linux Rust 1.85.0; see the verification record.
 - Original project documentation retained and updated to distinguish scaffolding from future behavior.
 
-No game server, UI, world simulator, database schema, content schema, protocol implementation, authentication, authorization, TLS, migration, or deployment is included. Core interfaces/primitives and local/CI workflows are now supplied; see [CORE_INTERFACES.md](CORE_INTERFACES.md) and [DEVELOPMENT.md](DEVELOPMENT.md).
+A programmatic local world runtime now supports Look/Move/Say, authoritative local attachments, and atomic in-memory effect application. No network game server, UI, database/content schema, account login, TLS, migration, or deployment is included. See [RUNTIME.md](RUNTIME.md), [CORE_INTERFACES.md](CORE_INTERFACES.md), and [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Workspace Map
 
@@ -30,7 +30,7 @@ No game server, UI, world simulator, database schema, content schema, protocol i
 | `worldwright-sdk` | `crates/worldwright-sdk/src/lib.rs` | Provisional core/content re-exports and status |
 | `worldwright-testkit` | `crates/worldwright-testkit/src/lib.rs` | Deterministic clock/RNG/world fixtures and tests; `ScenarioStub` still refuses execution |
 
-The server's `src/application.rs` remains a future composition root: it only calls the refusing world-start stub. Core now supports module registration and rule-to-plan evaluation, but neither is a validated command executor or durable game runtime.
+The server's `src/application.rs` remains a future network-service composition root and refuses default startup. The separate core `runtime` module now executes local Look/Move/Say commands with attachment and staged-plan validation; it returns in-memory results, not durable receipts. Testkit supplies the real two-room fixture. See [RUNTIME.md](RUNTIME.md).
 
 Studio and Console have separate binary packages because the requested scaffold includes the full suite. This does not settle whether future UI routes will run inside the server or as independently packaged applications.
 
@@ -103,9 +103,9 @@ These tests are intended to change as actual features replace stubs. A test requ
 
 1. Run the supplied workflow on the approved pinned toolchain and activate both CI jobs; keep Cargo.lock committed.
 2. Approve ownership, outbound licensing, and inbound contribution terms before public distribution.
-3. Build on the implemented core interfaces to create a validated command executor; planning alone is not execution.
-4. Add a small versioned content schema and a two-room fixture with reference validation.
-5. Implement a deterministic, in-process look/move vertical slice and Testkit assertions.
+3. Build on the implemented local runtime; review its trusted-host, in-memory-only boundary.
+4. Add a small versioned content schema and loader that produces validated world builders.
+5. Add a local interactive adapter to the existing tested Look/Move/Say slice.
 6. Add transport and persistence integrations separately with reviewed dependencies and failure tests.
 
 Do not start by adding all planned dependencies or implementing several incomplete service stacks at once.

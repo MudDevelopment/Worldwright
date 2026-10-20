@@ -87,7 +87,8 @@ impl RuleRegistry {
 
     /// Runs a rule to produce an UNVALIDATED plan, not a game command execution.
     /// Caller must establish and revalidate authority before this call, and the
-    /// future executor must validate/commit the resulting plan afterwards.
+    /// executor must validate/commit the resulting plan afterwards. WorldRuntime
+    /// provides this boundary for its supported local in-memory command subset.
     pub fn plan(
         &self,
         envelope: &CommandEnvelope,

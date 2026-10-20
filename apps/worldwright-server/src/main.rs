@@ -17,7 +17,9 @@ fn main() -> ExitCode {
         Some("--help" | "-h") => {
             println!("Worldwright server (scaffold only)");
             println!("Usage: worldwright-server <--help|--version|status>");
-            println!("No listener, world runtime, authentication, or database exists yet.");
+            println!(
+                "A local runtime exists in the SDK; this binary has no listener, login, or database."
+            );
         }
         Some("--version" | "-V") => {
             println!("worldwright-server {}", env!("CARGO_PKG_VERSION"));

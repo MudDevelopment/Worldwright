@@ -2,6 +2,7 @@
 
 - [Scaffold and integration status](SCAFFOLD.md): package boundaries, entry points, and next steps.
 - [Core interfaces](CORE_INTERFACES.md): implemented value types, rule planning, scheduling, and fixture contracts.
+- [World Runtime v0.1](RUNTIME.md): local Look/Move/Say execution, attachments, rollback, message routing, and focused tests.
 - [Development workflow](DEVELOPMENT.md): local tasks, pinned toolchain, and CI configuration.
 - [Verification record](VERIFICATION.md): performed checks and explicit limits.
 - [Project README](../README.md): setup and project overview.

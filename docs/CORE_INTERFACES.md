@@ -1,6 +1,6 @@
 # Core Interfaces — Current Implementation
 
-This increment implements reusable **in-process interfaces and primitives**, not an authenticated game server. The proposed runtime in [DESIGN.md](../DESIGN.md) remains separate from what is present here.
+The core now includes reusable interfaces and a real **in-process Look/Move/Say runtime**, not an authenticated network game server. [RUNTIME.md](RUNTIME.md) documents execution, attachment validation, atomicity, routing, and limits. The full network/persistence design in [DESIGN.md](../DESIGN.md) remains future work.
 
 ## Module Map
 
@@ -9,7 +9,8 @@ This increment implements reusable **in-process interfaces and primitives**, not
 | `ids` | Distinct account, character, world, room, item, connection, and operation IDs; validated definition IDs |
 | `command` | Bounded text, nonzero connection generations, actor context, Look/Move/Say intents and envelopes |
 | `effect` | Typed movement, transfer, message, and scheduling intentions; bounded plans; completed-event DTOs |
-| `world` | Read-only `WorldView` queries; `WorldStub` still refuses startup |
+| `world` | Read-only queries with conservative description/traversal defaults; service-start `WorldStub` still refuses |
+| `runtime` | Private world builder/state, local attachments, atomic Look/Move/Say execution, scoped views, and addressed output |
 | `rule` | Object-safe rule trait; duplicate-safe registry; same-world guard and rule dispatch to produce a plan |
 | `game` | Display metadata and fallible module registration; default registration explicitly refuses |
 | `time` | Logical ticks, checked arithmetic, clock and gameplay-randomness interfaces |
@@ -28,7 +29,7 @@ The provisional text parser accepts exactly 32 ASCII hexadecimal digits, includi
 
 `PlayerText` preserves Unicode and limits text to 4096 UTF-8 bytes. Empty/whitespace-only input and Unicode control characters are rejected; tabs, newlines, and ESC therefore fail. This is a single-line value, not a complete chat policy. It does **not** escape HTML, filter all Unicode formatting characters, or make text safe to render directly.
 
-Connection generations must be nonzero. `ActorContext` and `CommandEnvelope` are ordinary application-supplied data. Constructing them does not validate a session. Future execution must recheck world, account, character attachment, generation, permissions, and visibility.
+Connection generations must be nonzero. `ActorContext` and `CommandEnvelope` are ordinary application-supplied data, not proof of account login. The local runtime checks world, recorded character ownership, and the current connection/generation before evaluating a command. A trusted host establishes attachments; remote authentication and restart-safe session epochs remain future work.
 
 ## Queries, Rules, and Plans
 
@@ -42,7 +43,7 @@ Connection generations must be nonzero. `ActorContext` and `CommandEnvelope` are
 
 An effect plan holds at most 128 intentions and refuses an extra append without changing the existing plan. Movement and item transfer fields are explicit; expected item location is a precondition for a future executor, not an enforced transfer today. Capacity, containment cycles, conservation of value, authorization, current revisions, and durability still require execution-time validation.
 
-There is no plan `apply` method. Constructing a completed-event DTO is not evidence of a committed change or successful delivery. No durable receipts, event stream, or output fan-out are implemented.
+There is no public raw-plan `apply` method. `WorldRuntime::execute` validates its supported command/effect subset against staged state and releases events plus addressed messages only after in-memory replacement. It rejects transfers and scheduling effects. The plan-only registry remains an unvalidated lower-level interface. There are no durable receipts, persistent event stream, or actual network deliveries; constructing a DTO elsewhere proves none of these.
 
 ## Time and Scheduling
 
@@ -74,6 +75,6 @@ Fixtures are unfiltered test data, not production views or durable storage. They
 
 This remains an unpublished `0.1.0-dev.0` snapshot, not a stable SDK release. Existing metadata-only `GameModule` implementations and application stub behavior are retained. No deployed schema or wire format is migrated by this increment.
 
-The next vertical slice should implement a small world owner that validates commands and effect plans against an in-memory two-room world. Only after that should transport, authenticated session attachment, and transactional persistence be integrated. Keep execution authority out of network handlers and preserve the explicit separation between planning, validation, commitment, and delivery.
+The two-room world owner and execution slice now exist; see [RUNTIME.md](RUNTIME.md). The next component is a versioned content loader that constructs validated worlds, followed by a local interactive adapter, authenticated transport, and persistence. `two_room_world()` in Testkit builds the real local runtime programmatically. Keep execution authority out of network handlers and retain the distinction between in-memory success, durable commitment, and delivery.
 
 See [development workflow](DEVELOPMENT.md) for checks and [verification](VERIFICATION.md) for measured results and remaining gaps.

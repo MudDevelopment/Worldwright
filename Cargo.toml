@@ -38,7 +38,7 @@ unsafe_code = "forbid"
 all = "warn"
 
 [workspace.metadata.worldwright]
-stage = "core-interfaces-and-development-workflow"
+stage = "in-memory-world-runtime-look-move-say"
 proposed-license = "MIT OR Apache-2.0"
 license-approved = false
 production-ready = false

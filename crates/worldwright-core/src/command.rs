@@ -62,7 +62,8 @@ impl ConnectionGeneration {
     }
 }
 
-/// Application-supplied context; the future executor must revalidate it.
+/// Application-supplied context; the local runtime revalidates its attachment.
+/// The host/transport must separately establish authenticated caller identity.
 /// Possessing these values does not grant access or prove session validity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ActorContext {

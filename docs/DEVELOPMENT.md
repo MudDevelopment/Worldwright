@@ -62,6 +62,8 @@ Useful focused commands:
 
 ```bash
 cargo test -p worldwright-core --locked --offline
+cargo test -p worldwright-testkit --test runtime --locked --offline
+cargo test -p worldwright-testkit --test runtime --locked --offline two_room_look_move_say_walkthrough -- --nocapture
 cargo test -p worldwright-testkit --test rules --locked --offline
 cargo run -p worldwright-server --locked --offline -- status
 ```

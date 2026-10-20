@@ -55,9 +55,10 @@ impl fmt::Display for PlanFull {
 }
 impl Error for PlanFull {}
 
-/// The future executor must validate scope, current state, ownership, capacity,
-/// authorization, visibility, and durability before applying any effect.
-/// There is intentionally no `apply` or successful-commit operation here.
+/// The executor must validate scope, current state, ownership, capacity,
+/// authorization, visibility, and durability requirements before application.
+/// The local runtime validates its supported subset; transfers and scheduling
+/// remain unsupported. This type intentionally has no raw `apply` method.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct EffectPlan {
     effects: Vec<Effect>,

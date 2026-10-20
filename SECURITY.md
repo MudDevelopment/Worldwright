@@ -76,14 +76,16 @@ Do not include live tokens, passwords, private keys, full production databases, 
 
 ## Supported Versions
 
-There are **no verified supported software versions**. The supplied `0.1.0-dev.0` scaffold has no network listener, authentication, database, or game runtime; it is not a supported security release. See [scaffold scope](docs/SCAFFOLD.md) and [verification limits](docs/VERIFICATION.md).
+There are **no verified supported security releases**. The supplied `0.1.0-dev.0` snapshot has a tested local in-memory runtime, but no network listener, account login, or database. Runtime attachment matching is not proof of authenticated identity. See [runtime scope](docs/RUNTIME.md) and [verification limits](docs/VERIFICATION.md).
 
 | Artifact | Security support status |
 |---|---|
 | This documentation package | Planning material; corrections can be reviewed through established project channels once available |
-| Unreleased `0.1.0-dev.0` core-interface snapshot | Linux Rust 1.85.0 compilation/tests passed; no authenticated executor, networking, or persistence; no production support or security assurance |
+| Unreleased `0.1.0-dev.0` runtime snapshot | Local ownership/attachment/plan validation tested; no account authentication, network service, or persistence; no production support commitment |
 | Future tagged releases | Support policy must be announced with actual versions and end-of-support dates |
 | Independent games and modified deployments | Operator responsibility; upstream applicability assessed case by case |
+
+The local `attach` API is for a trusted host and is not safe to expose directly to clients. Context IDs are not cryptographic capabilities. Reconnect generations are instance-local; the host must discard contexts on runtime teardown until restart-safe session epochs exist. Native rule effects outside owned world state, including RNG consumption, are not rolled back. See [RUNTIME.md](docs/RUNTIME.md) for the precise atomicity and security boundary.
 
 Before a release, publish the supported engine/SDK ranges, platform/dependency assumptions, update path, advisory location, and support period. A branch name alone is not a maintenance commitment. “Latest” is not an adequate supported-version table.
 

@@ -7,10 +7,10 @@
 | Document version | 0.1 — proposed baseline |
 | Prepared | October 20, 2026 |
 | Architecture style | Modular monolith; one authoritative world per server process initially |
-| Implementation status | Core interfaces, bounded scheduler, and developer workflows supplied; Linux Rust 1.85.0 build/tests passed; no running game deployment |
+| Implementation status | Single-owner in-memory Look/Move/Say runtime and workflows supplied; Linux Rust 1.85.0 checks passed; no network game deployment |
 | Companion documents | [README.md](README.md) · [DESIGN.md](DESIGN.md) |
 
-> **Reading guide:** This file describes where responsibilities live, how components communicate, and how a release is assembled and operated. Behavioral rules and rationale are authoritative in [DESIGN.md](DESIGN.md). Diagrams describe a proposed system, not running infrastructure. Mermaid diagrams include prose explanations so this document remains useful in viewers without diagram rendering.
+> **Reading guide:** This file maps the target system, with rationale in [DESIGN.md](DESIGN.md). [RUNTIME.md](docs/RUNTIME.md) documents the implemented local subset: the core runtime owns state and attachment records, evaluates scoped rules, stages changes, and resolves message recipients before returning a committed in-memory result. Testkit builds a two-room world through its public builder. No network service or database participates. The wider diagrams remain proposed infrastructure, with prose explanations for readers without Mermaid support.
 >
 > **Not a deployment specification:** Listener ports, domains, dependency versions, cloud products, sizing, and public API paths remain unassigned. Their eventual values must be verified against real code and deployment artifacts. The architecture does not claim production readiness, automatic failover, or measured capacity.
 

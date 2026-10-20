@@ -1,9 +1,12 @@
 //! Deterministic fixtures and explicit placeholder for a future scenario runner.
 //!
-//! No simulator, fake database, production replay, or working scenario runner exists.
+//! Includes a two-room fixture backed by the real local runtime. No database,
+//! production replay, or general scenario runner is implemented.
 
 pub mod fixtures;
+pub mod two_room;
 pub use fixtures::{FakeClock, SequenceRandom, WorldFixture};
+pub use two_room::{TwoRoomWorld, two_room_world};
 
 pub use worldwright_content::ContentPipelineStub;
 pub use worldwright_core::NotImplemented;
