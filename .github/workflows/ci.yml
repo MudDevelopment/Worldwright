@@ -1,0 +1,50 @@
+name: Rust checks
+
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Check out source
+        # actions/checkout v4 commit verified from its upstream tag.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Bootstrap Linux toolchain
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/dev.sh bootstrap
+      - name: Bootstrap Windows toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/dev.ps1 bootstrap
+      - name: Check on Linux
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/dev.sh check
+      - name: Check on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/dev.ps1 check
+      - name: Ensure lockfile did not change
+        shell: bash
+        run: git diff --exit-code -- Cargo.lock
