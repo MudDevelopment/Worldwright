@@ -1,0 +1,13 @@
+[package]
+name = "worldwright-persistence"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Worldwright durable storage adapter scaffold"
+
+[dependencies]
+worldwright-core.workspace = true
+
+[lints]
+workspace = true
