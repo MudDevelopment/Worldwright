@@ -8,7 +8,7 @@ The effort brings together an authoritative game engine, reusable Rust libraries
 
 Worldwright is **a toolkit for building games, not a single game or setting**. A science-fiction frontier, a fantasy realm, and a roleplay-focused social world should be able to share the same technical foundation while retaining their own rules, content, and identity.
 
-> **Project status:** Planning and architectural definition. The components, directory layout, workflows, and roadmap below are proposed targets, not a claim that working software is available. No existing Worldwright repository or build was verified in preparing this README.
+> **Project status:** Core interfaces and development workflow implemented on the four-app/six-crate scaffold. Typed values, rule planning, a bounded logical scheduler, and deterministic fixtures are present; a running game, UI, networking, authentication, and persistence are not. Linux Rust 1.85.0 compilation, Clippy, 48 tests, debug build, and documentation passed. The pinned Rust 1.85.1 / Windows CI jobs are configured but not remotely verified. See [Getting Started](#getting-started), [core interfaces](docs/CORE_INTERFACES.md), and [verification](docs/VERIFICATION.md).
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
@@ -144,7 +144,7 @@ These are proposed starting choices, subject to architecture review and implemen
 | Deployment | Initially a single authoritative server deployment with a private database |
 | Packaging | Reproducible binaries or containers, selected during implementation |
 
-No dependency versions, network ports, or public endpoints are finalized by this README.
+The scaffold pins Rust 1.85.1, uses edition 2024, and versions local packages as `0.1.0-dev.0`. External dependency versions, network ports, and public endpoints remain unassigned; Tokio/Axum/SQLx/Askama are planned, not installed dependencies.
 
 ### Runtime Model
 
@@ -189,17 +189,23 @@ A game may use only part of the suite. Studio and Console should use documented 
 
 ## Proposed Repository Layout
 
-This is a suggested workspace layout, not a listing of an existing repository. Create components as they become useful; do not scaffold empty crates merely to fill the tree.
+The application and library directories contain the workspace and core-interface increment. Studio and Console remain metadata-only stubs. Cargo.lock is supplied. The local workflows live in `scripts/`, CI in `.github/workflows/ci.yml`, and the implemented boundary is documented in [CORE_INTERFACES.md](docs/CORE_INTERFACES.md). Other deployment/content directories remain guidance placeholders.
 
 ```text
 worldwright/
 ├── Cargo.toml
-├── Cargo.lock
+├── Cargo.lock                  # Cargo-generated; keep committed
+├── scripts/                    # dev.sh and dev.ps1
+├── .github/workflows/ci.yml     # Linux/Windows checks
+├── rust-toolchain.toml
+├── .cargo/config.toml
 ├── README.md
 ├── DESIGN.md
 ├── ARCHITECTURE.md
 ├── SECURITY.md
 ├── CONTRIBUTING.md
+├── CODE_OF_CONDUCT.md
+├── DEFINITIONS.md
 ├── apps/
 │   ├── worldwright/             # Developer CLI
 │   ├── worldwright-server/      # Authoritative server binary
@@ -219,7 +225,7 @@ worldwright/
 └── deploy/                     # Deployment definitions and environment examples
 ```
 
-Application binaries belong under `apps/`. Keep each application's directory, Cargo package, and executable names aligned. The CLI package and binary would both be named `worldwright`.
+Application binaries live under `apps/`. Each application's directory, Cargo package, and executable names are aligned. The CLI package and binary are both named `worldwright`.
 
 License files should be added after the licensing decision is approved; the recommended filenames are described below.
 
@@ -274,22 +280,44 @@ The second game is an important architectural test: it helps distinguish genuine
 
 ## Getting Started
 
-There is no verified installation package or runnable release specified by this document yet.
+Extract the framework archive and open its `worldwright/` directory. No clone URL, database, environment file, or external service is required for this scaffold.
 
-Before implementation begins:
+The workspace selects **Rust 1.85.1**, edition **2024**, and only local dependencies. Install that toolchain with rustfmt and Clippy through your approved tooling process; `rust-toolchain.toml` declares it for rustup. See the [scaffold guide](docs/SCAFFOLD.md) for installation details.
 
-1. Confirm the project's copyright owner and authority to publish it.
-2. Approve the licensing and contribution model.
-3. Confirm the Rust stack and workspace conventions.
-4. Define a minimal reference game and acceptance tests.
-5. Establish supported toolchain versions and reproducible build checks.
-6. Implement the smallest working server/client interaction.
+**Repeatable local workflow:**
 
-Once available, this section should contain the verified clone URL, prerequisites, build commands, database setup, configuration, local startup, and test commands. Do not replace those details with guessed commands or undocumented defaults.
+```bash
+bash scripts/dev.sh bootstrap
+bash scripts/dev.sh check
+```
+
+On Windows with PowerShell 7:
+
+```powershell
+./scripts/dev.ps1 bootstrap
+./scripts/dev.ps1 check
+```
+
+The full check runs formatting, all-target compilation, Clippy, tests, debug build, and API documentation. `fmt`, `test`, `docs`, and `doctor` are also available. See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for behavior and [ci.yml](.github/workflows/ci.yml) for Linux/Windows CI.
+
+Cargo.lock is supplied and was generated by Cargo. Keep it committed; checks use locked, offline dependency resolution. Bootstrap installs the pinned toolchain through rustup when available, or reports installed tools for manual version verification. Toolchain installation can require network access. The local Linux run used Rust 1.85.0; the Rust 1.85.1 Windows/hosted CI jobs still need verification.
+
+After successful verification, inspect the stubs:
+
+```bash
+cargo run -p worldwright --locked --offline -- --help
+cargo run -p worldwright-server --locked --offline -- status
+cargo run -p worldwright-studio --locked --offline -- status
+cargo run -p worldwright-console --locked --offline -- status
+```
+
+All four applications support `--help`/`-h`, `--version`/`-V`, and `status`. Those metadata commands exit successfully; no arguments, unknown operations, or extra arguments exit with code 2. Default server startup refuses to run. No port is opened, UI displayed, or database contacted. `status` is not a service-readiness check.
+
+See [docs/SCAFFOLD.md](docs/SCAFFOLD.md) for the implemented stub inventory and first coding tasks, and [docs/VERIFICATION.md](docs/VERIFICATION.md) for checks actually performed. Approve ownership/licensing before public distribution; the next coding goal is a minimal in-process look/move slice, not deployment.
 
 ## Contributing
 
-Contribution channels and repository policies remain to be established. The intended contribution model includes engineering, content, documentation, accessibility, testing, and operational work.
+The proposed [contribution and governance guide](CONTRIBUTING.md) covers engineering, content, documentation, accessibility, testing, and operations. The [Code of Conduct](CODE_OF_CONDUCT.md) defines proposed community expectations and conflict-aware reporting. These drafts still require owner adoption, named maintainers, and working reporting channels.
 
 Expected standards:
 
@@ -303,7 +331,7 @@ Expected standards:
 - Never commit passwords, private keys, access tokens, or production player data.
 - Submit contributions only when authorized to license them under the project's approved terms.
 
-Before accepting external contributions, publish the inbound license policy and decide whether to use Developer Certificate of Origin sign-off or a contributor agreement. A sign-off is an attestation of contribution rights; it is not a copyright transfer or a substitute for the project's license terms.
+CONTRIBUTING.md recommends an inbound-equals-outbound model and Developer Certificate of Origin 1.1 sign-off, both pending owner approval. Before accepting external contributions, publish the adopted inbound terms and DCO/contributor-agreement decision. A sign-off is an attestation of contribution rights; it is not a copyright transfer or a substitute for the project's license terms.
 
 ## Security and Responsible Operations
 
@@ -322,19 +350,21 @@ Planned safeguards include:
 - Documented retention and access rules for account, chat, and audit data.
 - A designated private vulnerability-reporting channel before public release.
 
-Do not use a public issue to disclose credentials, sensitive player information, or an unmitigated exploit. The project must publish a real private reporting route in `SECURITY.md` rather than relying on an invented address.
+Do not use a public issue to disclose credentials, sensitive player information, or an unmitigated exploit. [SECURITY.md](SECURITY.md) provides the proposed reporting process and explicitly marks private contact routes, support coverage, and supported software versions as not yet established; no address or operational service has been invented.
 
 ## Documentation
 
-This planning package contains README.md, DESIGN.md, and ARCHITECTURE.md. The design and architecture are proposed baselines, not verified implementations. Other documentation areas below remain planned; they are not asserted to exist.
+This scaffold retains the seven foundational documents: README.md, DESIGN.md, ARCHITECTURE.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, DEFINITIONS.md, and SECURITY.md. [docs/SCAFFOLD.md](docs/SCAFFOLD.md) describes the supplied code; [docs/VERIFICATION.md](docs/VERIFICATION.md) records performed checks and gaps. Runtime design remains proposed beyond the explicit stubs. Contribution, conduct, and security policies still require owner adoption and real reporting contacts. Deeper documentation directories contain guidance placeholders, not completed operational procedures.
 
 | Document or area | Intended purpose |
 |---|---|
 | [README.md](README.md) | Project overview and contributor/developer entry points; runnable instructions remain pending |
 | [DESIGN.md](DESIGN.md) | Design decisions, invariants, state ownership, subsystem contracts, and compatibility |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Component boundaries, crate dependencies, runtime flows, deployment topology, and lifecycle |
-| `SECURITY.md` | Security model, supported versions, and private reporting instructions |
-| `CONTRIBUTING.md` | Contribution workflow, checks, review standards, and inbound licensing |
+| [SECURITY.md](SECURITY.md) | Proposed security/reporting policy, support status, threat model, privacy, and release gates |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Proposed governance, contribution workflow, review standards, inbound terms, and DCO recommendation |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Proposed conduct expectations, private reporting, conflict handling, and appeals |
+| [DEFINITIONS.md](DEFINITIONS.md) | Detailed MUD, MUSH, MUCK, MUX, MOO, and MU* comparisons, glossary, and compatibility boundaries |
 | `docs/decisions/` | Architecture decision records |
 | `docs/content/` | World schemas, builder guidance, and publication procedures |
 | `docs/testing/` | Scenario design, fixtures, invariants, and verification procedures |
