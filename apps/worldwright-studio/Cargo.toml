@@ -1,0 +1,18 @@
+[package]
+name = "worldwright-studio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Worldwright content-authoring application scaffold"
+
+[[bin]]
+name = "worldwright-studio"
+path = "src/main.rs"
+
+[dependencies]
+worldwright-content.workspace = true
+worldwright-protocol.workspace = true
+
+[lints]
+workspace = true
