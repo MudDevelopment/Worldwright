@@ -13,24 +13,24 @@ This document describes the files actually supplied in this package. The larger 
 - Core/runtime tests, content/CLI tests, and application smoke tests; see the current verification record for results and provenance.
 - Original project documentation retained and updated to distinguish scaffolding from future behavior.
 
-The local runtime supports Look/Move/Say, authoritative attachments, and atomic in-memory effects. JSON content schema v1, a strict loader, builder conversion, CLI validation, and single-player terminal play are implemented. No network game server, graphical/web UI, database schema, account login, TLS, migration, or deployment is included. See [RUNTIME.md](RUNTIME.md), [CORE_INTERFACES.md](CORE_INTERFACES.md), and [DEVELOPMENT.md](DEVELOPMENT.md).
+The local runtime supports Look/Move/Say, authoritative attachments, and atomic in-memory effects. JSON content schema v1, a strict loader, builder conversion, CLI validation, single-player terminal play, and the authenticated loopback Transport v0.1 server/browser slice are implemented. Persistence, built-in TLS, migration, public deployment, and durable identity are not included. See [RUNTIME.md](RUNTIME.md), [CORE_INTERFACES.md](CORE_INTERFACES.md), [PROTOCOL_V1.md](PROTOCOL_V1.md), [SERVER.md](SERVER.md), and [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Workspace Map
 
 | Package | Source entry | Present behavior |
 |---|---|---|
 | `worldwright` | `apps/worldwright/src/main.rs` | Help/version/status, `content validate <path>`, and runtime-backed `play <path>` |
-| `worldwright-server` | `apps/worldwright-server/src/main.rs` | Metadata commands; default startup explicitly fails |
+| `worldwright-server` | `apps/worldwright-server/src/main.rs` | Protocol-v1 authenticated loopback browser transport, bounded owner, CLI/status/hash/serve commands |
 | `worldwright-studio` | `apps/worldwright-studio/src/main.rs` | Metadata-only builder placeholder; no window or web UI |
 | `worldwright-console` | `apps/worldwright-console/src/main.rs` | Metadata-only operator placeholder; no administration |
 | `worldwright-core` | `crates/worldwright-core/src/lib.rs` | Typed IDs/commands/effects, rule planning/registration, logical scheduler; `WorldStub` still refuses startup |
 | `worldwright-content` | `crates/worldwright-content/src/lib.rs` | Strict JSON v1 loader, semantic/graph validation, private validated types, builder conversion |
-| `worldwright-protocol` | `crates/worldwright-protocol/src/lib.rs` | Human-readable status and an empty supported-version list |
+| `worldwright-protocol` | `crates/worldwright-protocol/src/lib.rs` | Validated protocol-v1 client/server DTOs, envelopes, bounds, and version negotiation |
 | `worldwright-persistence` | `crates/worldwright-persistence/src/lib.rs` | `PersistenceStub`; connection always returns an error |
 | `worldwright-sdk` | `crates/worldwright-sdk/src/lib.rs` | Provisional core/content re-exports and status |
 | `worldwright-testkit` | `crates/worldwright-testkit/src/lib.rs` | Deterministic clock/RNG/world fixtures and tests; `ScenarioStub` still refuses execution |
 
-The server's `src/application.rs` remains a future network-service composition root and refuses default startup. The separate core `runtime` module now executes local Look/Move/Say commands with attachment and staged-plan validation; it returns in-memory results, not durable receipts. Testkit supplies the real two-room fixture. See [RUNTIME.md](RUNTIME.md).
+The server's `src/application.rs` is the implemented local network-service composition root; default/no-command startup remains a usage failure, while `serve` binds only loopback. The separate core `runtime` module executes local Look/Move/Say commands with attachment and staged-plan validation; it returns in-memory results, not durable receipts. Testkit supplies the real two-room fixture. See [RUNTIME.md](RUNTIME.md), [SERVER.md](SERVER.md), and [PROTOCOL_V1.md](PROTOCOL_V1.md).
 
 Studio and Console have separate binary packages because the requested scaffold includes the full suite. This does not settle whether future UI routes will run inside the server or as independently packaged applications.
 
@@ -44,7 +44,7 @@ Studio and Console have separate binary packages because the requested scaffold 
 - CLI depends on content and SDK.
 - Studio depends on content and protocol; Console depends only on protocol.
 
-Some composition dependencies are reserved and not yet used by executable statements. These are local boundary declarations, not installed networking/database functionality. Applications are never dependencies of libraries.
+Server composition dependencies for Tokio/Axum/authentication are now used by the local Transport v0.1 executable; persistence/database declarations remain boundaries rather than an installed durable service. Applications are never dependencies of libraries.
 
 ## Build on a Rust Development Machine
 
@@ -57,7 +57,7 @@ bash scripts/dev.sh check
 
 Use `./scripts/dev.ps1 bootstrap` and `./scripts/dev.ps1 check` on PowerShell 7. Bootstrap uses rustup to install the pin when available; otherwise it reports native tools for manual version verification. Cargo.lock is generated by Cargo and supplied in this increment. Keep it committed.
 
-See [VERIFICATION.md](VERIFICATION.md) for the current Linux Rust 1.85.1 results and temporary dependency-source provenance. Windows/remote CI remain unverified. Bootstrap fetches locked dependencies before offline checks; normal initial provisioning requires registry/toolchain access.
+See [VERIFICATION.md](VERIFICATION.md) for current Windows Transport evidence, historical Linux increment evidence, and dependency provenance. The Linux Transport rerun and hosted CI remain unverified. Bootstrap fetches locked dependencies before offline checks; normal initial provisioning requires registry/toolchain access.
 
 If rustfmt requests edits, run the `fmt` task, review changes, and repeat the check. Convenience Cargo aliases remain available:
 
@@ -70,14 +70,14 @@ cargo test-all
 
 ## Application Behavior
 
-Server, Studio, and Console retain the following single-argument metadata contract. The developer CLI additionally accepts `content validate <path>`, `play <path>`, and command-specific help; see [content guide](content/README.md) and [Local Play](LOCAL_PLAY.md).
+Studio and Console retain metadata behavior. The server additionally accepts `hash-password` and `serve`; the developer CLI accepts `content validate <path>` and `play <path>`. See [content guide](content/README.md), [Local Play](LOCAL_PLAY.md), and [SERVER.md](SERVER.md).
 
 | Argument | Expected exit code | Meaning |
 |---|---|---|
-| `--help` or `-h` | 0 | Print scaffold help |
+| `--help` or `-h` | 0 | Print package help |
 | `--version` or `-V` | 0 | Print Cargo package version |
-| `status` | 0 | Report scaffold status, not service health |
-| No argument | 2 | Requested default behavior is not implemented |
+| `status` | 0 | Report implementation status, not service health |
+| No command | 2 | Usage error; use `serve` for the server |
 | Unknown argument or extra arguments | 2 | Reject unsupported use |
 
 Examples after bootstrapping Cargo.lock:
@@ -89,7 +89,7 @@ cargo run -p worldwright-studio --locked --offline -- status
 cargo run -p worldwright-console --locked --offline -- status
 ```
 
-No command listens on a port or contacts a database. `status` is a local metadata report, not a readiness probe. Default server startup refuses to succeed. The developer CLI supports `content validate`, but no top-level `validate`, `serve`, `new`, `publish`, or `deploy` command.
+The server `serve` command listens only on an explicitly permitted loopback address and contacts no database. `status` is a local metadata report, not a readiness probe. The default/no-command server path is a usage error. The developer CLI supports `content validate` and `play`; account/hash and server options are documented in [SERVER.md](SERVER.md).
 
 ## Test Placement
 
@@ -100,6 +100,8 @@ Server, Studio, and Console include `tests/app_smoke.rs` through their own integ
 These tests are intended to change as actual features replace stubs. A test requiring `NotImplemented` is a scaffold guard, not a permanent product requirement. Replace it with positive and negative feature tests in the same change, documenting the newly supported behavior.
 
 ## First Implementation Tasks
+
+Transport v0.1 is implemented and locally verified on the pinned Windows toolchain. The next major task is durable gameplay/persistence; Studio and Console remain stubs.
 
 1. Run the supplied workflow on the approved pinned toolchain and activate both CI jobs; keep Cargo.lock committed.
 2. Approve ownership, outbound licensing, and inbound contribution terms before public distribution.

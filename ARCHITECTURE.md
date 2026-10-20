@@ -7,12 +7,12 @@
 | Document version | 0.1 — proposed baseline |
 | Prepared | October 20, 2026 |
 | Architecture style | Modular monolith; one authoritative world per server process initially |
-| Implementation status | In-memory Look/Move/Say runtime, strict JSON content loading, CLI validation, and single-player terminal play; see verification for actual checks and provenance limits; no network deployment |
+| Implementation status | In-memory runtime, strict JSON content loading, Local Play, and authenticated process-local Transport v0.1; see verification for Windows evidence and provenance limits; no public deployment |
 | Companion documents | [README.md](README.md) · [DESIGN.md](DESIGN.md) |
 
-> **Reading guide:** This file maps the target system, with rationale in [DESIGN.md](DESIGN.md). [RUNTIME.md](docs/RUNTIME.md) documents the implemented local subset: the core runtime owns state and attachment records, evaluates scoped rules, stages changes, and resolves message recipients before returning a committed in-memory result. Testkit builds a two-room world through its public builder. No network service or database participates. The wider diagrams remain proposed infrastructure, with prose explanations for readers without Mermaid support.
+> **Reading guide:** This file maps the target system, with rationale in [DESIGN.md](DESIGN.md). [RUNTIME.md](docs/RUNTIME.md) documents the implemented local subset: the core runtime owns state and attachment records, evaluates scoped rules, stages changes, and resolves message recipients before returning a committed in-memory result. Testkit builds a two-room world through its public builder. Transport v0.1 adds a separate bounded loopback service; no database participates yet. The wider diagrams remain proposed infrastructure, with prose explanations for readers without Mermaid support.
 >
-> **Not a deployment specification:** Listener ports, domains, dependency versions, cloud products, sizing, and public API paths remain unassigned. Their eventual values must be verified against real code and deployment artifacts. The architecture does not claim production readiness, automatic failover, or measured capacity.
+> **Not a deployment specification:** The local default `127.0.0.1:3000` listener is implemented for Transport v0.1. Production listener ports, domains, topology, dependency versions, cloud products, sizing, and public API deployment remain unassigned. Their eventual values must be verified against real code and deployment artifacts. The architecture does not claim production readiness, automatic failover, or measured capacity.
 
 ## Contents
 
@@ -46,13 +46,13 @@ Worldwright separates reusable engine infrastructure, developer tools, and indiv
 | Implementation language | Rust | Typed domain model, explicit ownership, libraries and applications |
 | Async networking | Tokio | Connection tasks, timers, bounded I/O coordination |
 | HTTP / WebSocket adapter | Axum | Request routing, authentication integration, protocol handling |
-| Web presentation | Askama + HTML and focused browser interaction | Account pages, player shell, initial staff interfaces |
+| Web presentation | Static HTML/CSS/JS and focused browser interaction; Askama deferred | Local player shell and transport reference client |
 | Persistence | PostgreSQL through SQLx | Durable facts, atomic operations, receipts, audit, outbox |
 | Content | Versioned JSON and immutable release artifacts | Game definitions and reproducible publication |
 | Server configuration | Versioned TOML with secret references | Validated deployment behavior |
 | Packaging | Reproducible binaries or containers | Exact code/content release identification |
 
-The workspace selects Rust 1.85.1 / edition 2024 and package version 0.1.0-dev.0. Serde, serde_json, and serde_path_to_error are pinned for the content integration; other external stacks remain deferred. Those libraries do not automatically provide the game's authorization, consistency, or recovery guarantees; those belong to the application design.
+The workspace selects Rust 1.85.1 / edition 2024 and package version 0.1.0-dev.0. Serde, serde_json, serde_path_to_error, Tokio, Axum, Argon2, getrandom, and futures are integrated for the local transport slice; SQLx/PostgreSQL and Askama remain deferred. Those libraries do not automatically provide the game's authorization, consistency, or recovery guarantees; those belong to the application design.
 
 ### Architectural commitments
 
@@ -134,7 +134,7 @@ In the initial deployment, staff pages can be modules hosted by the server while
 
 ### Proposed tree
 
-The four application and six library directories below contain the workspace, core interfaces, and remaining integration stubs. Runtime responsibilities beyond [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) remain proposed. Studio/Console remain metadata-only executables. Cargo.lock is included; `scripts/` and `.github/workflows/ci.yml` now supply local/CI checks. Other deployment/content directories remain guidance placeholders. See [development](docs/DEVELOPMENT.md) and [verification](docs/VERIFICATION.md).
+The four application and six library directories below contain the workspace, core interfaces, implemented local transport, and remaining integration stubs. Runtime responsibilities beyond [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) remain proposed. Studio/Console and persistence remain stubs. Cargo.lock is included; `scripts/` and `.github/workflows/ci.yml` supply local/CI checks. Other deployment/content directories remain guidance placeholders. See [development](docs/DEVELOPMENT.md), [SERVER.md](docs/SERVER.md), and [verification](docs/VERIFICATION.md).
 
 ```text
 worldwright/
@@ -213,7 +213,7 @@ Arrows mean **compile-time dependency**, not network traffic. The game-specific 
 
 ### Composition root
 
-The server application selects concrete adapters, creates pools/channels, loads content, registers game rules, and supervises tasks. It is where Tokio, Axum, SQLx, and application configuration are assembled.
+The server application selects concrete adapters, creates bounded channels, loads content and the local account registry, registers game rules, and supervises the owner/connection tasks. Tokio and Axum are assembled here for Transport v0.1; SQLx/PostgreSQL and durable configuration remain future composition-root work.
 
 Keep async orchestration out of pure rule code. Avoid a globally accessible application-state object containing both unrestricted world mutation and database credentials. Transport state should hold only the capabilities required to submit requests and inspect safe service status.
 
@@ -269,7 +269,7 @@ When the owner awaits a durable operation, socket tasks can continue receiving o
 
 ## Interfaces and Trust Boundaries
 
-These are semantic interface contracts, not finalized URLs or wire schemas.
+These are semantic interface contracts; Transport v0.1 wire schemas are specified in [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), while production URLs and durable interfaces remain open.
 
 | Interface | Caller → receiver | Transport | Authentication / authorization | Contract location |
 |---|---|---|---|---|
@@ -422,6 +422,14 @@ The developer CLI delegates to `worldwright-content`: bounded file/byte read -> 
 `WorldInstantiation::into_parts()` separates the builder and `WorldLookup`. The host supplies world identity, characters, rule registry, and attachments. Named exit lookup resolves syntax without weakening core movement checks. The `content validate` preflight builds a character-free world with an empty rule registry and never executes commands or starts a listener. The separate `play` command consumes the same builder/lookup, supplies one local actor and ReferenceGame, and executes typed commands in-process. Its input framer and terminal renderer live under `apps/worldwright/src/commands/`; the core runtime and content loader remain unchanged. No socket or database is opened. SDK exposes the content crate as `worldwright_sdk::content`.
 
 Source responsibilities and limits are in [schema v1](docs/content/SCHEMA_V1.md); the runnable reference is [examples/two-room](examples/two-room/README.md). Release digests, activation, persistence, browser transport, and Studio remain future work.
+
+## Implemented Transport v0.1
+
+`apps/worldwright-server` now combines the HTTP/WebSocket gateway, bounded account/session service, and one world-owner task. The owner exclusively holds `WorldRuntime`, `WorldLookup`, operation/tick state, and exact attachment routes. Gameplay, control, and per-connection output channels are bounded; cancellation is out of band for takeover, logout/expiry, shutdown, slow consumers, and internal failures.
+
+The gateway requires one exact configured Origin, binds only to loopback, uses a process-local 12-hour opaque session cookie, and serves a same-origin text browser client. Default mode expects an HTTPS edge while the application listener remains plaintext loopback; explicit insecure HTTP is local development only. No persistence, restart recovery, built-in TLS termination, proxy trust, public deployment, or stable SDK compatibility is implied.
+
+Protocol details are in [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), runnable setup is in [SERVER.md](docs/SERVER.md), and the real loopback WebSocket cases are covered by server library tests.
 
 ## Content and Tooling Architecture
 
@@ -701,8 +709,8 @@ Implement vertically through the boundaries, not one enormous subsystem at a tim
 |---|---|---|
 | 1 | Workspace, core IDs, minimal content loader, CI | Reproducible checks and validated two-room fixture |
 | 2 | World owner, look/move rules, fake clock, Testkit scenario | Deterministic headless traversal and invalid-command rejection |
-| 3 | Browser transport, sessions, attachments, bounded queues | Two users interact; stale attachment and slow-client tests |
-| 4 | Persistence schema, writer fencing, one durable item/reward flow | Transaction failure windows, duplicate attempts, restart |
+| 3 | Browser transport, sessions, attachments, bounded queues | Implemented locally; two-user, stale attachment, takeover, revocation, and slow-client tests pass; broader production/deployment gate remains open |
+| 4 | Persistence schema, writer fencing, one durable item/reward flow | Next major increment: transaction failure windows, duplicate attempts, restart |
 | 5 | Release manifest, content validation/package/activation | Staging activation and incompatible-content rejection |
 | 6 | Console control path, privilege scopes, audit, observability | Unauthorized actions denied; controlled drain and recovery |
 | 7 | Isolated preview and initial Studio conveniences | Builder completes a zone without production credentials |
@@ -745,6 +753,6 @@ The documentation package supplies:
 - [DEFINITIONS.md](DEFINITIONS.md): MU* traditions, glossary, and explicit compatibility limits.
 - [SECURITY.md](SECURITY.md): proposed reporting/support policy, threat model, safeguards, privacy, and release gates.
 
-These policies require owner adoption and real reporting channels; documents are not evidence of staffed enforcement or implemented controls. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) identifies current code boundaries and [DEVELOPMENT.md](docs/DEVELOPMENT.md) covers the supplied local/CI workflows. The Linux Rust 1.85.0 build/test run passed; exact Rust 1.85.1 and Windows/hosted CI remain pending. Authoritative wire/content schemas, migrations, networking/persistence integrations, deployment files, and operating procedures remain future work.
+These policies require owner adoption and real reporting channels; documents are not evidence of staffed enforcement or implemented controls. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) identifies current code boundaries and [DEVELOPMENT.md](docs/DEVELOPMENT.md) covers the supplied local/CI workflows. Protocol v1/local networking and the pinned Windows Rust 1.85.1 gate are implemented and verified. A Linux Transport rerun, hosted CI, persistence, production deployment, migrations, and operational procedures remain pending.
 
 The proposed **MIT OR Apache-2.0** licensing status remains unchanged and pending authorization. No source-code license grant or production capability is established by this architecture description.

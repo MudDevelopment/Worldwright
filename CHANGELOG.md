@@ -1,6 +1,13 @@
 # Worldwright Changes
 
-## Unreleased — Local Play v0.1
+## Unreleased — Multiplayer Transport v0.1
+
+- Added the versioned protocol-v1 DTO/validation layer and compatibility status constant.
+- Added the loopback-only authenticated server with strict account registries, fixed-profile Argon2id, process-local 12-hour sessions, exact-Origin login/logout/WebSocket checks, bounded channels, owner cancellation, takeover/revocation handling, and a same-origin browser client.
+- Added focused owner/auth/browser tests and real loopback WebSocket acceptance tests for two-client movement/Say, Ping/Pong, logout revocation, takeover, slow consumers, and sequence/epoch checks.
+- Added [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), [SERVER.md](docs/SERVER.md), and transport verification evidence. Persistence, public deployment, built-in TLS termination, durable identity, and stable compatibility policy remain deferred.
+
+## Previous increment — Local Play v0.1
 
 - Added `worldwright play <path>` with runtime-backed Look/Move/Say, help, quit/exit, and EOF handling. Initial and post-movement room descriptions also execute Look.
 - Added one trusted local actor at the declared entry room, ReferenceGame registration, checked operation counters, elapsed monotonic time, exact-attachment output filtering, and detach attempts on normal/error shutdown.

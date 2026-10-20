@@ -1,6 +1,6 @@
 # Core Interfaces — Current Implementation
 
-The core now includes reusable interfaces and a real **in-process Look/Move/Say runtime**, not an authenticated network game server. [RUNTIME.md](RUNTIME.md) documents execution, attachment validation, atomicity, routing, and limits. The full network/persistence design in [DESIGN.md](../DESIGN.md) remains future work.
+The core now includes reusable interfaces and a real **in-process Look/Move/Say runtime**. JSON content loading, Local Play, and authenticated Transport v0.1 are implemented in their owning crates/applications; this core remains independent of the network gateway. [RUNTIME.md](RUNTIME.md) documents execution, attachment validation, atomicity, routing, and limits. Persistence and durable reconciliation remain future work in [DESIGN.md](../DESIGN.md).
 
 ## Module Map
 
@@ -75,6 +75,6 @@ Fixtures are unfiltered test data, not production views or durable storage. They
 
 This remains an unpublished `0.1.0-dev.0` snapshot, not a stable SDK release. Existing metadata-only `GameModule` implementations and application stub behavior are retained. No deployed schema or wire format is migrated by this increment.
 
-The two-room world owner and execution slice now exist; see [RUNTIME.md](RUNTIME.md). The next component is a versioned content loader that constructs validated worlds, followed by a local interactive adapter, authenticated transport, and persistence. `two_room_world()` in Testkit builds the real local runtime programmatically. Keep execution authority out of network handlers and retain the distinction between in-memory success, durable commitment, and delivery.
+The runtime, versioned content loader, Local Play adapter, and authenticated Transport v0.1 now exist; see [RUNTIME.md](RUNTIME.md), [LOCAL_PLAY.md](LOCAL_PLAY.md), and [PROTOCOL_V1.md](PROTOCOL_V1.md). Persistence and durable reconciliation are next. `two_room_world()` in Testkit builds the real local runtime programmatically. Keep execution authority out of network handlers and retain the distinction between in-memory success, durable commitment, and delivery.
 
 See [development workflow](DEVELOPMENT.md) for checks and [verification](VERIFICATION.md) for measured results and remaining gaps.

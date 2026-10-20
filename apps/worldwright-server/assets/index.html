@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worldwright</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main>
+    <h1>Worldwright</h1>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Log in</button>
+      <button id="logout" type="button">Log out</button>
+    </form>
+    <p id="status" role="status">Disconnected</p>
+    <ul id="output" aria-live="polite"></ul>
+    <form id="command-form">
+      <label for="command">Command</label>
+      <input id="command" name="command" autocomplete="off" spellcheck="false" disabled>
+      <button id="command-submit" type="submit" disabled>Send</button>
+    </form>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

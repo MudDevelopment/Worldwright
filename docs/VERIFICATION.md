@@ -1,12 +1,20 @@
 # Verification
 
-## Current: Local Play v0.1
+## Current: Multiplayer Transport v0.1
 
-**127 tests passed (125 unit/integration + 2 compile-fail doctests)** on Linux Rust 1.85.1 after a clean rebuild. Formatting, all-target checks, Clippy, debug build, and API documentation passed. A real Linux pseudo-terminal smoke test verified prompts, movement, and quit.
+**166 workspace tests passed: 164 unit/integration tests and 2 compile-fail doctests, with 0 failures.** This includes 32 `worldwright-server` library tests, 2 server smoke tests, 14 protocol tests, and seven real loopback WebSocket acceptance cases covering two-client interaction, authentication/origin/logout boundaries, takeover, graceful shutdown with an open socket, absolute handshake deadlines under control Ping traffic, unsupported-version refusal, binary-frame refusal, epoch/sequence validation, and standard WebSocket Ping/Pong. No browser process or interactive accessibility test was run.
 
-See the [Local Play verification report](verification/local-play-report.md) and captured logs for actual results and provenance limits. Windows/hosted CI and approved registry-artifact acceptance remain pending; verification still uses the temporary dependency-source cache described there.
+The final Windows gate passed through PowerShell with `powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 check` (the direct `./scripts/dev.ps1 check` form is PowerShell syntax and is not executable by this Bash tool wrapper). The script passed formatting, locked/offline workspace check, Clippy with warnings denied, workspace tests/doctests, debug build, and rustdoc. Follow-up `cargo test -p worldwright-server`, `cargo test -p worldwright-protocol`, and `git diff --check` also passed.
+
+Environment: Windows host, `rustc 1.85.1 (4eb161250 2025-03-15)`, `cargo 1.85.1 (d73d2caf9 2024-12-31)`, native `x86_64-pc-windows-msvc` target. The resolved transport dependencies include `argon2 0.5.3`, `axum 0.8.6`, `futures-util 0.3.31`, `getrandom 0.3.4`, `rpassword 7.4.0`, `tokio 1.48.0`, `http-body-util 0.1.3`, `tokio-tungstenite 0.28.0`, `tower 0.5.2`, `serde 1.0.228`, and `serde_json 1.0.145`.
+
+Read the [Transport v0.1 report](verification/transport-report.md), [protocol contract](PROTOCOL_V1.md), and [server guide](SERVER.md). Linux rerun for this increment, hosted CI, public deployment, durable authentication/session recovery, and production capacity/security assessment remain unverified.
 
 ---
+
+## Historical: Local Play v0.1
+
+The preceding Local Play evidence remains historical evidence from its Linux run: 127 tests passed (125 unit/integration plus 2 compile-fail doctests), with formatting, all-target checks, Clippy, debug build, and API documentation passing. Windows/hosted CI and approved registry-artifact acceptance were not part of that increment.
 
 ## Historical: Content Loading v0.1
 

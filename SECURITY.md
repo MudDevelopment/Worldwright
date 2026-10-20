@@ -76,12 +76,12 @@ Do not include live tokens, passwords, private keys, full production databases, 
 
 ## Supported Versions
 
-There are **no verified supported security releases**. The supplied `0.1.0-dev.0` snapshot has a tested local in-memory runtime, but no network listener, account login, or database. Runtime attachment matching is not proof of authenticated identity. See [runtime scope](docs/RUNTIME.md) and [verification limits](docs/VERIFICATION.md).
+There are **no verified supported security releases**. The supplied `0.1.0-dev.0` snapshot has a tested local in-memory runtime and an authenticated loopback Transport v0.1 development slice, but no durable identity, database, public deployment, or production support commitment. See [server guide](docs/SERVER.md) and [verification limits](docs/VERIFICATION.md).
 
 | Artifact | Security support status |
 |---|---|
 | This documentation package | Planning material; corrections can be reviewed through established project channels once available |
-| Unreleased `0.1.0-dev.0` runtime snapshot | Local ownership/attachment/plan validation tested; no account authentication, network service, or persistence; no production support commitment |
+| Unreleased `0.1.0-dev.0` development snapshot | Local ownership/attachment, authenticated loopback transport, and bounded protocol validation tested; no durable persistence or production support commitment |
 | Future tagged releases | Support policy must be announced with actual versions and end-of-support dates |
 | Independent games and modified deployments | Operator responsibility; upstream applicability assessed case by case |
 
@@ -271,7 +271,15 @@ Diagnostics escape control and non-ASCII characters and bound each displayed com
 
 The input framer retains at most 4101 bytes plus bounded stdin buffering, drains oversized lines, and rejects invalid UTF-8/control-bearing input. This is memory bounding, not a deadline on local stdin. The renderer preserves full valid text and ordinary Unicode while escaping control, bidi-direction, and Unicode line/paragraph characters. Runtime actions are not rolled back when terminal delivery fails; Move and its automatic Look are separate executions. Cleanup attempts detach on quit, EOF, or session error. Ctrl-C retains ordinary OS termination behavior.
 
-No network listener, credential handling, durable session, persistent state, or random generator is introduced. See [Local Play](docs/LOCAL_PLAY.md).
+No network listener, credential handling, durable session, persistent state, or random generator is introduced by Local Play. See [Local Play](docs/LOCAL_PLAY.md).
+
+### Implemented authenticated local browser transport
+
+Transport v0.1 adds a loopback-only, exact-Origin browser service. Registry passwords use Argon2id v19 with `m=19456,t=2,p=1`, random salts, 32-byte output, 1 KiB password bounds, and four concurrent blocking verifications. Unknown and wrong passwords share a generic 401. Sessions use 32-byte random opaque server-side tokens, 12-hour absolute expiry, a 1024-entry cap with pruning, and `HttpOnly; SameSite=Strict` cookies that are Secure by default.
+
+The service rejects wildcard/query-token authentication, requires exact Origin values, and exposes insecure HTTP only through an explicit local-development flag. Body, frame, gameplay/control/output queues, handshake, idle, control, socket-write, and cleanup bounds are enforced. Out-of-band cancellation handles logout, expiry, takeover, shutdown, and slow consumers; attachment generations and recipient revalidation prevent stale execution/delivery. CSP and `textContent` rendering keep browser output data-only.
+
+This remains a static local registry with no recovery/MFA, no rate policy beyond hash concurrency, no durable revocation or sessions, no built-in TLS, no proxy-header trust, and no production deployment assessment. The browser assets and real loopback WebSocket cases are automated-tested; interactive accessibility testing has not been performed. See [SERVER.md](docs/SERVER.md) and [PROTOCOL_V1.md](docs/PROTOCOL_V1.md).
 
 ### Content and publication
 

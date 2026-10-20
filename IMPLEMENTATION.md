@@ -1,6 +1,14 @@
 # Implementation handoff
 
-## Current increment: Local Play v0.1
+## Current increment: Multiplayer Transport v0.1
+
+Implemented `worldwright-server` on top of the validated content loader and core runtime. The server includes strict account-registry loading, fixed-profile Argon2id login, process-local sessions, exact-Origin loopback HTTP/WebSocket routes, one owner task with bounded channels and cancellation, takeover-safe attachments, and a CSP-compatible browser client. `worldwright-protocol` contains the validated v1 DTO/envelope contract.
+
+Run the local account/hash and server workflow in [SERVER.md](docs/SERVER.md). The exact contract is in [PROTOCOL_V1.md](docs/PROTOCOL_V1.md). Local Play remains available as the preceding single-player host. Persistence, durable identity/revocation, recovery, public deployment, built-in TLS termination, and stable SDK policy remain future work.
+
+The final Windows local gate records formatting, server/protocol checks, workspace compilation, 32 server library tests plus 2 server smoke tests, and protocol tests. See [VERIFICATION.md](docs/VERIFICATION.md) and the [transport report](docs/verification/transport-report.md).
+
+## Previous increment: Local Play v0.1
 
 Implemented `worldwright play <path>` on top of the unchanged content loader and core runtime. New application modules are `commands/play.rs`, `commands/play_input.rs`, and `commands/play/tests.rs`; subprocess coverage lives in `apps/worldwright/tests/play.rs`. Argument parsing, dispatch/help/status, and stage metadata are updated.
 

@@ -8,7 +8,7 @@ The effort brings together an authoritative game engine, reusable Rust libraries
 
 Worldwright is **a toolkit for building games, not a single game or setting**. A science-fiction frontier, a fantasy realm, and a roleplay-focused social world should be able to share the same technical foundation while retaining their own rules, content, and identity.
 
-> **Project status:** Local Play v0.1 adds `worldwright play <path>`: load a validated JSON world and explore it through runtime-backed Look/Move/Say in a single-player terminal session. Content validation remains available separately. There is no login service, networking, graphical/web UI, or persistence. See [Local Play](docs/LOCAL_PLAY.md), [content schema](docs/content/SCHEMA_V1.md), [runtime guide](docs/RUNTIME.md), and [verification](docs/VERIFICATION.md) for supported behavior and verification limits.
+> **Project status:** Transport v0.1 adds an authenticated, process-local two-player browser/WebSocket slice over validated JSON content and the single-owner runtime. It includes bounded sessions, exact-origin checks, takeover-safe attachments, and automated two-client loopback coverage. Persistence, public deployment, and TLS termination remain outside this development increment. See [Local Play](docs/LOCAL_PLAY.md), [protocol v1](docs/PROTOCOL_V1.md), [server guide](docs/SERVER.md), [road map](ROAD-MAP.md), and [verification](docs/VERIFICATION.md).
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
@@ -144,7 +144,7 @@ These are proposed starting choices, subject to architecture review and implemen
 | Deployment | Initially a single authoritative server deployment with a private database |
 | Packaging | Reproducible binaries or containers, selected during implementation |
 
-The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as `0.1.0-dev.0`. Content loading uses pinned Serde, serde_json, and serde_path_to_error with a committed lockfile. Network ports and public endpoints remain unassigned; Tokio/Axum/SQLx/Askama are planned, not installed dependencies.
+The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as `0.1.0-dev.0`. Content loading uses pinned Serde, serde_json, and serde_path_to_error with a committed lockfile. Tokio, Axum, Argon2, getrandom, and futures are installed for the development server; SQLx/PostgreSQL and Askama remain planned rather than integrated.
 
 ### Runtime Model
 
@@ -189,7 +189,7 @@ A game may use only part of the suite. Studio and Console should use documented 
 
 ## Proposed Repository Layout
 
-The application and library directories contain the workspace and core-interface increment. Studio and Console remain metadata-only stubs. Cargo.lock is supplied. The local workflows live in `scripts/`, CI in `.github/workflows/ci.yml`, and the implemented boundary is documented in [CORE_INTERFACES.md](docs/CORE_INTERFACES.md). Other deployment/content directories remain guidance placeholders.
+The application and library directories contain the content, runtime, protocol, and local transport increments. `worldwright-server` and `worldwright-protocol` are implemented development slices; Studio, Console, and persistence remain stubs. Cargo.lock is supplied. The local workflows live in `scripts/`, CI in `.github/workflows/ci.yml`, and the implemented boundaries are documented in [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and [SERVER.md](docs/SERVER.md). Other deployment/content directories remain guidance placeholders.
 
 ```text
 worldwright/
@@ -265,7 +265,7 @@ Maintainers should record architectural decisions, review public API changes, an
 
 ## Delivery Roadmap
 
-All phases are proposed. Completion should be demonstrated through acceptance evidence rather than elapsed time alone.
+The local Phase 2 interaction slice now has Windows acceptance evidence. Production/deployment gates and later phases remain open; completion must be demonstrated through acceptance evidence rather than elapsed time alone.
 
 | Phase | Focus | Exit evidence |
 |---|---|---|
@@ -280,9 +280,9 @@ The second game is an important architectural test: it helps distinguish genuine
 
 ## Getting Started
 
-Extract the framework archive and open its `worldwright/` directory. No clone URL, database, environment file, or external service is required for this scaffold.
+Extract the framework archive and open its `worldwright/` directory. Local content validation and Local Play need no database or external service. Transport development additionally uses an untracked local account registry; see [SERVER.md](docs/SERVER.md).
 
-The workspace selects **Rust 1.85.1**, edition **2024**, and only local dependencies. Install that toolchain with rustfmt and Clippy through your approved tooling process; `rust-toolchain.toml` declares it for rustup. See the [scaffold guide](docs/SCAFFOLD.md) for installation details.
+The workspace selects **Rust 1.85.1**, edition **2024**, and locked local/registry dependencies. Install that toolchain with rustfmt and Clippy through your approved tooling process; `rust-toolchain.toml` declares it for rustup. See the [scaffold guide](docs/SCAFFOLD.md) and [development guide](docs/DEVELOPMENT.md) for installation details.
 
 **Repeatable local workflow:**
 
@@ -300,7 +300,7 @@ On Windows with PowerShell 7:
 
 The full check runs formatting, all-target compilation, Clippy, tests, debug build, and API documentation. `fmt`, `test`, `docs`, and `doctor` are also available. See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for behavior and [ci.yml](.github/workflows/ci.yml) for Linux/Windows CI.
 
-Cargo.lock is supplied and was generated by Cargo. Keep it committed. Bootstrap installs the pinned toolchain when rustup is available and runs `cargo fetch --locked`; subsequent checks use locked, offline resolution. Both initial dependency fetching and toolchain installation may need network access. The current Linux checks use Rust 1.85.1; Windows/hosted CI and approved registry-artifact acceptance remain pending as detailed in the verification record.
+Cargo.lock is supplied and was generated by Cargo. Keep it committed. Bootstrap installs the pinned toolchain when rustup is available and runs `cargo fetch --locked`; subsequent checks use locked, offline resolution. Both initial dependency fetching and toolchain installation may need network access. The current Transport gate passed on Windows Rust 1.85.1; older Linux increments have evidence, while a Linux Transport rerun, hosted CI, and approved registry-artifact acceptance remain pending as detailed in the verification record.
 
 Validate the editable reference world:
 
@@ -324,7 +324,16 @@ Play the same JSON world interactively:
 cargo run -p worldwright --locked --offline -- play examples/two-room/world.json
 ```
 
-Use `look` (`l`), `go north`, `say Hello`, `help`, and `quit` (`exit`). EOF also ends cleanly. The starting room appears automatically; successful movement is followed by a runtime-backed Look. Piped input is supported without prompts. This is a single-player, in-memory terminal host—not a network service or login system. See [LOCAL_PLAY.md](docs/LOCAL_PLAY.md) for input limits, exit codes, and the exact local trust boundary.
+Use `look` (`l`), `go north`, `say Hello`, `help`, and `quit` (`exit`). EOF also ends cleanly. The starting room appears automatically; successful movement is followed by a runtime-backed Look. Piped input is supported without prompts. This is a single-player, in-memory terminal host. See [LOCAL_PLAY.md](docs/LOCAL_PLAY.md) for its trust boundary, then [SERVER.md](docs/SERVER.md) for authenticated transport setup.
+
+For the authenticated local transport, generate one hash per user without passing passwords as arguments, create the untracked `accounts.local.json` schema from [SERVER.md](docs/SERVER.md), then run:
+
+```text
+cargo run -p worldwright-server --locked --offline -- hash-password
+cargo run -p worldwright-server --locked --offline -- serve --content examples/two-room/world.json --accounts accounts.local.json --origin http://127.0.0.1:3000 --allow-insecure-http
+```
+
+Visit `http://127.0.0.1:3000`. The insecure flag is local development only; keep account registries and password hashes untracked.
 
 Inspect application status separately:
 
@@ -335,9 +344,9 @@ cargo run -p worldwright-studio --locked --offline -- status
 cargo run -p worldwright-console --locked --offline -- status
 ```
 
-All four applications support `--help`/`-h`, `--version`/`-V`, and `status`. The developer CLI additionally supports `content validate <path>`, `play <path>`, and command-specific help. No arguments or invalid command shapes exit with code 2. Default server startup refuses to run. No port is opened, graphical/web UI displayed, or database contacted. `status` is not a service-readiness check.
+All four applications support `--help`/`-h`, `--version`/`-V`, and `status`; the server additionally supports `hash-password` and `serve`. The developer CLI additionally supports `content validate <path>` and `play <path>`. Invalid command shapes exit with code 2. Server runtime/startup failures exit with code 1, and `status` is not a service-readiness check. Studio, Console, and persistence remain stubs.
 
-See [docs/RUNTIME.md](docs/RUNTIME.md) for the implemented local game slice, [docs/SCAFFOLD.md](docs/SCAFFOLD.md) for remaining integrations, and [docs/VERIFICATION.md](docs/VERIFICATION.md) for checks actually performed. Approve ownership/licensing before public distribution. The next major component is separately designed authenticated transport, not deployment of the local terminal host as a server.
+Generate local account hashes and start the development transport with the exact workflow in [SERVER.md](docs/SERVER.md). The server is loopback-only, process-local, and intentionally not a public deployment or in-process TLS service. See [docs/RUNTIME.md](docs/RUNTIME.md), [docs/PROTOCOL_V1.md](docs/PROTOCOL_V1.md), [docs/SCAFFOLD.md](docs/SCAFFOLD.md), and [docs/VERIFICATION.md](docs/VERIFICATION.md). Persistence is the next major architecture step.
 
 ## Contributing
 
@@ -378,7 +387,7 @@ Do not use a public issue to disclose credentials, sensitive player information,
 
 ## Documentation
 
-This scaffold retains the seven foundational documents: README.md, DESIGN.md, ARCHITECTURE.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, DEFINITIONS.md, and SECURITY.md. [docs/SCAFFOLD.md](docs/SCAFFOLD.md) describes the supplied code; [docs/VERIFICATION.md](docs/VERIFICATION.md) records performed checks and gaps. Runtime and JSON content loading are implemented only within the documented local boundaries; networking and persistence remain proposed. Contribution, conduct, and security policies still require owner adoption and real reporting contacts. Deeper documentation directories contain guidance placeholders, not completed operational procedures.
+This package retains the foundational policy documents and now includes the implemented local transport guides: [ROAD-MAP.md](ROAD-MAP.md), [docs/PROTOCOL_V1.md](docs/PROTOCOL_V1.md), [docs/SERVER.md](docs/SERVER.md), and [docs/VERIFICATION.md](docs/VERIFICATION.md). Runtime, content, and authenticated transport are implemented only within their documented local boundaries; persistence and public deployment remain future work. Contribution, conduct, and security policies still require owner adoption and real reporting contacts. Deeper documentation directories contain guidance placeholders, not completed operational procedures.
 
 | Document or area | Intended purpose |
 |---|---|

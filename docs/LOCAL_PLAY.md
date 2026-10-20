@@ -84,4 +84,4 @@ Move and its automatic Look are separate executions. Failure of the latter does 
 
 CLI subprocess tests cover walkthroughs, declared entry rooms, one-way travel, invalid inputs, CRLF, EOF, large/invalid input, Unicode, paths, help, and startup failures. Unit tests cover runtime state/counters, tampered lookup rejection, exact attachment delivery, cleanup on read/write failure, prompt selection, and full-size safe rendering.
 
-See [verification](VERIFICATION.md) for actual results and platform/dependency provenance. The content schema, core runtime, package version, and dependency lockfile are unchanged. The next major implementation is separately designed authenticated transport, not deployment of this terminal host as a server.
+See [verification](VERIFICATION.md) for actual results and platform/dependency provenance. Local Play remains a local-only terminal host; authenticated Transport v0.1 now exists separately in `worldwright-server`. Persistence is the next major implementation step.

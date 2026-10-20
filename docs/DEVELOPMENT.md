@@ -3,9 +3,9 @@
 ## Prerequisites
 
 - The repository's `rust-toolchain.toml` pins Rust **1.85.1**, rustfmt, and Clippy.
-- Use an approved Rust installation, preferably rustup. Registry dependencies are Serde, serde_json, serde_path_to_error, and their locked transitive dependencies. Bootstrap needs registry access or an approved prepopulated cache.
+- Use an approved Rust installation, preferably rustup. Registry dependencies include Serde/JSON, Tokio, Axum, Argon2, getrandom, futures, rpassword, and their locked transitive dependencies. Bootstrap needs registry access or an approved prepopulated cache.
 - Bash is supported for the Unix workflow; the parallel Windows workflow targets PowerShell 7.
-- No database, container runtime, credentials, environment file, or running service is required.
+- No database, container runtime, or running service is required for checks. Server tests create ephemeral loopback listeners and use private synthetic account fixtures; no external service or database is needed.
 
 The package includes a Cargo-generated `Cargo.lock`. Keep it committed. The normal check workflow uses `--locked --offline`; it does not update dependencies silently.
 
@@ -67,7 +67,7 @@ cargo run -p worldwright --locked --offline -- play examples/two-room/world.json
 cargo test -p worldwright --test play --locked --offline
 ```
 
-See [Local Play](LOCAL_PLAY.md) for commands, EOF handling, input limits, and local-only scope. Other useful focused commands:
+See [Local Play](LOCAL_PLAY.md) for commands, EOF handling, input limits, and local-only scope. See [SERVER.md](SERVER.md) and [PROTOCOL_V1.md](PROTOCOL_V1.md) for account, server, and wire setup. Other useful focused commands:
 
 ```bash
 cargo test -p worldwright-core --locked --offline
@@ -75,9 +75,10 @@ cargo test -p worldwright-testkit --test runtime --locked --offline
 cargo test -p worldwright-testkit --test runtime --locked --offline two_room_look_move_say_walkthrough -- --nocapture
 cargo test -p worldwright-testkit --test rules --locked --offline
 cargo run -p worldwright-server --locked --offline -- status
+cargo test -p worldwright-server --locked --offline
 ```
 
-The last command reports scaffold status. It does not start a server or verify service readiness. Default application startup still fails explicitly.
+The server status command reports protocol/browser implementation and process-local state; it does not start a server or verify service readiness. Use [SERVER.md](SERVER.md) for the explicit local `serve` workflow.
 
 ## CI Configuration
 

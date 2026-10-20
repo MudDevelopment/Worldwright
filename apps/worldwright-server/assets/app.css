@@ -1,0 +1,38 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+}
+body {
+  margin: 0;
+  background: #12151b;
+  color: #f2f4f8;
+}
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+form {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+input, button {
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.5rem;
+}
+button {
+  cursor: pointer;
+}
+#output {
+  min-height: 12rem;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 1rem 2rem;
+  border: 1px solid #515b6b;
+  background: #1b2029;
+}
+#status {
+  font-weight: 600;
+}

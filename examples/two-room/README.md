@@ -12,6 +12,8 @@ cargo run -p worldwright --locked --offline -- play examples/two-room/world.json
 
 Local Play starts one player in the Atrium. Try `look`, `go north`, `say Hello from the observatory`, `go south`, and `quit`. A successful move automatically describes the destination. `help`, `l`, `exit`, piped input, and EOF are supported; no world state is saved. See [Local Play](../../docs/LOCAL_PLAY.md) for the full contract.
 
+Transport v0.1 uses this same world with account/character authority supplied by the separate untracked `accounts.local.json` registry. Follow [SERVER.md](../../docs/SERVER.md) to generate hashes and run two authenticated browser clients. Keep the registry and password hashes untracked; they are operational inputs, not world content.
+
 The runtime test loads this exact file, creates Alice/Bob through the trusted builder API, and verifies Look, Move, Look, Say, exact recipients, and rejection/rollback for reverse movement in a one-way variant. The original programmatic fixture remains independent of JSON loading.
 
 Edit a title or description and rerun validation. Introduce an unknown exit destination to see a JSON-pointer diagnostic and exit code 1. See [schema v1](../../docs/content/SCHEMA_V1.md) for all restrictions. Validation does not launch an interactive game or approve a release.

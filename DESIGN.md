@@ -8,7 +8,7 @@
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
-| Implementation status | Local runtime, JSON content loading/validation, and single-player terminal play implemented; see verification for evidence and provenance limits; network authentication, persistence, and hosted CI remain unverified |
+| Implementation status | Content loading, local runtime, Local Play, and authenticated process-local Transport v0.1 implemented; Windows local evidence is recorded in verification, while remote CI, deployment, persistence, and hosted operation remain unverified |
 | Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 > **Scope and authority:** This document describes the target system; “Must” is a requirement, not evidence of implementation. [RUNTIME.md](docs/RUNTIME.md) defines the implemented single-owner local execution subset: validated construction, current attachment checks, scoped rule queries, staged atomic effects, and addressed messages. This is not login authentication, database commitment, exactly-once delivery, or deployed capacity. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) and [VERIFICATION.md](docs/VERIFICATION.md) describe the supporting contracts and successful Linux checks. The broader network/persistence/recovery design remains future work.
@@ -398,7 +398,15 @@ Differences in combat vocabulary, resources, and content belong in game packages
 
 The adapter uses checked operation IDs and elapsed monotonic time. It displays only messages addressed to the exact current attachment and only that room's exit labels. It does not print host snapshots or lookup maps. Bounded line framing drains oversized input without executing its suffix, supports LF/CRLF and final lines at EOF, and preserves full valid Unicode text while escaping terminal controls. Input mistakes are recoverable; I/O and runtime invariant failures stop the session and attempt detach. See [Local Play](docs/LOCAL_PLAY.md) for exact semantics.
 
-No accounts are authenticated and no state is saved. Fixed process-local IDs are not durable identities. The reference rules do not consume randomness; unexpected requests fail rather than receiving fabricated random values. The implementation is in the CLI application, with no new library dependency or core/content API change.
+No accounts are authenticated and no state is saved in Local Play. Fixed process-local IDs are not durable identities. The reference rules do not consume randomness; unexpected requests fail rather than receiving fabricated random values. The implementation is in the CLI application, with no new library dependency or core/content API change.
+
+## Implemented Multiplayer Transport v0.1
+
+The server composition root now provides a bounded authenticated browser/WebSocket development slice. A strict local JSON account registry is checked against a fixed Argon2id v19 profile; four blocking password verifications are admitted at once; opaque server-side sessions expire after 12 hours and are revoked on logout. Exact Origin checks, loopback-only binding, Secure-by-default cookies, explicit local HTTP mode, CSP/security headers, and no query-string token keep the browser boundary narrow.
+
+One Tokio owner task exclusively owns `WorldRuntime`, `WorldLookup`, operation/tick state, and exact attachment routes. Bounded gameplay, control, and per-connection output queues use admission deadlines and out-of-band cancellation for takeover, revocation, shutdown, slow consumers, and internal failures. The transport translates protocol DTOs into runtime intents, revalidates attachments and recipient routes, and keeps Move's follow-up Look as a separate execution. Browser assets render text through DOM text nodes and enforce envelope epoch/sequence checks.
+
+This is implemented and tested only as a process-local, loopback development slice. It has no durable account/session state, restart recovery, database commitment, stable SDK/protocol compatibility policy, built-in TLS termination, proxy trust, public deployment assessment, or interactive accessibility assessment. See [protocol v1](docs/PROTOCOL_V1.md) and [server guide](docs/SERVER.md).
 
 ## Implemented Content Schema and Conversion
 
@@ -491,6 +499,10 @@ Content templates describe what may exist. Durable spawn/claim records determine
 
 ## Protocol and Player Experience
 
+### Implemented v1 contract
+
+The development protocol is specified in [PROTOCOL_V1.md](docs/PROTOCOL_V1.md). It uses bounded JSON text frames, strict DTO validation, Hello → Welcome → Attach → Accepted/Attached/initial Look sequencing, exact request/exit/text limits, stream epochs, and per-stream sequences. Accepted is admission only; operation IDs, runtime revisions, and sessions are process-local. Standard WebSocket Ping/Pong is distinct from application `ping`/`pong`. Durable reconciliation, replay, snapshots after restart, and unresolved durable-operation handling remain future persistence work.
+
 ### Browser-first interaction
 
 HTTPS handles account and application pages; secure WebSockets carry interactive play. Authentication uses a server-side session established before interactive play. No credentials or long-lived bearer tokens belong in WebSocket URL query strings.
@@ -504,7 +516,7 @@ The wire protocol distinguishes:
 - Structured display events and state snapshots.
 - Heartbeat, maintenance, and reconnect instructions.
 
-Route names and port numbers are not fixed here. HTTP operations and WebSocket message contracts must be specified and tested before clients depend on them.
+The implemented development routes and message contract are specified in [SERVER.md](docs/SERVER.md) and [PROTOCOL_V1.md](docs/PROTOCOL_V1.md). Stable public route, SDK, and compatibility policy remains open.
 
 ### Envelope proposal
 
@@ -550,7 +562,9 @@ Chat history, command history, and audit logs have different privacy and retenti
 
 ### Authentication baseline
 
-Propose browser form login with revocable server-side sessions. For password accounts, use Argon2id with independent salts and full encoded hash parameters; select costs through security review and load testing. Bound password-hash work so login floods cannot exhaust the runtime.
+Transport v0.1 implements a bounded JSON account registry with unique typed account/character IDs, bounded names, and strict unknown/duplicate-field rejection. Password hashes are Argon2id v19 with the fixed v0.1 profile `m=19456,t=2,p=1`, 32-byte output, random salts, and no keyid/data. Password inputs are bounded to 1 KiB and four concurrent blocking verifications are admitted; unknown and wrong credentials share a generic 401.
+
+Successful login creates a 32-byte opaque server-side token with a 12-hour absolute expiry and a 1024-session process-local cap. Cookies are HttpOnly/SameSite Strict and Secure by default. Logout, expiry, and authenticated takeover invalidate the relevant attachment. Recovery, MFA, durable identity, and durable revocation remain future decisions.
 
 Cookies require secure transport, HttpOnly, an appropriate SameSite policy, and deliberate scope. Rotate session identifiers on authentication and privilege changes. Logout, account suspension, and credential changes must invalidate relevant sessions and active gameplay attachments.
 
@@ -741,7 +755,7 @@ Do not defer identity, ownership, or transaction invariants until the operationa
 | WW-O01 | Copyright owner, final license, inbound contribution terms | Authorized project owner | Public code publication |
 | WW-O02 | Verify selected bootstrap Rust 1.85.1 / edition 2024; establish supported toolchain matrix and future external dependency versions | Engineering lead | Reproducible foundation build |
 | WW-O03 | Account recovery and privileged MFA/identity-provider approach | Security owner | External beta |
-| WW-O04 | Exact SDK traits, content schema, and protocol specification | Engineering/tooling leads | Publishing supported interfaces |
+| WW-O04 | Exact SDK traits, content schema, and protocol specification | Engineering/tooling leads | Publishing supported interfaces; development protocol v1 is specified, while stable protocol/SDK policy remains open |
 | WW-O05 | Database schema and durability/replication configuration | Engineering/service owners | Durable gameplay acceptance |
 | WW-O06 | Receipt retention, chat privacy, audit retention | Security/community/product owners | Operational beta |
 | WW-O07 | Hosting target, domains, ports, process supervisor, secret provider | Service owner | Deployment implementation |
