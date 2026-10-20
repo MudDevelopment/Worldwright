@@ -1,6 +1,20 @@
-//! Placeholder for the future authoritative world owner.
+//! Read-only query seam and explicit placeholder for the future world owner.
 
-use crate::NotImplemented;
+use crate::{
+    NotImplemented,
+    effect::ItemLocation,
+    ids::{CharacterId, ItemId, RoomId, WorldId},
+};
+
+/// A rule receives only queries, never mutable world state or database access.
+/// Implementations must scope/redact results to the authorized caller. This
+/// trait alone does not enforce visibility, identity, or snapshot consistency.
+pub trait WorldView {
+    fn world_id(&self) -> WorldId;
+    fn contains_room(&self, room: RoomId) -> bool;
+    fn character_room(&self, character: CharacterId) -> Option<RoomId>;
+    fn item_location(&self, item: ItemId) -> Option<ItemLocation>;
+}
 
 /// No world state, scheduling, persistence, or player admission exists yet.
 #[derive(Debug, Default)]
