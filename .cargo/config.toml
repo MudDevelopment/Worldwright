@@ -4,3 +4,6 @@ check-all = "check --workspace --all-targets --locked --offline"
 test-all = "test --workspace --locked --offline"
 fmt-check = "fmt --all -- --check"
 lint = "clippy --workspace --all-targets --all-features --locked --offline -- -D warnings"
+
+[build]
+target = "x86_64-pc-windows-msvc"
