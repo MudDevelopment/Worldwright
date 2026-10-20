@@ -1,0 +1,10 @@
+[package]
+name = "worldwright-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Worldwright transport contract placeholder; no wire protocol yet"
+
+[lints]
+workspace = true
