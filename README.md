@@ -8,7 +8,9 @@ The effort brings together an authoritative game engine, reusable Rust libraries
 
 Worldwright is **a toolkit for building games, not a single game or setting**. A science-fiction frontier, a fantasy realm, and a roleplay-focused social world should be able to share the same technical foundation while retaining their own rules, content, and identity.
 
-> **Project status:** Transport v0.1 adds an authenticated, process-local two-player browser/WebSocket slice over validated JSON content and the single-owner runtime. It includes bounded sessions, exact-origin checks, takeover-safe attachments, and automated two-client loopback coverage. Persistence, public deployment, and TLS termination remain outside this development increment. See [Local Play](docs/LOCAL_PLAY.md), [protocol v1](docs/PROTOCOL_V1.md), [server guide](docs/SERVER.md), [road map](ROAD-MAP.md), and [verification](docs/VERIFICATION.md).
+> **Project status:** Milestones 1–2 provide the reported foundation, runtime, strict JSON content loading, and Local Play baseline. **Milestone 3 — Multiplayer Transport v0.1** is the latest implemented increment, with reported Windows-local verification: authenticated, process-local two-player browser/WebSocket play, bounded sessions, exact-origin checks, and takeover-safe attachments. Linux Transport rerun, hosted CI, and deployment verification remain pending. **Milestone 4 — Durable Gameplay v0.1 is next active, but still planned**; no PostgreSQL-backed gameplay, durable sessions, restart recovery, public deployment, or built-in TLS termination is claimed. See [road map](ROAD-MAP.md), [implementation handoff](IMPLEMENTATION.md), [Local Play](docs/LOCAL_PLAY.md), [protocol v1](docs/PROTOCOL_V1.md), [server guide](docs/SERVER.md), and [verification](docs/VERIFICATION.md).
+>
+> **Documentation alignment — October 21, 2026:** This README is aligned with the expanded eight-milestone roadmap and revised DESIGN/ARCHITECTURE. Existing commands and implementation claims are carried forward from the supplied documents; this documentation update did not change source code or rerun repository tests.
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
@@ -78,6 +80,8 @@ The following components define the intended product family. They are responsibi
 
 ## Planned Capabilities
 
+This is the target product scope, not a list of features all present today. M1–M3 already provide typed core/runtime contracts, strict room/exit content loading, Local Play, and a bounded authenticated loopback browser slice. Inventory/progression, durable state, immutable release/preview workflows, operational administration, and Studio remain later milestone work. See [Delivery Roadmap](#delivery-roadmap) for status and dependencies.
+
 ### World and Gameplay Foundations
 
 - Rooms, exits, zones, objects, characters, and non-player characters.
@@ -129,26 +133,28 @@ The following components define the intended product family. They are responsibi
 
 ### Reference Stack
 
-These are proposed starting choices, subject to architecture review and implementation evidence.
+The table separates reported local implementation from target architecture. Detailed decisions and boundaries are in [DESIGN.md](DESIGN.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Area | Proposed technology or approach |
-|---|---|
-| Primary language | Rust |
-| Asynchronous I/O | Tokio |
-| HTTP and WebSocket service | Axum |
-| Relational persistence | PostgreSQL |
-| Database access | SQLx |
-| Server-rendered web surfaces | Askama and HTML, with focused client-side interaction |
-| World content | Proposed versioned JSON definitions and immutable content-release artifacts |
-| Server configuration | Proposed versioned TOML with validated settings and secret references |
-| Deployment | Initially a single authoritative server deployment with a private database |
-| Packaging | Reproducible binaries or containers, selected during implementation |
+| Area | Technology or approach | Status |
+|---|---|---|
+| Primary language | Rust | Reported workspace baseline |
+| Asynchronous I/O | Tokio | Integrated for the local Transport slice |
+| HTTP and WebSocket service | Axum | Integrated for loopback development, not a public deployment |
+| Relational persistence | PostgreSQL | Planned for M4 |
+| Database access | SQLx | Planned; not integrated in the reported baseline |
+| Web surfaces | Static HTML/CSS/JavaScript player client; Askama for future server-rendered surfaces | Local player client implemented; Askama deferred |
+| World content | Strict JSON schema v1; later immutable content-release artifacts | Loader/validation implemented in M2; packaging/activation/preview planned for M5 |
+| Server configuration | Versioned TOML with validated settings and secret references | Proposed; existing CLI settings do not establish this configuration schema |
+| Deployment | Single authoritative process initially; private database for durable operation | M3 is process-local and database-free; supported production topology remains undecided |
+| Packaging | Reproducible binaries or containers | Deployment packaging and verification remain planned |
 
 The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as `0.1.0-dev.0`. Content loading uses pinned Serde, serde_json, and serde_path_to_error with a committed lockfile. Tokio, Axum, Argon2, getrandom, and futures are installed for the development server; SQLx/PostgreSQL and Askama remain planned rather than integrated.
 
 ### Runtime Model
 
-Begin with a **modular monolith** and one authoritative owner of mutable simulation state. Keep the system internally modular without introducing distributed services solely to match component names.
+Use a **modular monolith** and one authoritative owner of mutable simulation state. Keep the system internally modular without introducing distributed services solely to match component names.
+
+The diagram is the **target architecture across multiple milestones**, not the current runnable composition. M3 has no PostgreSQL, reviewed-release activation, operational Console, or integrated durable scheduler. Its loopback gateway does not terminate TLS itself. Database work begins in M4, release/preview in M5, and scoped operational control in M6.
 
 ```text
 Player Browser
@@ -200,6 +206,8 @@ worldwright/
 ├── rust-toolchain.toml
 ├── .cargo/config.toml
 ├── README.md
+├── ROAD-MAP.md                 # Milestones, dependencies, decisions and exit gates
+├── IMPLEMENTATION.md           # Latest implementation, next work and historical evidence
 ├── DESIGN.md
 ├── ARCHITECTURE.md
 ├── SECURITY.md
@@ -239,11 +247,11 @@ The intended workflow is:
 4. **Validate content.** Check identifiers, references, constraints, and schema compatibility.
 5. **Implement game rules.** Add focused systems through supported Rust interfaces.
 6. **Run repeatable tests.** Verify actions, authorization, ownership, and recovery behavior.
-7. **Playtest in staging.** Review the experience with designers, builders, and operators.
-8. **Publish a versioned release.** Record code, content, configuration, and migration versions together.
-9. **Operate and improve.** Monitor the service, handle reports, and use evidence to guide changes.
+7. **Package and preview.** In M5, identify immutable bytes with a manifest/digest and test that exact artifact in an isolated environment; Studio integration follows in M7.
+8. **Request controlled publication.** Bind review to the tested digest and target environment, check the expected current release and compatibility, then use the authorized staging/activation workflow. A save or successful validation is not publication approval.
+9. **Operate and improve.** Record code, content, configuration and migration versions together; use M6 authorization, audit, monitoring, drain and recovery procedures before operational exposure.
 
-This is a target workflow. CLI subcommands and installation instructions will be documented only after they exist and are verified.
+This is a target workflow. Existing content-validation, Local Play and local Transport commands are documented under [Getting Started](#getting-started). Scaffolding, packaging, preview, publication and administration commands must not be inferred from these steps; document their actual syntax only when implemented and verified. Changed artifact bytes require refreshed review, and a supported content rollback must account for durable-state/schema compatibility.
 
 ## Organization and Responsibilities
 
@@ -265,18 +273,30 @@ Maintainers should record architectural decisions, review public API changes, an
 
 ## Delivery Roadmap
 
-The local Phase 2 interaction slice now has Windows acceptance evidence. Production/deployment gates and later phases remain open; completion must be demonstrated through acceptance evidence rather than elapsed time alone.
+[ROAD-MAP.md](ROAD-MAP.md) is authoritative for the **eight dependency-ordered milestones**. This summary replaces the earlier six-phase outline. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the latest implemented slice, next work, and increment-specific historical evidence.
 
-| Phase | Focus | Exit evidence |
+| Milestone | Focus | Status and exit evidence |
 |---|---|---|
-| **1. Foundation** | Ownership, licensing decision, workspace, architectural contracts, and CI | Reproducible baseline build and approved project boundaries |
-| **2. Playable slice** | Browser connection, character entry, look, movement, and communication | Two players can interact in a small authoritative world |
-| **3. Durable gameplay** | Inventory, progression, a simple encounter, rewards, and reconnect | Restart and retry tests preserve documented state invariants |
-| **4. Builder workflow** | Content validation, preview, publication, and reference content | A builder can safely introduce and test a small playable zone |
-| **5. Operational beta** | Moderation, authentication hardening, metrics, deployment, and recovery | Restricted beta with tested restore and documented support ownership |
-| **6. Toolkit maturity** | SDK stabilization, richer Studio/Console features, templates, and compatibility policy | A second game reuses the foundation without extensive engine changes |
+| **M1 — Foundation and Core** | Workspace, typed identifiers/contracts, rules/effects, scheduling primitives, deterministic tests | Reported complete baseline; configured CI is not proof of successful hosted runs |
+| **M2 — Runtime, Content, and Local Play** | Single-owner runtime, attachment generations, staged Look/Move/Say, strict JSON v1, named exits, local terminal host | Reported complete with earlier Linux evidence and provenance limits |
+| **M3 — Multiplayer Transport v0.1** | Bounded protocol, local registry/sessions, loopback HTTP/WebSocket gateway, browser client | Implemented with reported Windows-local verification; Linux Transport rerun, hosted CI and deployment remain pending |
+| **M4 — Durable Gameplay v0.1** | PostgreSQL schema/migrations, writer fencing, identity decision, one valuable operation, scoped receipts, atomic audit/outbox, uncertain-outcome recovery | **Next active, planned:** one item/reward operation survives duplicate, concurrency, failure and restart tests without duplicate value, false success or accepted stale writers |
+| **M5 — Content Release and Preview v0.1** | Immutable manifests/artifacts, compatibility, staging/maintenance activation, supported rollback, isolated preview, CLI publication requests | Planned: exact reviewed/tested artifact activates in staging; stale/incompatible artifacts and production access from preview are refused |
+| **M6 — Operational Control v0.1** | Capability-scoped control, privileged assurance, audit, observability, graceful drain, backup/restore and takeover runbooks | Planned: unauthorized actions fail; allowed changes are attributable; documented restore produces a coherent playable world |
+| **M7 — Builder Workflow and Studio v0.1** | Schema-aware editing, shared diagnostics, M5 preview/release integration, M6-controlled publication, accessibility | Planned: builder creates, validates and previews a zone, then submits exact reviewed bytes without production database credentials |
+| **M8 — Toolkit Maturity** | Independent second game, SDK compatibility/deprecation, justified gameplay expansion, scaffolding/migrations, measured performance | Planned: reuse without game-specific transport/core-invariant branches; upgrade and performance evidence |
 
-The second game is an important architectural test: it helps distinguish genuinely reusable infrastructure from assumptions embedded in the first game's design.
+### Next implementation priority
+
+M4 is a narrow durable vertical slice, not a commitment to implement all inventory, combat, progression or economic systems at once. Select the first item/reward operation, decide local durable identity versus identity-provider integration, and review transaction/schema/fencing and recovery contracts before coding. Preserve the existing local commands and M3 authority, bounds, origin and text-safety guarantees.
+
+Protocol v1 request IDs remain stream-local correlation; `accepted` means admission and `command_result` means in-memory execution. Durable idempotency, receipt lookup and reconnect reconciliation require explicit new contracts, not silent changes to those meanings. Planned database work does not make current sessions or gameplay restart-safe.
+
+### Dependency and release boundaries
+
+M5 consumes M4's durable-reference and writer contracts. M6 consumes transaction and release mechanisms. M7 consumes shared validation, isolated preview and operational controls rather than introducing a second validator or direct database editing. M8 uses a genuinely independent second game to distinguish reusable infrastructure from first-game assumptions.
+
+Design and test-fixture work can overlap milestones, but activation cannot bypass prerequisite gates. Security applies from the earliest affected increment. Neither M3 local success nor M5 staging activation constitutes production readiness. Licensing, owner adoption, identity, retention, deployment and measured recovery targets remain explicit decisions; no legal approval, production port or service-level target is selected by this roadmap summary.
 
 ## Getting Started
 
@@ -368,20 +388,25 @@ CONTRIBUTING.md recommends an inbound-equals-outbound model and Developer Certif
 
 ## Security and Responsible Operations
 
-Security and player safety are part of the toolkit's requirements.
+Security and player safety apply to every milestone, not only operational beta.
 
-Planned safeguards include:
+**Reported M3 development safeguards:**
 
-- Server-side authentication and authorization.
-- Modern password hashing where password accounts are supported.
-- TLS for public connections and secure session management.
-- Validation of WebSocket origins and protection for state-changing browser requests; CORS alone is not an authorization or CSRF defense.
-- Limits on input size, command rate, queues, and expensive operations.
-- Safe rendering of player-generated text.
-- Audited, least-privilege administrative actions.
-- Protected backups and tested restoration.
-- Documented retention and access rules for account, chat, and audit data.
-- A designated private vulnerability-reporting channel before public release.
+- Server-side local-account authentication, authorized character attachment and execution-time generation checks.
+- Fixed-profile Argon2id password hashes and bounded process-local sessions.
+- Exact-Origin checks on login, logout and WebSocket upgrade; no wildcard authenticated CORS. CORS alone is not authentication or CSRF defense.
+- Bounded input, queues, expensive password-verification work and connection/output paths; saturated critical output routes disconnect.
+- Text-safe browser rendering, a CSP-compatible client and sanitized logging that excludes credentials, raw gameplay frames and chat bodies.
+- Loopback-only service; the documented plain-HTTP option is explicit local development, not a public deployment mode. Secure-cookie/HTTPS-origin defaults do not supply built-in TLS termination.
+
+**Still planned or requiring owner decisions and verification:**
+
+- Durable identity/session or identity-provider integration and documented revocation/restart behavior in M4.
+- Scoped privileged operations, stronger privileged authentication policy, required audit, observability and exercised recovery controls in M6.
+- Supported production TLS termination, trusted proxy policy, certificate lifecycle and secret delivery before public exposure.
+- Protected backups, restore/takeover drills, restore-safe writer authority, and approved recovery targets.
+- Retention and access rules for accounts, receipts, chat, audit, outbox and backups; retention choices must precede the affected durable storage/cleanup behavior.
+- A designated private vulnerability-reporting channel, named owners and an adopted support policy before public release.
 
 Do not use a public issue to disclose credentials, sensitive player information, or an unmitigated exploit. [SECURITY.md](SECURITY.md) provides the proposed reporting process and explicitly marks private contact routes, support coverage, and supported software versions as not yet established; no address or operational service has been invented.
 
@@ -391,9 +416,11 @@ This package retains the foundational policy documents and now includes the impl
 
 | Document or area | Intended purpose |
 |---|---|
-| [README.md](README.md) | Project overview and contributor/developer entry points; runnable instructions remain pending |
-| [DESIGN.md](DESIGN.md) | Design decisions, invariants, state ownership, subsystem contracts, and compatibility |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Component boundaries, crate dependencies, runtime flows, deployment topology, and lifecycle |
+| [README.md](README.md) | Project overview, current local build/run commands, limitations and concise delivery summary |
+| [ROAD-MAP.md](ROAD-MAP.md) | Eight milestones, detailed work packages, dependencies, owner decisions, failure scenarios and exit gates |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | Latest implemented increment, next planned work, concrete handoff and scoped historical evidence |
+| [DESIGN.md](DESIGN.md) | Behavioral decisions, invariants, state ownership, durable/release contracts, compatibility and decision crosswalks |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Component ownership, crate dependencies, runtime/data/control flows, milestone boundaries and lifecycle |
 | [SECURITY.md](SECURITY.md) | Proposed security/reporting policy, support status, threat model, privacy, and release gates |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Proposed governance, contribution workflow, review standards, inbound terms, and DCO recommendation |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Proposed conduct expectations, private reporting, conflict handling, and appeals |
