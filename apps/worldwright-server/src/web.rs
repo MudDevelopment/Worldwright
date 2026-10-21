@@ -144,7 +144,9 @@ async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
         return (StatusCode::FORBIDDEN, "forbidden\n").into_response();
     }
     if let Some(token) = auth::token_from_cookie(&headers) {
-        state.auth.revoke(&token);
+        if state.auth.revoke(&token).await.is_err() {
+            return (StatusCode::SERVICE_UNAVAILABLE, "temporarily unavailable\n").into_response();
+        }
         state.world.revoke_session(token).await;
     }
     let mut response = StatusCode::NO_CONTENT.into_response();
@@ -165,8 +167,12 @@ async fn play(
     let Some(token) = auth::token_from_cookie(&headers) else {
         return auth::unauthorized_response();
     };
-    let Some(principal) = state.auth.lookup(&token) else {
-        return auth::unauthorized_response();
+    let principal = match state.auth.lookup(&token).await {
+        Ok(Some(principal)) => principal,
+        Ok(None) => return auth::unauthorized_response(),
+        Err(_) => {
+            return (StatusCode::SERVICE_UNAVAILABLE, "temporarily unavailable\n").into_response();
+        }
     };
     let connection = match random_connection_id() {
         Ok(connection) => connection,
@@ -315,7 +321,7 @@ async fn handshake(
         .await;
         return (None, request_ids);
     }
-    if !session_matches(auth, principal, session_token) {
+    if !session_matches(auth, principal, session_token).await {
         cancel_first(cancel_tx, DisconnectReason::SessionRevoked);
         return (None, request_ids);
     }
@@ -353,7 +359,7 @@ async fn handshake(
             }
             Receive::Closed => return (None, request_ids),
         };
-        if !session_matches(auth, principal, session_token) {
+        if !session_matches(auth, principal, session_token).await {
             cancel_first(cancel_tx, DisconnectReason::SessionRevoked);
             return (None, request_ids);
         }
@@ -477,7 +483,7 @@ async fn gameplay_loop(
             biased;
             _ = cancellation.changed() => break,
             _ = checks.tick() => {
-                if !session_matches(auth, principal, session_token) {
+                if !session_matches(auth, principal, session_token).await {
                     cancel_first(cancel_tx, DisconnectReason::SessionRevoked);
                     break;
                 }
@@ -583,8 +589,15 @@ async fn gameplay_loop(
     }
 }
 
-fn session_matches(auth: &auth::AuthService, principal: &auth::Principal, token: &str) -> bool {
+async fn session_matches(
+    auth: &auth::AuthService,
+    principal: &auth::Principal,
+    token: &str,
+) -> bool {
     auth.lookup(token)
+        .await
+        .ok()
+        .flatten()
         .is_some_and(|current| current == *principal)
 }
 
@@ -762,6 +775,11 @@ fn cancellation_error(reason: DisconnectReason) -> Option<(ErrorCode, &'static s
                 ErrorCode::Overloaded => "server is busy",
                 ErrorCode::InvalidCommand => "invalid command",
                 ErrorCode::NotFound => "not found",
+                ErrorCode::DurabilityUnavailable => "durability unavailable",
+                ErrorCode::Conflict => "operation conflict",
+                ErrorCode::OperationPending => "operation pending",
+                ErrorCode::WriterFenced => "writer fenced",
+                ErrorCode::TemporarilyUnavailable => "temporarily unavailable",
             },
         )),
         DisconnectReason::Normal | DisconnectReason::Shutdown => None,

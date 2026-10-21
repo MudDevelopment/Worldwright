@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::{
     collections::HashMap,
     sync::{
@@ -13,10 +14,14 @@ use tokio::{
 use worldwright_content::{ValidatedWorldContent, WorldLookup, instantiate};
 use worldwright_core::{
     command::{ActorContext, CommandEnvelope, CommandIntent, PlayerText},
-    ids::{CharacterId, ConnectionId, OperationId, RoomId, WorldId},
+    ids::{CharacterId, ConnectionId, ItemId, OperationId, RoomId, WorldId},
     rule::RuleRegistry,
     runtime::{ExecutionResult, ReferenceGame, WorldError, WorldRuntime},
     time::{RandomExhausted, RandomSource, Tick},
+};
+use worldwright_persistence::{
+    InventorySnapshot, PersistenceError, PostgresStore, RewardOutcome, RewardResult,
+    TransferOutcome, TransferResult,
 };
 use worldwright_protocol::{ClientCommand, ErrorCode, OutputKind, ServerMessage};
 
@@ -47,6 +52,118 @@ pub(crate) fn cancel_first(
             false
         }
     });
+}
+
+pub(crate) struct DurableRewardSpec {
+    key: String,
+    generation: u64,
+    credits: u64,
+    item_definition: String,
+    item: ItemId,
+}
+
+pub(crate) struct DurableActor {
+    world: WorldId,
+    account: worldwright_core::ids::AccountId,
+    character: CharacterId,
+    token_hash: [u8; 32],
+}
+
+#[async_trait]
+pub(crate) trait DurableStore: Send + Sync {
+    async fn inventory(&self, actor: &DurableActor) -> Result<InventorySnapshot, PersistenceError>;
+    async fn claim_reward(
+        &self,
+        actor: &DurableActor,
+        lease: worldwright_persistence::WriterLease,
+        request_id: String,
+        operation: OperationId,
+        spec: DurableRewardSpec,
+    ) -> Result<RewardResult, PersistenceError>;
+    async fn transfer_item(
+        &self,
+        actor: &DurableActor,
+        lease: worldwright_persistence::WriterLease,
+        request_id: String,
+        operation: OperationId,
+        item: ItemId,
+        recipient: String,
+    ) -> Result<TransferResult, PersistenceError>;
+}
+
+#[async_trait]
+impl DurableStore for PostgresStore {
+    async fn inventory(&self, actor: &DurableActor) -> Result<InventorySnapshot, PersistenceError> {
+        self.inventory(&worldwright_persistence::AuthenticatedActor {
+            world: actor.world,
+            account: actor.account,
+            character: actor.character,
+            token_hash: &actor.token_hash,
+        })
+        .await
+    }
+    async fn claim_reward(
+        &self,
+        actor: &DurableActor,
+        lease: worldwright_persistence::WriterLease,
+        request_id: String,
+        operation: OperationId,
+        spec: DurableRewardSpec,
+    ) -> Result<RewardResult, PersistenceError> {
+        self.claim_reward(
+            lease,
+            &worldwright_persistence::AuthenticatedActor {
+                world: actor.world,
+                account: actor.account,
+                character: actor.character,
+                token_hash: &actor.token_hash,
+            },
+            &request_id,
+            operation,
+            worldwright_persistence::RewardSpec {
+                key: &spec.key,
+                generation: spec.generation,
+                credits: spec.credits,
+                item_definition: &spec.item_definition,
+                item: spec.item,
+            },
+        )
+        .await
+    }
+    async fn transfer_item(
+        &self,
+        actor: &DurableActor,
+        lease: worldwright_persistence::WriterLease,
+        request_id: String,
+        operation: OperationId,
+        item: ItemId,
+        recipient: String,
+    ) -> Result<TransferResult, PersistenceError> {
+        self.transfer_item(
+            lease,
+            &worldwright_persistence::AuthenticatedActor {
+                world: actor.world,
+                account: actor.account,
+                character: actor.character,
+                token_hash: &actor.token_hash,
+            },
+            &request_id,
+            operation,
+            worldwright_persistence::TransferSpec {
+                item,
+                recipient_username: &recipient,
+            },
+        )
+        .await
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DurableContext {
+    pub(crate) store: Arc<dyn DurableStore>,
+    pub(crate) lease: worldwright_persistence::WriterLease,
+    pub(crate) world: WorldId,
+    pub(crate) item_definition: String,
 }
 
 #[derive(Clone)]
@@ -135,24 +252,66 @@ struct Owner {
     gameplay: mpsc::Receiver<GameplayRequest>,
     control: mpsc::Receiver<ControlRequest>,
     _ready_guard: ReadyGuard,
+    durable: Option<DurableContext>,
     next_operation: u128,
     started: Instant,
 }
 
 impl WorldHandle {
+    #[allow(dead_code)]
     pub(crate) fn new(
         content: ValidatedWorldContent,
         principals: Vec<crate::auth::Principal>,
+    ) -> Result<Self, crate::ServerError> {
+        Self::new_with_registrations(
+            content,
+            principals
+                .into_iter()
+                .map(|principal| crate::auth::CharacterRegistration {
+                    principal,
+                    room_definition: None,
+                })
+                .collect(),
+        )
+    }
+
+    pub(crate) fn new_with_registrations(
+        content: ValidatedWorldContent,
+        registrations: Vec<crate::auth::CharacterRegistration>,
+    ) -> Result<Self, crate::ServerError> {
+        Self::new_with_durable(content, registrations, None)
+    }
+
+    pub(crate) fn new_with_durable(
+        content: ValidatedWorldContent,
+        registrations: Vec<crate::auth::CharacterRegistration>,
+        durable: Option<DurableContext>,
     ) -> Result<Self, crate::ServerError> {
         let world = WorldId::from_u128(1)
             .map_err(|_| crate::ServerError::startup("world ID initialization failed"))?;
         let (mut builder, lookup) = instantiate(&content, world)
             .map_err(|_| crate::ServerError::startup("world content instantiation failed"))?
             .into_parts();
-        let mut names = HashMap::with_capacity(principals.len());
-        for principal in principals {
+        let mut names = HashMap::with_capacity(registrations.len());
+        for registration in registrations {
+            let principal = registration.principal;
+            let room = match registration.room_definition.as_deref() {
+                None => lookup.entry_room,
+                Some(raw) => {
+                    let definition = raw.parse().map_err(|_| {
+                        crate::ServerError::startup(
+                            "durable character room is not present in loaded content",
+                        )
+                    })?;
+                    lookup.room_ids.get(&definition).copied().ok_or_else(|| {
+                        crate::ServerError::startup(
+                            "durable character room is not present in loaded content",
+                        )
+                    })?
+                }
+            };
             builder
-                .add_character(principal.character, principal.account, lookup.entry_room)
+                .add_character(principal.character, principal.account, room)
                 .map_err(|_| {
                     crate::ServerError::startup("world character initialization failed")
                 })?;
@@ -176,6 +335,7 @@ impl WorldHandle {
             gameplay: gameplay_receiver,
             control: control_receiver,
             _ready_guard: ReadyGuard(ready.clone()),
+            durable,
             next_operation: 1,
             started: Instant::now(),
         };
@@ -298,7 +458,9 @@ impl Owner {
                 Some(request) = self.control.recv() => {
                     if self.handle_control(request).await { break; }
                 }
-                Some(request) = self.gameplay.recv() => self.handle_gameplay(request),
+                Some(request) = self.gameplay.recv() => {
+                    if self.handle_gameplay(request).await { break; }
+                }
                 else => break,
             }
         }
@@ -449,7 +611,215 @@ impl Owner {
         }
     }
 
-    fn handle_gameplay(&mut self, request: GameplayRequest) {
+    async fn handle_gameplay(&mut self, request: GameplayRequest) -> bool {
+        let durable_command = matches!(
+            request.command,
+            ClientCommand::Inventory
+                | ClientCommand::ClaimReward { .. }
+                | ClientCommand::TransferItem { .. }
+        );
+        if !durable_command {
+            self.handle_gameplay_sync(request);
+            return false;
+        }
+        if !self.is_current(request.actor) {
+            return false;
+        }
+        if !self.send_to_actor(
+            request.actor,
+            ServerMessage::Accepted {
+                request_id: request.request_id.clone(),
+            },
+        ) {
+            return false;
+        }
+        let Some(context) = self.durable.clone() else {
+            let _ = self.send_to_actor(
+                request.actor,
+                ServerMessage::Error {
+                    request_id: Some(request.request_id),
+                    code: ErrorCode::DurabilityUnavailable,
+                    message: "durability unavailable".to_owned(),
+                    fatal: false,
+                },
+            );
+            return false;
+        };
+        let token = self
+            .routes
+            .get(&request.actor.character)
+            .map(|route| route.session_token.clone())
+            .unwrap_or_default();
+        let actor = DurableActor {
+            world: context.world,
+            account: request.actor.account,
+            character: request.actor.character,
+            token_hash: worldwright_persistence::session_token_hash(&token),
+        };
+        let result = match request.command {
+            ClientCommand::Inventory => {
+                context
+                    .store
+                    .inventory(&actor)
+                    .await
+                    .map(|snapshot| ServerMessage::Inventory {
+                        request_id: request.request_id.clone(),
+                        balance: snapshot.balance,
+                        character_version: snapshot.character_version,
+                        items: snapshot
+                            .items
+                            .into_iter()
+                            .map(|item| worldwright_protocol::InventoryItem {
+                                item_id: item.item.to_string(),
+                                definition_id: item.definition,
+                                version: item.version,
+                            })
+                            .collect(),
+                    })
+            }
+            ClientCommand::ClaimReward { reward } => {
+                if reward != "welcome" {
+                    let _ = self.send_to_actor(
+                        request.actor,
+                        ServerMessage::Error {
+                            request_id: Some(request.request_id),
+                            code: ErrorCode::NotFound,
+                            message: "reward not found".to_owned(),
+                            fatal: false,
+                        },
+                    );
+                    return false;
+                }
+                let Ok((operation, item)) = durable_ids() else {
+                    return self.durable_failure(DisconnectReason::Internal);
+                };
+                let spec = DurableRewardSpec {
+                    key: "welcome".to_owned(),
+                    generation: 1,
+                    credits: 100,
+                    item_definition: context.item_definition.clone(),
+                    item,
+                };
+                context
+                    .store
+                    .claim_reward(
+                        &actor,
+                        context.lease,
+                        request.request_id.clone(),
+                        operation,
+                        spec,
+                    )
+                    .await
+                    .map(|result| ServerMessage::RewardResult {
+                        request_id: request.request_id.clone(),
+                        operation_id: result.operation.to_string(),
+                        outcome: map_reward_outcome(result.outcome),
+                        balance: result.balance,
+                        item_id: result.item.map(|item| item.to_string()),
+                        replayed: result.replayed,
+                    })
+            }
+            ClientCommand::TransferItem { item_id, recipient } => {
+                let Ok(item) = item_id.parse::<worldwright_core::ids::ItemId>() else {
+                    let _ = self.send_to_actor(
+                        request.actor,
+                        ServerMessage::Error {
+                            request_id: Some(request.request_id),
+                            code: ErrorCode::InvalidCommand,
+                            message: "invalid item ID".to_owned(),
+                            fatal: false,
+                        },
+                    );
+                    return false;
+                };
+                let Ok(operation) = durable_operation_id() else {
+                    return self.durable_failure(DisconnectReason::Internal);
+                };
+                context
+                    .store
+                    .transfer_item(
+                        &actor,
+                        context.lease,
+                        request.request_id.clone(),
+                        operation,
+                        item,
+                        recipient,
+                    )
+                    .await
+                    .map(|result| ServerMessage::TransferResult {
+                        request_id: request.request_id.clone(),
+                        operation_id: result.operation.to_string(),
+                        outcome: map_transfer_outcome(result.outcome),
+                        item_id: result.item.to_string(),
+                        owner_character_id: result.owner.map(|id| id.to_string()),
+                        recipient_name: result.recipient_name,
+                        replayed: result.replayed,
+                    })
+            }
+            _ => unreachable!(),
+        };
+        match result {
+            Ok(message) => {
+                let _ = self.send_to_actor(request.actor, message);
+                false
+            }
+            Err(error) => self.map_durable_failure(request.actor, Some(request.request_id), error),
+        }
+    }
+
+    fn durable_failure(&mut self, reason: DisconnectReason) -> bool {
+        self.shutdown_routes(reason);
+        true
+    }
+
+    fn map_durable_failure(
+        &mut self,
+        actor: ActorContext,
+        request_id: Option<String>,
+        error: PersistenceError,
+    ) -> bool {
+        let (code, message, fatal) = match error {
+            PersistenceError::ReceiptConflict => (
+                ErrorCode::Conflict,
+                "request ID conflicts with an earlier intent",
+                false,
+            ),
+            PersistenceError::Unauthorized => (
+                ErrorCode::Unauthenticated,
+                "session expired or revoked",
+                true,
+            ),
+            PersistenceError::StaleWriter => {
+                return self.durable_failure(DisconnectReason::Protocol(ErrorCode::WriterFenced));
+            }
+            PersistenceError::UnknownOutcome => {
+                return self
+                    .durable_failure(DisconnectReason::Protocol(ErrorCode::OperationPending));
+            }
+            PersistenceError::Database(_) => {
+                return self.durable_failure(DisconnectReason::Protocol(
+                    ErrorCode::TemporarilyUnavailable,
+                ));
+            }
+            _ => return self.durable_failure(DisconnectReason::Protocol(ErrorCode::InternalError)),
+        };
+        if fatal {
+            self.remove_route(actor, DisconnectReason::Protocol(code));
+        } else {
+            let _ = self.send_to_actor(
+                actor,
+                ServerMessage::Error {
+                    request_id,
+                    code,
+                    message: message.to_owned(),
+                    fatal,
+                },
+            );
+        }
+        false
+    }
+
+    fn handle_gameplay_sync(&mut self, request: GameplayRequest) {
         if !self.is_current(request.actor) {
             return;
         }
@@ -528,6 +898,9 @@ impl Owner {
                 }
                 Ok(())
             }
+            ClientCommand::Inventory
+            | ClientCommand::ClaimReward { .. }
+            | ClientCommand::TransferItem { .. } => Err(WorldError::IntentViolation.into()),
         }
     }
 
@@ -707,6 +1080,46 @@ enum CommandError {
 impl From<WorldError> for CommandError {
     fn from(error: WorldError) -> Self {
         Self::Runtime(error)
+    }
+}
+
+fn durable_operation_id() -> Result<OperationId, ()> {
+    for _ in 0..8 {
+        let mut bytes = [0u8; 16];
+        getrandom::fill(&mut bytes).map_err(|_| ())?;
+        if let Ok(id) = OperationId::from_u128(u128::from_be_bytes(bytes)) {
+            return Ok(id);
+        }
+    }
+    Err(())
+}
+fn durable_ids() -> Result<(OperationId, worldwright_core::ids::ItemId), ()> {
+    Ok((durable_operation_id()?, durable_item_id()?))
+}
+fn durable_item_id() -> Result<worldwright_core::ids::ItemId, ()> {
+    for _ in 0..8 {
+        let mut bytes = [0u8; 16];
+        getrandom::fill(&mut bytes).map_err(|_| ())?;
+        if let Ok(id) = worldwright_core::ids::ItemId::from_u128(u128::from_be_bytes(bytes)) {
+            return Ok(id);
+        }
+    }
+    Err(())
+}
+fn map_reward_outcome(value: RewardOutcome) -> worldwright_protocol::RewardOutcome {
+    match value {
+        RewardOutcome::RewardGranted => worldwright_protocol::RewardOutcome::RewardGranted,
+        RewardOutcome::AlreadyClaimed => worldwright_protocol::RewardOutcome::AlreadyClaimed,
+        RewardOutcome::InventoryFull => worldwright_protocol::RewardOutcome::InventoryFull,
+    }
+}
+fn map_transfer_outcome(value: TransferOutcome) -> worldwright_protocol::TransferOutcome {
+    match value {
+        TransferOutcome::ItemTransferred => worldwright_protocol::TransferOutcome::ItemTransferred,
+        TransferOutcome::NotOwned => worldwright_protocol::TransferOutcome::NotOwned,
+        TransferOutcome::SameOwner => worldwright_protocol::TransferOutcome::SameOwner,
+        TransferOutcome::TargetNotFound => worldwright_protocol::TransferOutcome::TargetNotFound,
+        TransferOutcome::InventoryFull => worldwright_protocol::TransferOutcome::InventoryFull,
     }
 }
 

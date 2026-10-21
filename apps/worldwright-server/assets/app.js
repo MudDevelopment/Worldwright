@@ -116,6 +116,16 @@
           break;
         case "command_result":
           break;
+        case "reward_result":
+          print(`Reward ${body.outcome}; balance ${body.balance}${body.item_id ? `; item ${body.item_id}` : ""}${body.replayed ? " (replayed)" : ""}.`);
+          break;
+        case "transfer_result":
+          print(`Transfer ${body.outcome}; item ${body.item_id}${body.recipient_name ? ` to ${body.recipient_name}` : ""}${body.replayed ? " (replayed)" : ""}.`);
+          break;
+        case "inventory":
+          print(`Balance ${body.balance}; items ${body.items.length}.`);
+          body.items.forEach((item) => print(`${item.item_id} ${item.definition_id} v${item.version}`));
+          break;
         case "error":
           print(`${body.code}: ${body.message}`);
           if (body.fatal) {
@@ -178,6 +188,17 @@
     const requestId = nextRequestId();
     if (value === "look" || value === "l") {
       send(socket, { type: "command", request_id: requestId, command: { type: "look" } });
+    } else if (value === "inventory") {
+      send(socket, { type: "command", request_id: requestId, command: { type: "inventory" } });
+    } else if (value === "claim welcome") {
+      send(socket, { type: "command", request_id: requestId, command: { type: "claim_reward", reward: "welcome" } });
+    } else if (value.startsWith("give ")) {
+      const parts = value.slice(5).trim().split(/\s+/);
+      if (parts.length === 2) {
+        send(socket, { type: "command", request_id: requestId, command: { type: "transfer_item", item_id: parts[0], recipient: parts[1] } });
+      } else {
+        print("Commands: look, l, go <exit-label>, say <text>, inventory, claim welcome, give <item-id> <username>");
+      }
     } else if (value.startsWith("go ")) {
       send(socket, { type: "command", request_id: requestId, command: { type: "move", exit: value.slice(3).trim() } });
     } else if (value.startsWith("say ")) {

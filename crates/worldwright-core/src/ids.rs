@@ -66,7 +66,8 @@ instance_id!(
     RoomId,
     ItemId,
     ConnectionId,
-    OperationId
+    OperationId,
+    WriterId
 );
 
 /// Content identity such as `frontier:rooms.arrival`; no persistence schema yet.

@@ -8,11 +8,16 @@ use std::{error::Error, fmt, future::Future, net::SocketAddr, path::PathBuf, pro
 
 pub use application::BoundServer;
 
+pub enum StorageConfig {
+    Local { accounts_path: PathBuf },
+    Postgres { database_url: String },
+}
+
 pub struct ServerConfig {
     pub bind: SocketAddr,
     pub allowed_origin: String,
     pub content_path: PathBuf,
-    pub accounts_path: PathBuf,
+    pub storage: StorageConfig,
     pub allow_insecure_http: bool,
 }
 

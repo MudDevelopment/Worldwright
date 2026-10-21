@@ -1,4 +1,4 @@
-use crate::{BoundServer, ServerConfig};
+use crate::{BoundServer, ServerConfig, ServerError, StorageConfig};
 use axum::http::Uri;
 use std::{
     ffi::OsString,
@@ -14,6 +14,18 @@ pub(crate) enum Command {
     Status,
     HashPassword,
     Serve(ServerConfig),
+    Database(DatabaseCommand),
+}
+
+pub(crate) enum DatabaseCommand {
+    Migrate {
+        env_name: String,
+    },
+    Seed {
+        env_name: String,
+        content: PathBuf,
+        accounts: PathBuf,
+    },
 }
 
 pub(crate) fn parse<I>(arguments: I) -> Result<Command, String>
@@ -29,10 +41,71 @@ where
         Some("--version" | "-V") if arguments.next().is_none() => Ok(Command::Version),
         Some("status") if arguments.next().is_none() => Ok(Command::Status),
         Some("hash-password") if arguments.next().is_none() => Ok(Command::HashPassword),
+        Some("database") => parse_database(arguments),
         Some("serve") => parse_serve(arguments),
         Some(_) => Err("unknown command or extra argument".to_owned()),
         None => Err("command must be valid Unicode".to_owned()),
     }
+}
+
+fn parse_database<I>(arguments: I) -> Result<Command, String>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let mut args = arguments.into_iter();
+    let subcommand = args
+        .next()
+        .ok_or_else(|| "database subcommand is required".to_owned())?;
+    let subcommand = subcommand
+        .to_str()
+        .ok_or_else(|| "database subcommand must be Unicode".to_owned())?;
+    let mut env_name = None;
+    let mut content = None;
+    let mut accounts = None;
+    while let Some(argument) = args.next() {
+        match argument.to_str() {
+            Some("--database-url-env") if env_name.is_none() => {
+                env_name = Some(next_env_name(&mut args)?)
+            }
+            Some("--content") if content.is_none() => {
+                content = Some(next_path(&mut args, "--content")?)
+            }
+            Some("--accounts") if accounts.is_none() => {
+                accounts = Some(next_path(&mut args, "--accounts")?)
+            }
+            _ => return Err("invalid database option".to_owned()),
+        }
+    }
+    let env_name = env_name.ok_or_else(|| "--database-url-env is required".to_owned())?;
+    match subcommand {
+        "migrate" if content.is_none() && accounts.is_none() => {
+            Ok(Command::Database(DatabaseCommand::Migrate { env_name }))
+        }
+        "seed" => Ok(Command::Database(DatabaseCommand::Seed {
+            env_name,
+            content: content.ok_or_else(|| "--content is required".to_owned())?,
+            accounts: accounts.ok_or_else(|| "--accounts is required".to_owned())?,
+        })),
+        _ => Err("invalid database subcommand/options".to_owned()),
+    }
+}
+
+fn next_env_name<I>(arguments: &mut I) -> Result<String, String>
+where
+    I: Iterator<Item = OsString>,
+{
+    let value = next_unicode(arguments, "--database-url-env")?;
+    let bytes = value.as_bytes();
+    if bytes.is_empty()
+        || bytes.len() > 128
+        || !bytes[0].is_ascii_alphabetic() && bytes[0] != b'_'
+        || bytes[1..]
+            .iter()
+            .any(|b| !b.is_ascii_alphanumeric() && *b != b'_')
+    {
+        return Err("environment name is invalid".to_owned());
+    }
+    Ok(value)
 }
 
 fn parse_serve<I>(arguments: I) -> Result<Command, String>
@@ -42,6 +115,8 @@ where
     let mut arguments = arguments.into_iter();
     let mut content = None;
     let mut accounts = None;
+    let mut database_env = None;
+    let mut acquire_writer = false;
     let mut origin = None;
     let mut bind = None;
     let mut allow_insecure_http = false;
@@ -61,6 +136,18 @@ where
                     return Err("--accounts may appear only once".to_owned());
                 }
                 accounts = Some(next_path(&mut arguments, "--accounts")?);
+            }
+            "--database-url-env" => {
+                if database_env.is_some() {
+                    return Err("--database-url-env may appear only once".to_owned());
+                }
+                database_env = Some(next_env_name(&mut arguments)?);
+            }
+            "--acquire-writer" => {
+                if acquire_writer {
+                    return Err("--acquire-writer may appear only once".to_owned());
+                }
+                acquire_writer = true;
             }
             "--origin" => {
                 if origin.is_some() {
@@ -89,7 +176,20 @@ where
         }
     }
     let content = content.ok_or_else(|| "--content is required".to_owned())?;
-    let accounts = accounts.ok_or_else(|| "--accounts is required".to_owned())?;
+    let storage = match (accounts, database_env, acquire_writer) {
+        (Some(accounts_path), None, false) => StorageConfig::Local { accounts_path },
+        (None, Some(env_name), true) => StorageConfig::Postgres {
+            database_url: resolve_env(&env_name)?,
+        },
+        (None, Some(_), false) => {
+            return Err("--acquire-writer is required for PostgreSQL mode".to_owned());
+        }
+        (Some(_), _, true) => {
+            return Err("--acquire-writer is valid only for PostgreSQL mode".to_owned());
+        }
+        (Some(_), Some(_), _) => return Err("exactly one storage mode is required".to_owned()),
+        (None, None, _) => return Err("exactly one storage mode is required".to_owned()),
+    };
     let origin = origin.ok_or_else(|| "--origin is required".to_owned())?;
     validate_origin(&origin, allow_insecure_http)?;
     let bind = bind.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
@@ -100,9 +200,18 @@ where
         bind,
         allowed_origin: origin,
         content_path: content,
-        accounts_path: accounts,
+        storage,
         allow_insecure_http,
     }))
+}
+
+fn resolve_env(name: &str) -> Result<String, String> {
+    let value = std::env::var(name)
+        .map_err(|_| "database URL environment variable is missing or non-Unicode".to_owned())?;
+    if value.is_empty() {
+        return Err("database URL environment variable is empty".to_owned());
+    }
+    Ok(value)
 }
 
 fn next_path<I>(arguments: &mut I, option: &str) -> Result<PathBuf, String>
@@ -210,6 +319,13 @@ where
                 ExitCode::from(1)
             }
         },
+        Command::Database(database) => match run_database(database).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("worldwright-server: {error}");
+                ExitCode::from(1)
+            }
+        },
         Command::Serve(config) => match BoundServer::bind(config).await {
             Ok(server) => {
                 println!("worldwright-server listening on {}", server.local_addr());
@@ -237,6 +353,59 @@ where
             }
         },
     }
+}
+
+async fn run_database(command: DatabaseCommand) -> Result<(), ServerError> {
+    match command {
+        DatabaseCommand::Migrate { env_name } => {
+            let url = resolve_env(&env_name).map_err(|_| {
+                ServerError::startup("database URL environment variable is unavailable")
+            })?;
+            let store = worldwright_persistence::PostgresStore::connect(&url)
+                .await
+                .map_err(|_| ServerError::startup("database connection failed"))?;
+            store
+                .migrate()
+                .await
+                .map_err(|_| ServerError::startup("database migration failed"))?;
+            store
+                .verify_migrations()
+                .await
+                .map_err(|_| ServerError::startup("database migration verification failed"))?;
+        }
+        DatabaseCommand::Seed {
+            env_name,
+            content,
+            accounts,
+        } => {
+            let url = resolve_env(&env_name).map_err(|_| {
+                ServerError::startup("database URL environment variable is unavailable")
+            })?;
+            let store = worldwright_persistence::PostgresStore::connect(&url)
+                .await
+                .map_err(|_| ServerError::startup("database connection failed"))?;
+            store
+                .verify_migrations()
+                .await
+                .map_err(|_| ServerError::startup("database migration verification failed"))?;
+            let validated = worldwright_content::load_file(&content, Default::default())
+                .map_err(|_| ServerError::startup("content validation failed"))?;
+            let accounts = crate::auth::load_seed_accounts(&accounts)?;
+            let seed = worldwright_persistence::SeedWorld {
+                world: worldwright_core::ids::WorldId::from_u128(1)
+                    .map_err(|_| ServerError::startup("world identity failed"))?,
+                content_namespace: validated.namespace().to_owned(),
+                content_schema_version: validated.schema_version(),
+                entry_room_definition: validated.entry_room().as_str().to_owned(),
+                accounts,
+            };
+            store
+                .seed(&seed)
+                .await
+                .map_err(|_| ServerError::startup("database seed failed"))?;
+        }
+    }
+    Ok(())
 }
 
 fn print_help() {

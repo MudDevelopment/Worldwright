@@ -1,4 +1,5 @@
-use crate::{ServerConfig, ServerError};
+use crate::{ServerConfig, ServerError, StorageConfig};
+use std::sync::Arc;
 use std::{future::Future, net::SocketAddr};
 use tokio::net::TcpListener;
 
@@ -18,9 +19,52 @@ impl BoundServer {
             .map_err(|_| ServerError::Configuration("origin is not valid for this mode"))?;
         let content = worldwright_content::load_file(&config.content_path, Default::default())
             .map_err(|_| ServerError::startup("world content failed validation"))?;
-        let auth =
-            crate::auth::AuthService::load(&config.accounts_path, !config.allow_insecure_http)?;
-        let world = crate::world::WorldHandle::new(content, auth.principals())?;
+        let world_id = worldwright_core::ids::WorldId::from_u128(1)
+            .map_err(|_| ServerError::startup("world identity failed"))?;
+        let (auth, registrations, durable) = match config.storage {
+            StorageConfig::Local { accounts_path } => {
+                let auth = crate::auth::AuthService::load_local(
+                    &accounts_path,
+                    !config.allow_insecure_http,
+                )?;
+                let registrations = auth.registrations();
+                (auth, registrations, None)
+            }
+            StorageConfig::Postgres { database_url } => {
+                let store = worldwright_persistence::PostgresStore::connect(&database_url)
+                    .await
+                    .map_err(|_| ServerError::startup("durable storage connection failed"))?;
+                store
+                    .verify_migrations()
+                    .await
+                    .map_err(|_| ServerError::startup("durable migrations are not current"))?;
+                store
+                    .verify_world(world_id, content.namespace(), content.schema_version())
+                    .await
+                    .map_err(|_| ServerError::startup("durable world does not match content"))?;
+                let writer = random_writer_id()
+                    .ok_or_else(|| ServerError::startup("writer identity generation failed"))?;
+                let lease = store
+                    .acquire_writer(world_id, writer)
+                    .await
+                    .map_err(|_| ServerError::startup("writer acquisition failed"))?;
+                let item_definition = format!("{}:items.welcome_token", content.namespace());
+                let durable = crate::world::DurableContext {
+                    store: Arc::new(store.clone()),
+                    lease,
+                    world: world_id,
+                    item_definition,
+                };
+                let (auth, registrations) = crate::auth::AuthService::postgres(
+                    store,
+                    world_id,
+                    !config.allow_insecure_http,
+                )
+                .await?;
+                (auth, registrations, Some(durable))
+            }
+        };
+        let world = crate::world::WorldHandle::new_with_durable(content, registrations, durable)?;
         let listener = match TcpListener::bind(config.bind).await {
             Ok(listener) => listener,
             Err(error) => {
@@ -71,6 +115,17 @@ where
         .map_err(ServerError::io);
     server.world.shutdown().await;
     result
+}
+
+fn random_writer_id() -> Option<worldwright_core::ids::WriterId> {
+    for _ in 0..8 {
+        let mut bytes = [0u8; 16];
+        getrandom::fill(&mut bytes).ok()?;
+        if let Ok(id) = worldwright_core::ids::WriterId::from_u128(u128::from_be_bytes(bytes)) {
+            return Some(id);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -157,7 +212,7 @@ mod tests {
             bind: "127.0.0.1:0".parse().expect("bind"),
             allowed_origin: "http://localhost".to_owned(),
             content_path,
-            accounts_path,
+            storage: crate::StorageConfig::Local { accounts_path },
             allow_insecure_http: true,
         })
         .await
@@ -254,7 +309,9 @@ mod tests {
                 bind: "127.0.0.1:0".parse().expect("bind"),
                 allowed_origin: "http://localhost".to_owned(),
                 content_path: content_path.clone(),
-                accounts_path: accounts_path.clone(),
+                storage: StorageConfig::Local {
+                    accounts_path: accounts_path.clone(),
+                },
                 allow_insecure_http: true,
             })
             .await
