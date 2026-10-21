@@ -4,11 +4,15 @@
 
 | Attribute | Value |
 |---|---|
-| Document version | 0.1 — proposed baseline |
+| Document version | 0.2 — expanded-roadmap alignment; target architecture remains proposed where noted |
+| Updated | October 21, 2026 |
+| Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): eight dependency-ordered milestones; M4 is the next active increment, still planned |
 | Prepared | October 20, 2026 |
 | Architecture style | Modular monolith; one authoritative world per server process initially |
 | Implementation status | In-memory runtime, strict JSON content loading, Local Play, and authenticated process-local Transport v0.1; see verification for Windows evidence and provenance limits; no public deployment |
-| Companion documents | [README.md](README.md) · [DESIGN.md](DESIGN.md) |
+| Companion documents | [README.md](README.md) · [DESIGN.md](DESIGN.md) · [ROAD-MAP.md](ROAD-MAP.md) |
+
+> **Synchronization basis:** This edition reconciles the supplied ARCHITECTURE and DESIGN documents with the expanded ROAD-MAP. Source code, manifests, migrations, and linked verification logs were not inspected in this documentation-only update. “Implemented” below carries forward reported baseline claims; it is not a new test result. New lifecycle and data-model details are planned requirements or labeled proposals, not new APIs, tables, configuration fields, or approved deployment choices.
 
 > **Reading guide:** This file maps the target system, with rationale in [DESIGN.md](DESIGN.md). [RUNTIME.md](docs/RUNTIME.md) documents the implemented local subset: the core runtime owns state and attachment records, evaluates scoped rules, stages changes, and resolves message recipients before returning a committed in-memory result. Testkit builds a two-room world through its public builder. Transport v0.1 adds a separate bounded loopback service; no database participates yet. The wider diagrams remain proposed infrastructure, with prose explanations for readers without Mermaid support.
 >
@@ -24,6 +28,8 @@
 - [Interfaces and Trust Boundaries](#interfaces-and-trust-boundaries)
 - [Runtime Flows](#runtime-flows)
 - [Data Architecture](#data-architecture)
+- [Implemented Content Loading v0.1](#implemented-content-loading-v01)
+- [Implemented Transport v0.1](#implemented-transport-v01)
 - [Content and Tooling Architecture](#content-and-tooling-architecture)
 - [Deployment Views](#deployment-views)
 - [Startup and Shutdown](#startup-and-shutdown)
@@ -37,7 +43,24 @@
 
 ## Architecture at a Glance
 
-Worldwright separates reusable engine infrastructure, developer tools, and individual games. The initial server combines transport, application services, simulation coordination, and persistence adapters in one process. It does not split every product name into a service.
+Worldwright separates reusable engine infrastructure, developer tools, and individual games. The target initial durable server combines transport, application services, simulation coordination, and persistence adapters in one process. The reported M3 server has no participating database. Product names do not each become a service.
+
+### Milestone and evidence map
+
+| Milestone | Architectural increment | Reported status / remaining gate |
+|---|---|---|
+| M1 — Foundation and Core | Ten-package Rust workspace, typed contracts, pure core, verification structure | Reported baseline complete; configured CI is not proof of a hosted run |
+| M2 — Runtime, Content, and Local Play | Single-owner runtime, strict JSON v1, named-exit lookup, terminal host | Reported complete; earlier Linux evidence has recorded provenance limits |
+| M3 — Multiplayer Transport v0.1 | Process-local identity, browser/WebSocket gateway, bounded owner/route channels | Reported Windows-local verification; Linux Transport rerun, hosted CI, deployment pending |
+| M4 — Durable Gameplay v0.1 | PostgreSQL adapter, writer fencing, one valuable operation, receipts/audit/outbox, restart projection | Next active increment, still planned |
+| M5 — Content Release and Preview v0.1 | Immutable artifacts, publication workflow, staging activation, isolated preview process | Planned; consumes M4 durable-reference and writer contracts |
+| M6 — Operational Control v0.1 | Capability-scoped controls, privileged assurance, audit, drain, observability, exercised restore | Planned; production readiness is a separate assessed gate |
+| M7 — Builder Workflow and Studio v0.1 | Editor and workflow clients over M5 preview/release and M6 authority contracts | Planned; no direct production database access |
+| M8 — Toolkit Maturity | Independent second game, compatibility policy, tooling and measured scaling | Planned; no speculative distribution or stable-SDK claim |
+
+The historical M3 record reports 164 unit/integration tests and 2 compile-fail doctests, including 32 server library tests, 2 server smoke tests, and 14 protocol tests, plus seven real loopback acceptance cases. These are not additive totals or tests run for this edition. See [ROAD-MAP M3](ROAD-MAP.md#milestone-3--multiplayer-transport-v01) and the actual [verification record](docs/VERIFICATION.md) for provenance.
+
+Design and fixture preparation may overlap milestones. Activating a later capability must not bypass its prerequisites. In particular, preview infrastructure belongs to M5; M7 adds the builder-facing integration, not a second preview implementation.
 
 ### Reference stack
 
@@ -123,6 +146,25 @@ The following modules may initially live inside existing crates or the server ap
 | Output projector | Visibility filtering and presentation messages | Completed events/snapshots → recipient output | Cannot change world state |
 | Outbox dispatcher | Retries committed external side effects | Durable outbox rows → delivery attempts | Separate from game-rule execution |
 | Supervisor / health | Startup, drain, failure propagation, readiness | Task state and dependencies → service state | Can stop admission and terminate world |
+
+### Milestone ownership and completion boundaries
+
+| Work package | Responsible boundary | Required handoff |
+|---|---|---|
+| M4.1 schema/migrations | Persistence adapter and controlled migration tooling | Supported schema/constraint map; no migrations owned by socket handlers |
+| M4.2 writer fencing | World owner, persistence adapter, authorized takeover coordinator | Checked authority carried into every protected transaction |
+| M4.3 identity | Identity/application layer | Stable identity mapping and explicit restart/revocation policy |
+| M4.4–M4.6 valuable operation | Trusted rules, owner, persistence adapter | Confirmed effects plus receipt, required audit, and outbox in one transaction |
+| M4.7–M4.8 uncertainty/restart | Owner and supervisor with persistence queries | Reconciled projection before mutation/readiness resumes |
+| M4.9 failure evidence | Testkit/integration and process-level harness | Real PostgreSQL races and interruption results |
+| M5.1–M5.4 artifact/activation | Content tooling and release coordinator | Pinned bytes, expected current release, recoverable activation state |
+| M5.5 preview | Isolated process supervisor | Disposable state, denied production access, quota/cleanup result |
+| M5.6 publication request | CLI/application workflow | Request identity distinct from approval and activation |
+| M6 control/recovery | Authorized application services and operations | Transactional attribution, drain policy, restore-safe authority |
+| M7 Studio | Authoring/workflow client | Draft revision, diagnostic snapshot, preview artifact and publication digest |
+| M8 reuse | SDK/game packages and benchmark harness | Reuse/gap report, compatibility evidence, measured bottlenecks |
+
+These are responsibilities, not new package names. M4 does not require splitting identity, audit, and release into network services. Add internal modules only after inspecting the actual tree and interfaces.
 
 ### What is not a service
 
@@ -265,7 +307,23 @@ Bound both per-connection queues and total world work. Fair scheduling prevents 
 
 Reserve a bounded control path for drain, shutdown, revocation, and other supervisory signals so player traffic cannot indefinitely delay them. Control messages still need authorization and cannot interrupt a database transaction by pretending it did not happen.
 
-When the owner awaits a durable operation, socket tasks can continue receiving only until their admission budgets are exhausted. This baseline knowingly couples database latency to world progress. Improve it only after profiling and a revised conflict/recovery design.
+When the owner awaits a durable operation, socket tasks can continue receiving only until their admission budgets are exhausted. This M4 baseline knowingly couples database latency to world progress. Improve it only after profiling and a revised conflict/recovery design.
+
+A bounded channel is insufficient if unbounded producers are waiting to send into it. Bound producer/task counts, pending database work, authentication waiters, decoded payload allocation, and retained output as well as queue depth. Document each bound together with its rejection, disconnect, retry, or fail-closed action. No new numerical settings are assigned by this architecture.
+
+### Durable completion boundary — M4
+
+The initial owner awaits at most one durable world mutation; the persistence adapter never acquires general mutable access to `WorldRuntime`. Model adapter completion as a confirmed outcome, a terminal business rejection, or an unresolved outcome. These are conceptual categories, not asserted Rust types.
+
+1. Owner checks the current attachment/authority and builds a bounded effect plan.
+2. Adapter locks writer authority and authoritative business records, resolves the scoped receipt, and commits required effects/receipt/audit/outbox together.
+3. Owner applies or reconstructs the confirmed durable projection before reporting durable success.
+4. Uncertain completion pauses state-changing execution. The supervisor remains able to report not-ready and coordinate bounded recovery without waiting on a client socket.
+5. A lost output route does not undo a committed effect. Later authorized reconciliation returns the original stable result.
+
+For an asynchronous adapter implementation, completion must carry enough operation/world/authority context for the owner to reject stale application. Introducing concurrent durable mutations is a separate conflict-ordering design, not an implementation detail of the first slice.
+
+**Example:** a reward commits and its client disconnects. The new attachment does not replay an old v1 command ID; a separately designed durable interface reconciles the original scoped operation key.
 
 ## Interfaces and Trust Boundaries
 
@@ -273,8 +331,8 @@ These are semantic interface contracts; Transport v0.1 wire schemas are specifie
 
 | Interface | Caller → receiver | Transport | Authentication / authorization | Contract location |
 |---|---|---|---|---|
-| Account lifecycle | Browser → identity/application layer | HTTPS | Login-specific controls; revocable session afterward | Future HTTP specification |
-| Gameplay | Browser → transport gateway | Secure WebSocket | Session, allowed origin, character ownership, connection generation | Future versioned protocol specification |
+| Account lifecycle | Browser → identity/application layer | HTTPS at browser boundary; explicit loopback HTTP development exception | M3 registry/session checks; durable lifecycle remains M4 work | Existing routes in `docs/SERVER.md`; future durable HTTP specification |
+| Gameplay | Browser → transport gateway | Secure WebSocket at browser boundary; local HTTP exception only | Session, exact allowed origin, authorized character, current attachment generation | Implemented `docs/PROTOCOL_V1.md`; durable extension/version not yet specified |
 | Content validation | CLI/Studio → validator | In-process library / local tool call | Filesystem/project permissions | Content schema and diagnostic format |
 | Preview launch | Developer/Studio → preview supervisor | Local process control initially | Project access; isolated credentials | Preview lifecycle documentation |
 | Publication request | Authorized publisher → release workflow | Authenticated control channel | Environment scope, artifact identity, approval | Future control API/workflow contract |
@@ -298,18 +356,34 @@ HTTP routes should ultimately have an OpenAPI or equivalent authoritative specif
 
 ### Player entry
 
-1. Browser establishes a session using the chosen account flow over HTTPS.
-2. Player requests a character attachment.
-3. Server validates account restrictions, ownership, and current connection policy.
-4. WebSocket upgrade validates the expected browser origin and session.
-5. Runtime establishes the controlling attachment generation.
-6. Client and server agree on supported protocol behavior.
-7. Server sends a visibility-filtered initial snapshot and current stream identity.
-8. The connection begins submitting bounded command intents.
+The reported M3 sequence is not an arbitrary future handshake:
 
-The attachment and transport handshake may be combined or ordered differently in the final API, but the invariants must hold before any game command is admitted. Reconnect follows the [design's generation and receipt reconciliation rules](DESIGN.md#protocol-and-player-experience).
+1. Login through `POST /api/v1/session` with the exact configured Origin and bounded credentials.
+2. Establish the opaque process-local cookie/session and server-authorized account/character mapping.
+3. Upgrade at `GET /api/v1/play` only after session and exact-Origin checks.
+4. Negotiate `hello` / `welcome` under protocol v1.
+5. Request `attach`; the owner establishes the authorized current attachment.
+6. Receive admission/attachment and initial runtime-backed Look output according to the exact protocol ordering.
+7. Submit bounded Look, Move-by-label, or Say intent; recheck authority when executing.
+
+The protocol document owns exact serialized fields and message order. Reconnect creates a new stream/attachment context and does not replay old command history. M4 adds separately reviewed durable reconciliation after authentication/attachment; it does not preserve old connection generations or change v1 sequence numbers into replay offsets. See [DESIGN](DESIGN.md#protocol-and-player-experience).
+
+### Local route boundary
+
+| Reported route | Purpose and limit |
+|---|---|
+| `GET /`, `GET /app.js`, `GET /app.css` | Same-origin reference player page/assets; no gameplay authority |
+| `POST /api/v1/session` | Exact-Origin login, bounded credentials and password work |
+| `DELETE /api/v1/session` | Exact-Origin revocation and cookie expiry |
+| `GET /api/v1/play` | Authenticated, exact-Origin WebSocket upgrade |
+| `GET /health/live` | Process liveness only |
+| `GET /health/ready` | Owner accepting work in M3; durable reconstruction/fence conditions added in M4 |
+
+This summary is not an OpenAPI specification. Cookie names, complete request/response schemas, status codes, and flag spellings must be checked in source and the server/protocol guides before integration. Future publication, operation-status, and operator routes are not assigned here.
 
 ### Durable action and lost response
+
+**Planned M4 flow; not protocol v1.** The durable operation key below belongs to the reviewed persistent contract, not v1 stream correlation.
 
 ```mermaid
 sequenceDiagram
@@ -318,20 +392,20 @@ sequenceDiagram
     participant W as World owner
     participant P as Persistence adapter
     participant D as PostgreSQL
-    B->>G: Intent with stable request ID
+    B->>G: Intent with scoped durable operation key
     G->>W: Authenticated bounded command
-    W->>W: Revalidate and build effect plan
+    W->>W: Revalidate authority and build effect plan
     W->>P: Execute durable operation
-    P->>D: Begin, lock epoch, check receipt and records
+    P->>D: Begin, lock writer authority, check receipt
     D-->>P: Authoritative current state
-    P->>D: Effects, receipt, required audit and outbox
+    P->>D: Conditional effects, receipt, required audit and outbox
     P->>D: Commit
     D-->>P: Commit confirmed
-    P-->>W: Committed result
+    P-->>W: Stable committed result
     W->>W: Apply committed projection
     W-->>G: Final result
-    G--xB: Connection lost before receipt
-    B->>G: Reconnect and reconcile same request ID
+    G--xB: Connection lost before result arrives
+    B->>G: Reauthenticate, reattach and reconcile original key
     G->>W: Authorized result lookup
     W->>P: Retrieve scoped receipt
     P->>D: Query committed receipt
@@ -341,7 +415,7 @@ sequenceDiagram
     G-->>B: Result without repeating business effect
 ```
 
-The adapter also compares intent fingerprints and enforces business uniqueness independent of the request ID. The diagram shows a confirmed commit followed by a lost response; an uncertain commit is a different state requiring resolution before further mutations.
+The adapter compares versioned canonical intent fingerprints and enforces business uniqueness independently of receipt keys. Authorization still applies to result lookup. This diagram shows a confirmed commit followed by a lost response; an uncertain COMMIT pauses mutations until resolution. An immediate missing receipt is not proof that the original transaction cannot still commit.
 
 ### Moderator action
 
@@ -358,16 +432,16 @@ Cross-boundary actions, such as a durable account ban followed by disconnecting 
 
 ### Content release
 
-1. Builder edits files or a Studio draft.
-2. Shared validator resolves the complete content graph.
-3. CI runs static validation and scenario tests.
-4. An artifact is assembled with a manifest and digest.
-5. A publisher approves the artifact for a named environment.
-6. Staging starts against isolated data and runs acceptance scenarios.
-7. Production enters maintenance and drains the old runtime.
-8. The release workflow performs compatibility checks and approved migrations.
-9. Server loads the exact active artifact and durable state.
-10. Readiness and smoke checks allow player admission.
+1. Builder edits files (M5) or a Studio draft (M7).
+2. Shared validator resolves the complete content graph and binds diagnostics to that snapshot.
+3. The selected build/test pipeline runs validation and scenarios; planned CI is not a claim of an observed hosted run.
+4. Package immutable bytes with a manifest/digest and preview/test those identified bytes in isolation.
+5. Authorized review approves the exact digest for its target, not a mutable filename.
+6. Staging activates against isolated data using an expected-current-release check and runs acceptance/rollback scenarios.
+7. Production approval separately checks the staged artifact, target, recovery plan, and M6 operational gate.
+8. Maintenance closes admission, reconciles durable work, and establishes the writer barrier.
+9. The coordinator records activation progress, applies approved migrations, and selects the exact active artifact/state.
+10. Reconstruction, readiness, and smoke checks precede successful activation and reopened admission; retained known-good material supports the approved recovery path.
 
 Artifact digest verification detects corruption or mismatch. It does not prove provenance if an attacker controls both artifact and expected digest; protect the release pipeline and artifact metadata, with signing when the threat model requires it.
 
@@ -377,7 +451,7 @@ Artifact digest verification detects corruption or mismatch. It does not prove p
 
 | Store | Contents | Writer | Readers |
 |---|---|---|---|
-| PostgreSQL account/security data | Accounts, session records, restrictions, capabilities | Identity and authorized control services | Authentication and scoped staff queries |
+| Identity authority and PostgreSQL mappings/security data | Local accounts/sessions if selected; otherwise trusted issuer-to-account mapping, local restrictions and grants | Selected identity provider and/or authorized identity services | Authentication and scoped staff queries under the approved M4 choice |
 | PostgreSQL world data | Persistent characters, locations, items, claims, progression | Fenced persistence operations invoked by world owner | World load, transactional validation, scoped queries |
 | PostgreSQL operation receipts | Scoped intent fingerprints and committed results | Same transaction as the protected operation | Authorized retry/reconciliation path |
 | PostgreSQL audit | Privileged actions and approved summaries | Responsible transactional services | Authorized investigation and review |
@@ -403,6 +477,26 @@ Implementation should provide an explicit mapping from domain concepts to relati
 
 Database constraints supplement application checks. A single world task cannot protect data against maintenance scripts or a second process unless write authority is constrained and the database transaction checks it.
 
+### M4 minimum durable projection
+
+Persist only the facts needed to reconstruct the approved valuable operation and its playable context. Inventory the character/world mapping, selected stable content references, item owner or reward entitlement, durable outcome, required audit, and pending outbox work. Receipt history is not automatically a complete world snapshot.
+
+The local content loader assigns deterministic sequential room IDs for a given definition set. Those numbers can change when the content set changes; they are not safe durable room identities. Use stable definition IDs or an explicitly versioned persistent mapping, then construct runtime lookup/instance IDs during load. Missing references are a migration/refusal condition, not permission to drop items or relocate characters arbitrarily.
+
+### Transaction and writer authority placement
+
+Every protected world transaction locks/checks the same world-authority record and holds it through commit. The authorized takeover coordinator locks that record, advances the checked epoch, commits, and then enables the replacement. An in-flight old transaction that owns the lock may complete before takeover; after takeover commits, later old-epoch transactions fail.
+
+Account/security transactions have their own authority domain, but cannot directly mutate world value to bypass its fence. Administrative repairs and scheduled grants that change protected world state follow the world fence and business invariants. Pool size and queue limits must not introduce hidden unbounded work.
+
+A committed result is distinct from its successful projection and network delivery. Scope receipts to trusted identity/world/operation, compare versioned semantic fingerprints, and enforce independent entitlement uniqueness. See [DESIGN](DESIGN.md#persistence-and-recovery) for behavior; exact tables/types and PostgreSQL isolation/durability settings remain a schema decision.
+
+### Schema and migration boundary
+
+Use a controlled migration identity, immutable applied migrations, explicit schema compatibility, and tests for clean installation and supported upgrades. Ordinary server startup verifies schema compatibility rather than racing other replicas to migrate. Changing identity semantics or defaults can be breaking even when field types do not change.
+
+M4 must decide receipt lifetime and cleanup behavior before offering retry guarantees. M6 operational retention implements the approved policy without deleting required recovery or independent business-uniqueness facts.
+
 ### Query paths
 
 Player state reads are visibility-filtered application queries. Operator dashboards may use read models with explicit freshness indicators. Do not let a stale read model approve an item transfer or reward claim.
@@ -421,7 +515,7 @@ The developer CLI delegates to `worldwright-content`: bounded file/byte read -> 
 
 `WorldInstantiation::into_parts()` separates the builder and `WorldLookup`. The host supplies world identity, characters, rule registry, and attachments. Named exit lookup resolves syntax without weakening core movement checks. The `content validate` preflight builds a character-free world with an empty rule registry and never executes commands or starts a listener. The separate `play` command consumes the same builder/lookup, supplies one local actor and ReferenceGame, and executes typed commands in-process. Its input framer and terminal renderer live under `apps/worldwright/src/commands/`; the core runtime and content loader remain unchanged. No socket or database is opened. SDK exposes the content crate as `worldwright_sdk::content`.
 
-Source responsibilities and limits are in [schema v1](docs/content/SCHEMA_V1.md); the runnable reference is [examples/two-room](examples/two-room/README.md). Release digests, activation, persistence, browser transport, and Studio remain future work.
+Source responsibilities and limits are in [schema v1](docs/content/SCHEMA_V1.md); the runnable reference is [examples/two-room](examples/two-room/README.md). Browser transport is the reported M3 slice below, not future work. Persistence is M4; release digests/activation/isolated preview are M5; Studio integration is M7.
 
 ## Implemented Transport v0.1
 
@@ -443,11 +537,37 @@ The pipeline transforms:
 
 Game-specific content extensions register validators and conversion logic through reviewed SDK facilities. Production never treats unknown extension data as executable code.
 
+### Artifact and activation coordinator — M5
+
+The shared validator feeds a bounded package builder; an immutable manifest binds schema/game compatibility, source/build provenance, and a digest of precisely defined payload bytes. Avoid self-referential hashing and timestamp-dependent archive identity. Integrity is not publisher authorization: approval records must bind the trusted digest, target environment/world, and expected current release.
+
+A publication request, its approval, activation intent, active database release pointer, and runtime readiness are distinct facts. The release coordinator serializes expected-release transitions and records enough progress for restart after a crash. A database pointer update cannot atomically switch in-process definitions; remain not-ready until the selected artifact and durable projection are coherent. Retain the prior known-good release and compatible recovery material.
+
+If archive packaging is selected, the package boundary enforces size/file-count/decompression bounds and rejects traversal, absolute paths, symlink escape, and duplicate entries. No new archive format or manifest schema is adopted here.
+
+### Preview supervisor — M5
+
+Preview is implemented as a separate controlled process and isolated state before Studio integration. Its launch context identifies a validated snapshot or immutable artifact and uses an allowlisted environment rather than inheriting production secrets.
+
+| Resource | Isolation responsibility |
+|---|---|
+| Database | Disposable data and least-privilege preview identity; no production grants |
+| Network | Denied production database/control reachability; restricted egress where required |
+| Filesystem | Separate output and temporary paths; no production secret mounts |
+| Sessions | Test identities, never copied live bearer tokens |
+| External effects | Disabled or safe test adapters; no live notifications/payments |
+| Capacity | Bounded concurrent previews, CPU/memory/storage/connections and lifetime |
+| Cleanup | Crash/expiry cleanup scoped to preview identity, never broad production deletion |
+
+A separate process is not by itself a sandbox for arbitrary native code. Compiled game extensions remain trusted and reviewed. Verify denied production access independently of UI controls, and test process crash, lost browser connection, quota refusal, and cleanup.
+
 ### Studio placement
 
-Initial Studio capability may be limited to file editing plus CLI validation. A later server-rendered or separately packaged editor uses the same diagnostic contract and an explicit draft revision model.
+M7 adds editing, schema-aware assistance, and workflow clients; M5 owns preview/release mechanisms and M6 owns operational capability/audit controls. Studio must not reimplement either.
 
-Studio preview has its own server process, game data, content release, and credentials. It may use an ephemeral development database, but must not accidentally bind to a production connection string through inherited environment variables.
+Keep draft revision, validation snapshot, package digest, running preview identity, and publication request identity distinct. A save does not update an already running preview; a changed artifact requires refreshed review. Use optimistic concurrency for draft saves and expected-current-release conflicts in publication, not last-write-wins updates.
+
+Shared validator diagnostics drive both CLI and Studio. Field-level hints are advisory; full authoritative validation remains mandatory. Bind asynchronous results to the snapshot validated, display stale results clearly, and render diagnostics/preview output as bounded text. Editing must round-trip the actual strict schema without adding unsupported extension fields.
 
 ### CLI placement
 
@@ -464,6 +584,8 @@ A fault-injection seam around persistence can simulate failures before execution
 ## Deployment Views
 
 ### Local development
+
+The diagram is the **target development environment across M4–M7**. The reported M3 slice needs no database, staff interface, or preview supervisor; those additions remain planned. Local Play also remains a listener-free, database-free CLI workflow.
 
 ```text
 Developer workstation
@@ -512,7 +634,7 @@ Staging and production use separate instances of these resources. The diagram is
 | Health probes | Minimal status; sensitive detail remains restricted |
 | Artifact / backup administration | Privileged deployment/recovery identities only |
 
-No application-specific port number is assigned. The edge may use conventional HTTPS service exposure, but actual listener ports and proxy trust settings must be specified in deployment configuration and reflected in README instructions once verified.
+No **production** application-specific port is assigned. The supplied architecture reports the M3 local default `127.0.0.1:3000`; that is not a production assignment. The selected production listener interfaces/ports, edge TLS, certificate rotation, trusted proxy peers/headers, supervisor, and secret delivery must be reviewed and verified before documenting a supported deployment. Default HTTPS-origin behavior in the local app is not built-in TLS termination or automatic proxy-header trust.
 
 ### Process and credential policy
 
@@ -530,6 +652,10 @@ Container orchestration does not make two active world owners safe. Start with a
 ## Startup and Shutdown
 
 ### Startup sequence
+
+The sequence below is the **target M4+ durable composition**, not M3 startup. M3 loads content and its separate account registry, adds configured actors at the entry room, registers ReferenceGame, starts one owner with bounded routes/channels, and exposes only the loopback service. It opens no PostgreSQL connection.
+
+For M4, identify compatible content before reconstructing durable references, verify database schema before state load, acquire approved writer authority before accepting mutations, and advertise readiness only after coherent reconstruction. M5 adds immutable release/activation recovery; M6 adds the full operating lifecycle. Exact ordering must preserve these barriers even when independent preflight checks run earlier.
 
 1. Parse configuration, validate the schema, and resolve allowed overrides.
 2. Resolve secrets without logging their values.
@@ -559,6 +685,10 @@ If the server obtains a writer epoch and then fails startup, it remains unavaila
 | Stopped | Closed | None | Process/world service terminated |
 
 “Degraded” must have a precise reason. It is not permission to acknowledge durable commands while the database is unavailable.
+
+The roadmap's illustrative `Running → Draining → Quiescent → Stopping → Stopped` sequence refines this table rather than creating a second incompatible state machine. Running corresponds to Ready; Quiescent means no unresolved/admitted mutation remains under the drain policy; Stopping covers resource teardown. Those labels are not claims about existing enum variants. Forced termination can occur without reaching Quiescent and requires restart reconciliation.
+
+M4 readiness requires a live owner, valid writer authority, and coherent compatible durable projection. M5 also checks activation recovery; M6 adds controlled drain and operational dependencies. A liveness probe remains lightweight and distinct from a downstream-database availability test.
 
 ### Graceful shutdown
 
@@ -614,11 +744,24 @@ Do not run a destructive down-migration automatically because the new server fai
 
 ### Recovery drills
 
-A restore drill should use isolated infrastructure, restore the required database and artifacts, disable or redirect external side effects, validate world reconstruction, and run a short scripted game scenario.
+M4 proves process interruption/restart of the first valuable operation. M6 proves recovery of an environment from backup. The latter requires compatible database state, code/game build, content artifact, migration history, configuration references, and an approved secret recovery/rotation process.
 
-External notification replay deserves special care: a restored outbox can include events delivered after the backup point. Consumers need deduplication where applicable, and restore procedures must prevent accidental re-sending of sensitive or costly effects.
+| Step | Responsible boundary | Required evidence |
+|---|---|---|
+| Identify recovery set | Release/recovery owner | Exact artifact digests, schema/build identities and approved recovery point |
+| Restore in isolation | Restricted recovery tooling | No production write credentials or uncontrolled external effects |
+| Fence old writers | Deployment/network/credential control | Pre-restore processes cannot contact or mutate restored authority |
+| Establish restore-safe authority | Approved authority/takeover mechanism | No collision with authority retained by an old process |
+| Reconstruct | Server owner and persistence/content adapters | Valid references/ownership; readiness closed until coherent |
+| Reconcile effects | Receipt/outbox adapters | Original outcomes retained; prior external deliveries handled |
+| Smoke test | Scripted game/recovery harness | Look/Move, one owned reward, duplicate retry without added value |
+| Measure and review | Service owner and independent runbook executor | Observed recovery point, time to defined readiness, unresolved defects |
 
-Record measured recovery time, recovered point, unresolved discrepancies, and corrective actions. RPO/RTO targets are open decisions listed in DESIGN, not values asserted here.
+**Restore-specific fence hazard:** an old backup can rewind the epoch. Incrementing that restored value may reproduce an epoch still held by a pre-restore process. Isolation/termination of old writers is mandatory. An independently managed incarnation plus epoch is one candidate authority scheme; it is not an adopted table design and must not derive freshness from the same rewound backup. Record and test the selected scheme before reconnecting services.
+
+A restored outbox can contain events already delivered after the backup point. Consumer deduplication or controlled suppression/redirection must prevent unsafe duplicate external effects. Database restore cannot undo an external notification already sent.
+
+Record measured recovery time, recovered point, unresolved discrepancies, and corrective actions. RPO/RTO and support coverage remain owner decisions, not guarantees supplied by PostgreSQL or this document. Exercise the runbook with someone other than its author.
 
 ## Observability
 
@@ -643,6 +786,10 @@ Keep metric labels bounded. Account IDs, names, raw commands, and operation iden
 Logs should correlate a request, world, release identity, and operation ID without exposing credentials or private content. Distinguish user rejection, conflict, infrastructure failure, and internal invariant violation.
 
 Trace the time spent in ingress, world queue, rule execution, database transaction, and output delivery. Otherwise a slow client, a slow query, and a hung rule all look like the same “lag.”
+
+Keep transport request ID, durable operation key, stream epoch/sequence, runtime revision, writer authority, and content release identity distinct in correlation. Do not force them into one overloaded request identifier. Track uncertain-operation count/age and outbox oldest age separately from ordinary transaction failures.
+
+Ordinary logs exclude passwords, cookies, tokens, raw gameplay frames, and chat bodies. Required audit is not sampled away with debug telemetry. Use secret-canary/redaction checks and bounded-cardinality/load tests, plus explicit runbook links for actionable alerts.
 
 ### Alert ownership
 
@@ -672,6 +819,22 @@ The detailed behavioral baseline is in [Identity and Authorization](DESIGN.md#id
 | Compromised build or dependency | Reviewed build pipeline, pinned artifacts, dependency/license inventory |
 
 Network isolation is defense in depth, not a substitute for authentication. A same-origin staff page is not automatically authorized. A separate staff hostname, if later chosen, requires a deliberate cookie, origin, and identity design rather than casually widening CORS.
+
+### Operational control placement — M6
+
+| Concern | Enforcing component | Required negative case |
+|---|---|---|
+| Privileged assurance | Selected identity integration and application policy | Wrong issuer/audience, expiry, insufficient MFA/step-up, offboarded operator |
+| Action and target scope | Application service before execution/irreversible job step | Staging moderator substitutes production world ID |
+| Publication approval | Release workflow | Changed digest or stale expected release |
+| Required mutation audit | Same persistence transaction as protected state | Audit insert failure rolls back the mutation |
+| Multi-step external action | Durable workflow intent/progress/outcome records | Job interrupted after an external step |
+| Session/grant revocation | Identity service plus owner/control cancellation | Queued action executes after its authority was revoked |
+| Break-glass or automation | Separately approved time-bounded credential workflow | Human token reused as permanent automation or expired emergency grant |
+
+No provider, role constant, staff route, or MFA mechanism is finalized here. A token role claim alone is not evidence of required authentication strength. Required audit is not sampled telemetry; denied actions use a bounded sanitized security-event path. An operator API/runbook does not by itself mean the Console UI is complete.
+
+Long-running jobs recheck current authorization before irreversible steps under the adopted policy. Controls that affect durable world state still enter the owner/fenced transaction boundary. Recovery authority must be narrowly scoped and separately approved, not granted implicitly by ordinary status-view access.
 
 ## Scaling and Evolution
 
@@ -703,22 +866,28 @@ Do not introduce Kafka, Redis, Kubernetes, an ECS framework, or a distributed sc
 
 ## Implementation Order
 
-Implement vertically through the boundaries, not one enormous subsystem at a time.
+[ROAD-MAP.md](ROAD-MAP.md) owns the eight-milestone delivery sequence. Implement vertically through boundaries, not one enormous subsystem at a time. This replaces the older step mapping that placed the content loader in M1 and first preview in M7.
 
-| Step | Minimal implementation | Verification before expansion |
+| Milestone | Dependency-ordered architectural work | Required handoff evidence |
 |---|---|---|
-| 1 | Workspace, core IDs, minimal content loader, CI | Reproducible checks and validated two-room fixture |
-| 2 | World owner, look/move rules, fake clock, Testkit scenario | Deterministic headless traversal and invalid-command rejection |
-| 3 | Browser transport, sessions, attachments, bounded queues | Implemented locally; two-user, stale attachment, takeover, revocation, and slow-client tests pass; broader production/deployment gate remains open |
-| 4 | Persistence schema, writer fencing, one durable item/reward flow | Next major increment: transaction failure windows, duplicate attempts, restart |
-| 5 | Release manifest, content validation/package/activation | Staging activation and incompatible-content rejection |
-| 6 | Console control path, privilege scopes, audit, observability | Unauthorized actions denied; controlled drain and recovery |
-| 7 | Isolated preview and initial Studio conveniences | Builder completes a zone without production credentials |
-| 8 | Second game and SDK refinement | Reuse without changing transport or core invariant logic |
+| M1 — Foundation and Core | Workspace/toolchain → typed contracts → rules/effects/scheduling primitives → deterministic test support | Pure core and reproducible checks, with actual CI provenance |
+| M2 — Runtime, Content, and Local Play | Owner/attachment generations → staged Look/Move/Say → strict JSON v1 → host lookup/terminal play | Deterministic loading, directed movement, stale authority rejection, separate Move/Look |
+| M3 — Multiplayer Transport v0.1 | Protocol → local registry/sessions → owner service → HTTP/WebSocket gateway → reference browser | Reported Windows-local evidence; broader environment verification remains open |
+| M4 — Durable Gameplay v0.1 | Schema/migration and identity decisions → transactional fence → one valuable operation → scoped receipts/audit/outbox → uncertainty/restart | Real PostgreSQL failure/race/retry/restart evidence without duplicate value, false success, or accepted stale writer |
+| M5 — Content Release and Preview v0.1 | Manifest/package → compatibility → staging/maintenance activation and rollback → isolated preview → CLI publication requests | Same reviewed/tested digest, conflict rejection, crash recovery, denied preview-to-production access |
+| M6 — Operational Control v0.1 | Scoped APIs/privileged assurance → transactional audit → observability/drain → restore/takeover runbooks | Unauthorized requests denied, attributable changes, coherent measured restore |
+| M7 — Builder Workflow and Studio v0.1 | Schema-aware editing → shared diagnostics → existing preview integration → publication → accessibility/destructive-action checks | Builder completes a zone and submits exact reviewed artifact without production credentials |
+| M8 — Toolkit Maturity | Independent game → compatibility/deprecation policy → justified systems/tooling → measured optimization | Reuse/gap report, upgrade/template tests, workload-backed performance without invariant bypass |
 
-Security is not postponed to step 6: authentication and authority are necessary in earlier slices; step 6 completes privileged operational workflows.
+M4 is next active but still planned. Security is not postponed until M6: M3 authentication/authority, M4 transaction integrity, and M5 publication/isolation are prerequisites. M6 completes operational controls and exercised production recovery; it does not waive earlier security.
 
-Do not ship a CLI command merely because its name appears in a roadmap. Once implemented, verify it, document real options and paths in README, and add regression tests for destructive or environment-sensitive behavior.
+### Gate records and blocking decisions
+
+Use the roadmap work-package and verification templates. Each architectural change records the inspected source contracts, owning component, input/queue/concurrency limits, failure path, migration impact, observable tests, and linked decision IDs. A box is checked only with actual implementation and stated evidence; doc alignment does not complete a milestone.
+
+Roadmap D01–D07 govern licensing, deployment/secrets, identity, database/recovery, retention, compatibility, and service ownership. They are distinct from DESIGN's WW-Dxx rationale IDs; use its [crosswalk](DESIGN.md#open-decisions). Do not choose unresolved production ports, identity providers, RPO/RTO, or supported-client windows merely to fill a diagram.
+
+Do not ship a CLI command merely because its name appears in a roadmap. Verify actual options/paths in source, document them in README, and add destructive/environment-sensitive regression tests. Parallel design or mockups do not authorize deployment before prerequisite gates.
 
 ## Architecture Review Checklist
 
@@ -736,23 +905,42 @@ Before marking an architectural change ready:
 - [ ] Deployment cannot accidentally create two authoritative writers.
 - [ ] New observability avoids secret leakage and unbounded metric cardinality.
 - [ ] Source, template, dependency, and content licensing remain explicit.
-- [ ] README, DESIGN, ARCHITECTURE, and applicable runbooks are updated together.
-- [ ] Verification claims distinguish inspection, automated tests, and untested proposals.
+- [ ] ROAD-MAP work packages, blocking decisions, dependencies, and exit evidence remain aligned.
+- [ ] v1 stream correlation has not been silently promoted into durable idempotency or replay.
+- [ ] Preview infrastructure remains M5; Studio integration consumes it in M7.
+- [ ] Reviewed/tested/activated artifact digests match and stale expected-release requests conflict.
+- [ ] Disaster restore cannot reuse authority still held by a pre-restore writer.
+- [ ] README, DESIGN, ARCHITECTURE, ROAD-MAP, IMPLEMENTATION, SECURITY, and applicable runbooks are updated for affected behavior.
+- [ ] Verification claims distinguish inspection, historical local runs, hosted CI, deployment tests, and untested proposals.
 
 ## Document Control
 
-This architecture elaborates the product defined in README and implements the proposed contracts in DESIGN. If the three documents disagree, resolve the discrepancy explicitly rather than letting implementation teams select different interpretations.
+This architecture maps DESIGN's behavioral contracts to components and processes; it does not implement code by describing it. ROAD-MAP owns delivery order and scope. Resolve disagreements explicitly rather than treating the newest prose example as an API or allowing different components to choose different interpretations.
 
-The documentation package supplies:
+| Document | Primary responsibility and synchronization trigger |
+|---|---|
+| [README.md](README.md) | Build/run/configure/use, real commands and current component status |
+| [ROAD-MAP.md](ROAD-MAP.md) | Milestone scope, dependencies, owner decisions, exit gates and evidence templates |
+| [DESIGN.md](DESIGN.md) | Behavioral contracts, invariants, decision rationale, compatibility and recovery semantics |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Ownership, dependencies, components, trust boundaries and deployment/lifecycle views |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | Concrete implementation status and source map as features are completed |
+| [SECURITY.md](SECURITY.md) | Threat model, authentication, exposure, secrets, privacy and operational policy |
+| [PROTOCOL_V1.md](docs/PROTOCOL_V1.md) / [SERVER.md](docs/SERVER.md) | Exact local wire contract and runnable server behavior |
+| [VERIFICATION.md](docs/VERIFICATION.md) | Actual revision, platform, dependency source, commands, results and unexecuted checks |
+| CONTRIBUTING / CODE_OF_CONDUCT / DEFINITIONS | Governance, reporting/appeal policy, terminology and licensing/compatibility context |
 
-- [README.md](README.md): product, suite, roadmap, and proposed licensing.
-- [DESIGN.md](DESIGN.md): invariants, decisions, subsystem behavior, compatibility, and acceptance gates.
-- [ARCHITECTURE.md](ARCHITECTURE.md): components, dependencies, flows, topology, and lifecycle.
-- [CONTRIBUTING.md](CONTRIBUTING.md): proposed governance, review process, contribution rights, and verification standards.
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): proposed conduct, reporting, conflict, and appeal procedures.
-- [DEFINITIONS.md](DEFINITIONS.md): MU* traditions, glossary, and explicit compatibility limits.
-- [SECURITY.md](SECURITY.md): proposed reporting/support policy, threat model, safeguards, privacy, and release gates.
+Referenced repository documents beyond the supplied DESIGN/ARCHITECTURE and expanded ROAD-MAP were not inspected or modified in this update. They still need same-change updates when implementation changes their contracts. Policy text is not proof of owner adoption, real reporting channels, or staffed enforcement.
 
-These policies require owner adoption and real reporting channels; documents are not evidence of staffed enforcement or implemented controls. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) identifies current code boundaries and [DEVELOPMENT.md](docs/DEVELOPMENT.md) covers the supplied local/CI workflows. Protocol v1/local networking and the pinned Windows Rust 1.85.1 gate are implemented and verified. A Linux Transport rerun, hosted CI, persistence, production deployment, migrations, and operational procedures remain pending.
+### Revision 0.2 alignment record
 
-The proposed **MIT OR Apache-2.0** licensing status remains unchanged and pending authorization. No source-code license grant or production capability is established by this architecture description.
+- Replaced the old implementation step mapping with the roadmap's eight milestones and kept M4 planned/next active.
+- Placed isolated preview and artifact/publication infrastructure in M5; kept Studio workflow integration in M7.
+- Preserved reported local details, including the loopback default, without assigning a production port or new flag.
+- Separated v1 request/stream identity from durable receipt identity and added M4 owner/adapter completion boundaries.
+- Added exact-artifact approval, expected-release conflict, activation recovery, and preview resource isolation responsibilities.
+- Added restore-safe authority and clarified roadmap drain substates against the existing service-state vocabulary.
+- Linked work packages, component owners, blocking decisions and evidence without declaring new implementation complete.
+
+Reported Transport v0.1 evidence remains Windows-local on the pinned Rust 1.85.1 toolchain. Earlier Linux core/content/local-play results do not replace a Linux Transport rerun. Hosted CI, persistence, migrations, production deployment, and operational procedures remain pending. No repository tests were run for this documentation revision.
+
+The proposed **MIT OR Apache-2.0** licensing status remains unchanged and pending authorization. No source-code license grant, supported-capacity promise, or production capability is established by this architecture description.
