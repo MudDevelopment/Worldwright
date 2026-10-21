@@ -4,16 +4,20 @@
 
 | Attribute | Value |
 |---|---|
-| Document version | 0.1 — proposed baseline |
+| Document version | 0.2 — expanded-roadmap alignment; proposed contracts remain subject to approval |
+| Updated | October 21, 2026 |
+| Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): eight dependency-ordered milestones; M4 is next active, not implemented |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
 | Implementation status | Content loading, local runtime, Local Play, and authenticated process-local Transport v0.1 implemented; Windows local evidence is recorded in verification, while remote CI, deployment, persistence, and hosted operation remain unverified |
-| Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ROAD-MAP.md](ROAD-MAP.md) |
 
-> **Scope and authority:** This document describes the target system; “Must” is a requirement, not evidence of implementation. [RUNTIME.md](docs/RUNTIME.md) defines the implemented single-owner local execution subset: validated construction, current attachment checks, scoped rule queries, staged atomic effects, and addressed messages. This is not login authentication, database commitment, exactly-once delivery, or deployed capacity. [CORE_INTERFACES.md](docs/CORE_INTERFACES.md) and [VERIFICATION.md](docs/VERIFICATION.md) describe the supporting contracts and successful Linux checks. The broader network/persistence/recovery design remains future work.
+> **Scope and authority:** This document describes the target system; “must” states a requirement, not completion. The reported M1–M2 baseline includes single-owner in-memory execution, strict content loading, and Local Play. M3 adds authenticated, bounded loopback transport and has reported Windows-local evidence. Earlier Linux core/content/local-play evidence does not prove a Linux Transport rerun. Persistence, controlled releases, operations, Studio, and toolkit maturity remain planned M4–M8 work.
 >
-> **Document boundary:** The README explains the product. This file explains the decisions and behavioral contracts. ARCHITECTURE maps those decisions to components, processes, interfaces, and deployment. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) provide proposed policies, pending operational adoption; [DEFINITIONS.md](DEFINITIONS.md) explains MU* terminology and compatibility limits. Detailed operating runbooks remain future work.
+> **Synchronization basis:** This documentation-only revision compares the supplied DESIGN and ARCHITECTURE documents with the expanded ROAD-MAP. Repository source, manifests, migrations, and linked verification logs were not independently inspected. Retained implementation details and numerical limits are reported contracts, not newly verified code. New examples and state labels are design guidance, not finalized schemas or API constants.
+>
+> **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROAD-MAP owns milestone scope, dependency order, blocking decisions, and exit evidence. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
 
 ## Contents
 
@@ -26,6 +30,9 @@
 - [Simulation and Scheduling](#simulation-and-scheduling)
 - [Persistence and Recovery](#persistence-and-recovery)
 - [Game SDK and Extensions](#game-sdk-and-extensions)
+- [Implemented Local Play Host](#implemented-local-play-host)
+- [Implemented Multiplayer Transport v0.1](#implemented-multiplayer-transport-v01)
+- [Implemented Content Schema and Conversion](#implemented-content-schema-and-conversion)
 - [Content Lifecycle](#content-lifecycle)
 - [Protocol and Player Experience](#protocol-and-player-experience)
 - [Identity and Authorization](#identity-and-authorization)
@@ -78,7 +85,9 @@ Individual games may add capabilities later. Such additions do not automatically
 
 ## Decision Register
 
-All entries below are **proposed**, awaiting review and implementation evidence. These identifiers can be used in issues and future architecture decision records.
+Entries below record the target design position, not blanket implementation status or proof of owner adoption. Parts of WW-D01, WW-D02, WW-D05–WW-D08, WW-D10, WW-D11, and WW-D14 have reported M1–M3 implementations; durable and operational extensions remain planned. Use the implemented-subset sections and delivery gates to distinguish the two. Formal acceptance or amendment requires an accountable decision record.
+
+The `WW-Dxx` design identifiers are **not** the roadmap's `D01`–`D07` owner-decision identifiers. Keep both namespaces in issues; use the crosswalk under [Open Decisions](#open-decisions), not number-based equivalence.
 
 | ID | Proposed decision | Rationale | Consequence / alternative |
 |---|---|---|---|
@@ -211,9 +220,24 @@ A domain event describes a completed transition. It is not proof that the event 
 
 Recipient selection and redaction occur server-side. Never broadcast private fields to every client and rely on the browser to hide them.
 
+### Authority and identifier separation
+
+| Identity / observation | Scope and lifetime | Must not be reused as |
+|---|---|---|
+| Authenticated account | Server-established principal under current identity policy | Proof of authority over every character/world |
+| Runtime attachment generation | Current character/controller binding in the live runtime | A durable session, writer epoch, or restart-stable authority |
+| Protocol v1 request ID | Bounded stream-local correlation | A durable deduplication key |
+| Stream epoch and sequence | Connection identity and gap detection | A replay log offset or commit order |
+| Process-local operation ID / runtime revision | Runtime execution and ordering | Database identity or durable commit evidence |
+| Planned durable operation key | Approved principal/world/operation scope and retention window | Authentication or business entitlement |
+| Writer authority | Current permitted database writer for a world | Permission to deliver stale ephemeral output |
+| Content release identity / digest | Exact compatible immutable artifact | Proof that a publisher approved it |
+
+The application translation boundary constructs trusted context; clients cannot supply authority by adding a field. Checked counters must fail closed on exhaustion instead of wrapping to a previously valid identity.
+
 ### Result states
 
-Use stable machine-readable result categories with separate player-facing text:
+The following categories are **target design vocabulary**, not additions to the implemented protocol-v1 error enum. Their exact wire representation requires a reviewed protocol contract. Use stable machine-readable result categories with separate player-facing text:
 
 - `invalid_input`, `not_authorized`, `not_found_or_not_visible`.
 - `ambiguous_target`, `precondition_failed`, `conflict`.
@@ -263,6 +287,23 @@ Deterministic test scenarios do not establish general production replay: release
 
 ## Persistence and Recovery
 
+### M4 scope and design entry gate
+
+[ROAD-MAP M4](ROAD-MAP.md#milestone-4--durable-gameplay-v01) is the next active increment and remains planned. It proves **one** PostgreSQL-backed item or reward operation, not persistence of every runtime field. Select the operation and identity/session approach before implementation; preserve M3 authority, bounded admission, exact routing, and separate Move/Look behavior.
+
+A one-time item entitlement is a proposed first candidate, not an adopted reference-game rule. Inventory trading, a full economy, durable chat, universal command replay, event sourcing, automatic failover, and distributed world mutation are excluded unless separately approved. Development restart/retry evidence belongs to M4; production backup/restore and service readiness require M6.
+
+Before writing migrations, document:
+
+- Stable world, account, character, and content references for the chosen operation.
+- Authoritative database facts versus ephemeral and derived state.
+- Exclusive ownership or entitlement uniqueness and expected-version/locking rules.
+- Writer transaction fence, receipt scope, canonicalization version, retention, and result policy.
+- Required audit/outbox participation and behavior if either cannot be persisted.
+- Projection reconstruction, migration compatibility, and uncertainty-resolution procedure.
+
+The content loader's deterministic sequential room IDs are not durable references across content-set changes. Persist stable definition identity or an approved durable mapping; reconstruct runtime IDs from the selected compatible content. Do not reinterpret old saved numbers against a newly ordered room set.
+
 ### State classes
 
 | Class | Examples | Baseline contract |
@@ -285,7 +326,7 @@ The baseline uses current-state tables, operation receipts, audit entries, and a
 
 ### Idempotent durable operations
 
-Use a stable client request identifier for retryable mutations, scoped by trusted world and actor identity. Store:
+Introduce a durable operation key for retryable mutations, scoped by trusted world/actor identity and the approved operation domain. It is **not** protocol v1's stream-local request ID, and v1 `command_result` must not silently become a durable receipt. Define the new negotiation/message contract before a client relies on cross-reconnect reconciliation. Store:
 
 - The scoped request key and server operation ID.
 - A canonical intent fingerprint, including relevant targets and arguments.
@@ -296,7 +337,20 @@ A repeated key with the same intent returns the previous result after authorizat
 
 Enforce independent business uniqueness as well. For example, a quest reward needs a claim key tied to character, quest, and repeatable-completion generation. A malicious client using new request IDs must not claim the same completion repeatedly.
 
-Receipt retention is a launch decision. Expired receipt cleanup must not defeat independent ownership and business-uniqueness constraints. Clients must not blindly resubmit old pending requests under fresh IDs.
+Receipt retention and the retry guarantee are M4 design decisions, not details to postpone until operational beta. Expired receipt cleanup must not defeat independent ownership and business-uniqueness constraints. Clients must not blindly resubmit old pending requests under fresh IDs.
+
+| Attempt | Required outcome |
+|---|---|
+| Same scoped key, same canonical intent | Return the stored outcome without a second grant, subject to current authorization |
+| Same scoped key, different intent | Explicit key-reuse conflict |
+| Different key, same one-time entitlement | Business uniqueness still prevents duplicate value |
+| Concurrent first use of one key | Serialize/resolve under a database constraint; one stable outcome |
+| Key beyond retention window | Follow the documented expiry/tombstone policy; no unlimited retry promise |
+| Lost COMMIT reply, no immediately visible receipt | Remain uncertain until the original transaction is resolved |
+
+Canonicalize the server-resolved semantic intent, including value-determining target and scope. Version the canonicalization; raw JSON bytes are not a stable semantic fingerprint because field order and equivalent encodings can differ. Do not include a reconnect's stream epoch or incidental presentation text in the business fingerprint unless explicitly required. Rejected business outcomes may be recorded as terminal receipts under the chosen policy; infrastructure failures must not become permanent business rejections.
+
+**Example:** a retry returns the original granted item ID, not a rerolled reward. A fresh key for that same one-time entitlement also cannot mint another item. Test semantic equivalence, changed-intent conflicts, concurrent first attempts, and cleanup boundaries against real PostgreSQL.
 
 ### Transaction procedure
 
@@ -314,6 +368,12 @@ For an ownership transfer or reward:
 
 Do not claim universal exactly-once execution or delivery. The target is an at-most-once business effect under the documented idempotency and uniqueness rules, with retryable result retrieval.
 
+Specify the unique-key reservation/lookup strategy and lock order before coding the transaction. A concurrent receipt insertion can fail with a uniqueness violation; PostgreSQL does not let the transaction continue normally after that error without the appropriate rollback/savepoint recovery. Returning a successful prior receipt is distinct from blindly rerunning the business logic.
+
+Conditional ownership changes must prove the expected holder/world and affect exactly the intended item. Foreign keys, exclusive ownership constraints, entitlement uniqueness, and nonnegative quantity checks reinforce application validation. SQL row counts do not replace authorization. The first slice need not implement every holder type, stack operation, or currency rule in the target domain model.
+
+If a required audit or outbox insert fails, no associated business effect or terminal success receipt may commit. If projection application fails after a confirmed commit, stop affected mutation and reconcile/reconstruct; never invent a database rollback or grant the value again. Test failures after each transaction step and after commit but before projection/output.
+
 ### World writer fencing
 
 Only one writer may mutate a world's durable gameplay state. Application deployment conventions alone are not a sufficient safeguard against two server processes starting accidentally.
@@ -327,6 +387,18 @@ Proposed baseline:
 - A stale-epoch result causes the old runtime to stop admitting mutations and shut down its world service.
 
 The release controller must enforce a one-active-process deployment. Automatic failover, leases, and high-availability promotion require a separate tested design. Durable account/session services are distinct from world simulation but cannot use that distinction to modify protected game state.
+
+The gameplay transaction retains the authority-row lock through commit. Takeover uses the **same lock**, increments authority with checked semantics, commits, and only then permits the replacement to become write-ready. An older transaction already holding the lock may finish before takeover commits; this is defined serialization, not a failed fence. Later transactions presenting the old epoch must fail.
+
+All protected world writes—including administrative repair and background grants—must use the fence. Define database privileges and reviewed write paths accordingly. A check outside the business transaction, a process heartbeat, or a lease alone is insufficient. Apply bounded lock/statement deadlines and an authorized stuck-transaction procedure; a deadline expiring does not by itself prove rollback.
+
+**Example:** writer A holds epoch 12. After B commits takeover to epoch 13, a resumed A cannot grant a reward under epoch 12. Tests must also cover A already inside the locked transaction when B requests takeover.
+
+### Disaster-restore authority
+
+M6 restore is not ordinary M4 takeover. Restoring a backup may restore a lower epoch; merely incrementing it can collide with an authority value held by a still-running pre-restore process. Before reconnecting a restored service, isolate/terminate old writers, prevent their credentials/network routes from reaching the restored authority domain, and establish restore-safe authority.
+
+An independently managed incarnation plus epoch is a **candidate**, not an adopted schema. Any incarnation source used to prevent reuse must not itself rewind with the same backup. The selected mechanism, credential isolation, and failure tests belong to roadmap D04 / WW-O05 and the recovery runbook. Never claim that an ordinary epoch increment alone protects disaster restore.
 
 ### Failure windows
 
@@ -370,7 +442,7 @@ The SDK should expose a narrow, documented facade over core types and content fa
 - Content-type registration and validation hooks.
 - Test fixtures and injectable time/randomness.
 
-Exact Rust trait signatures are deferred until the playable slice validates ownership, lifetimes, error types, and async boundaries. Do not publish placeholder APIs as stable contracts.
+The reported baseline already has provisional core/SDK interfaces documented in `docs/CORE_INTERFACES.md`; do not treat existing signatures as nonexistent. Stable SDK commitments and new persistence/extension signatures require source inspection, downstream use, and M8 compatibility evidence. Do not publish illustrative APIs as stable contracts.
 
 ### Trusted extensions
 
@@ -388,9 +460,19 @@ Do not promise ABI-compatible hot loading of Rust libraries. The baseline extens
 
 ### Cross-game proof
 
-Use a small fantasy reference world and a small science-fiction reference world to validate reusable abstractions. Both should implement movement, interaction, one encounter, and one progression outcome without changing core ownership or persistence logic.
+M8 requires a second **meaningfully different game**, not merely new room descriptions. A fantasy/science-fiction pair remains a possible fixture, but the second game's choice is open: an investigation game or resource-driven expedition may expose different rule assumptions more effectively. Movement and interaction should reuse common infrastructure; encounters/progression are added only when the selected game requires them.
 
-Differences in combat vocabulary, resources, and content belong in game packages. If every new game requires modifying transport handlers or core tables, revisit the abstraction before declaring the SDK stable.
+Produce a reuse/gap report covering commands/effects, attachment authority, durable operations and fencing, content packaging, preview, and operations. Identify which parts reused unchanged, which required general contract improvements, and which remain game-specific. Do not hide gaps with game-name branches in transport or core invariants.
+
+Only then establish supported SDK/toolchain combinations, public exports, deprecation windows, migration guidance, and downstream compilation tests. An independent game must exercise an upgrade and the shared negative/recovery tests. Differences in vocabulary, resource policy, and rules belong in game packages; shared changes must generalize.
+
+### M8 tooling and performance evidence
+
+Generated projects should keep `apps/` binary directory/package/binary names aligned and exercise generate/build/test in repeatable checks. Templates must not overwrite user code silently; content/schema migrations provide dry-run output, a recovery copy, and a new immutable artifact rather than modifying approved bytes.
+
+Benchmark idle heartbeats, representative Look/Move/Say, high fan-out with slow consumers, contended rewards/retries, outbox recovery, reconstruction, and long-running retained memory. Record hardware, OS, build profile, dependency/database configuration, dataset, workload, warm-up/duration, throughput, tail latency, memory, and queue depth. Compare like-for-like revisions and preserve invariant tests.
+
+A per-world fence lock may become a measured bottleneck; removing it requires equivalent authority guarantees. Independent worlds are a preferable scaling boundary to speculative distribution of one mutable world. Numeric beta targets and support commitments remain owner decisions.
 
 ## Implemented Local Play Host
 
@@ -471,25 +553,52 @@ Diagnostics include severity, code, source path, JSON pointer or equivalent loca
 
 ### Artifact and activation
 
-The content artifact includes a manifest identifying release ID, schema version, compatible engine/game versions, content digests, and migration requirements. Reproducible digests require a defined canonical encoding or sorted bundle process; a timestamp-bearing ZIP file is not automatically reproducible.
+M5 converts validated definitions into immutable releases and isolated previews. M7 consumes those contracts through Studio. A manifest identifies the release, schema and engine/game compatibility, payload digest, provenance, and migration requirements. Exact manifest fields remain proposed.
 
-Initial workflow:
+Define the payload byte set and canonical encoding/sorted packaging rules before hashing. Avoid a digest over a manifest that contains that same digest, and do not assume timestamp-bearing archives are reproducible. Integrity verifies bytes relative to trusted metadata; it does not establish who approved them. Signing/attestation and trust-root requirements remain deployment/security decisions.
 
-**Draft → Validated → Reviewed → Packaged → Staged → Approved → Activated**
+Proposed progression, aligned with the roadmap:
+
+**Draft → Validated → Packaged → Reviewed → Staged → Activated**
+
+These are workflow labels, not implemented database values. Source review can occur before packaging, but artifact approval must bind the exact packaged digest. Staging and production authorization are environment-specific; the simplified progression does not waive either approval. A preview may run against a validated snapshot, but the release demonstration must preview/test the exact artifact submitted for activation.
 
 Initial activation occurs during maintenance:
 
-- Drain and stop world mutation.
-- Validate the candidate artifact and runtime compatibility.
-- Verify existing persistent references have mappings or remain valid.
-- Back up or otherwise establish the approved recovery point.
-- Apply reviewed data migrations and update the active release record.
-- Reconstruct runtime state against that exact release.
-- Open admission only after validation and smoke checks.
+1. Select approved bytes, target environment/world, and expected current release.
+2. Revalidate digest, complete content graph, game/schema compatibility, and durable references in that target.
+3. Close affected admission, settle/reconcile durable work, and establish the authorized writer/admission barrier.
+4. Establish the approved recovery point and record activation intent plus required audit.
+5. Apply reviewed migrations and the expected-release-checked active-release transition.
+6. Reconstruct runtime definitions/state against that exact release.
+7. Complete readiness and scripted gameplay checks before reopening admission and marking activation successful.
+8. Retain the previous known-good artifact and the metadata/data compatibility needed to use it.
 
-A failed startup leaves the world unavailable, not half-running against mixed definitions. Binary rollback and content rollback are allowed only when persistent data remains compatible. A destructive migration may require a forward repair or approved restore rather than reverting files.
+The database pointer and in-process content registry cannot be assumed to switch atomically. Define restart behavior for interruption before/after each durable transition. A failed reconstruction remains unavailable rather than serving mixed releases. Concurrent publication jobs based on the same old release must conflict, not silently overwrite each other.
 
-Hot reload, in-place entity migration, and live multi-release sessions are deferred.
+| Recovery action | Required compatibility check |
+|---|---|
+| Content rollback | Old content still resolves current persistent rooms/items/progression |
+| Binary rollback | Old executable understands current relational/game-state/config encodings |
+| Data migration reversal | Reversal is reviewed, supported, and not silently lossy |
+| Forward repair | New migration restores compatibility without pretending old state never committed |
+| Backup restore | Approved data-loss window, compatible artifacts, isolated old writers, restored authority |
+
+**Example:** a new package removes a room occupied by saved characters, or introduces an item the previous release cannot load. Reject activation/rollback or require an approved migration; do not silently teleport players, delete their value, or select an arbitrary fallback room.
+
+Production activation capability in M5 is not production readiness: the exposure, identity, retention, ownership, and recovery gates in M6 must still pass. Hot reload, in-place entity migration, and live multi-release sessions remain deferred.
+
+### Package and publication conflict rules
+
+- Reject unsupported schema/game compatibility and mismatched digests before activation.
+- If using archives, reject unsafe paths, symlink escape, duplicate entries, unbounded file counts/bytes, and decompression bombs.
+- The same immutable release identity with different bytes is a conflict, not an overwrite.
+- Identical-byte reuse follows a documented deduplication policy; it does not grant target-environment approval automatically.
+- Edits after review produce a new digest and require refreshed approval.
+- A stale expected current release requires refreshed validation/approval under policy.
+- Publication submission returns a distinct request/status identity; submission is not approval or activation.
+
+Record requester, reviewer/approver, and activation executor separately. Exact API and CLI names are not created by these requirements. Test tampering, incompatible durable references, stale release conflicts, crash-interrupted activation, and supported rollback.
 
 ### Spawn and reward identity
 
@@ -507,7 +616,7 @@ The development protocol is specified in [PROTOCOL_V1.md](docs/PROTOCOL_V1.md). 
 
 HTTPS handles account and application pages; secure WebSockets carry interactive play. Authentication uses a server-side session established before interactive play. No credentials or long-lived bearer tokens belong in WebSocket URL query strings.
 
-The wire protocol distinguishes:
+The **target** protocol must distinguish the following. Items involving durable results, replay/reconciliation, or maintenance are future contracts, not implied v1 message support:
 
 - Handshake/version negotiation and session attachment.
 - Command intent and optional idempotency identifier.
@@ -518,23 +627,28 @@ The wire protocol distinguishes:
 
 The implemented development routes and message contract are specified in [SERVER.md](docs/SERVER.md) and [PROTOCOL_V1.md](docs/PROTOCOL_V1.md). Stable public route, SDK, and compatibility policy remains open.
 
-### Envelope proposal
+<a id="envelope-proposal"></a>
 
-A client command may resemble the following. Fields are illustrative and do not assert an implemented API:
+### Envelope and durable extension boundary
 
-```json
-{
-  "protocol_version": 1,
-  "type": "command",
-  "request_id": "client-request-00042",
-  "command": "look",
-  "arguments": []
-}
+Use `docs/PROTOCOL_V1.md` and the actual DTO definitions for serialized v1 examples. This design deliberately avoids presenting invented fields under `protocol_version: 1`.
+
+The carried-forward v1 contract includes a 16 KiB text-frame limit before JSON decoding; strict malformed/duplicate/unknown-field rejection; at most eight offered versions; request IDs of 1–128 bytes using the restricted visible ASCII alphabet; exit labels matching `[a-z][a-z0-9_-]*` with a 64-byte limit; and nonblank, control-free Say text of 1–4096 UTF-8 bytes. Binary gameplay frames and unsupported versions are refused. These reported limits are not changed by the roadmap expansion.
+
+For ordering, server output carries a per-connection stream epoch and checked monotonic sequence. They detect gaps, not persistent replay offsets. The server establishes identity; M3 `attach` addresses the character already authorized by the session, not a new arbitrary character selector. Any future selection field would express a request to authorize, never ownership proof.
+
+**Conceptual M4 extension flow, not serialized JSON or an existing endpoint:**
+
+```text
+New durable intent -> authenticated scope + durable key + semantic intent
+Admission          -> bounded work accepted, no commit claim
+Confirmed outcome  -> authoritative receipt and reconciled projection
+Uncertain outcome  -> retain original key; resolve the original transaction
+Reconnect          -> reauthenticate/reattach; authorized receipt reconciliation
+Changed-key intent -> enforce business entitlement uniqueness independently
 ```
 
-The server attaches identity. A client-supplied character ID is at most a requested selection to authorize, never proof of ownership.
-
-For ordering and resynchronization, server output carries a connection/stream epoch and monotonic sequence within that stream. These values detect gaps; they do not promise a persistent replay log. After restart or a gap that cannot be filled, send a fresh authorized snapshot and require reconciliation of unresolved durable requests.
+Choose an explicit protocol extension/version and supported-client behavior before implementing that flow. Do not redefine `accepted`, `command_result`, runtime revisions, or v1 request IDs. A gap/restart requires a fresh authorized view and, only for the future durable contract, reconciliation of pending durable operations; it never authorizes blindly replaying old Look/Move/Say history.
 
 ### Reconnect and duplicate sessions
 
@@ -542,13 +656,15 @@ Baseline policy: one controlling connection per character. An explicit authentic
 
 Queued commands carry their original generation. The runtime rejects stale-generation commands when executed. A reconnect does not automatically replay all commands in browser history.
 
-On attachment:
+For the future durable-capable client, attachment/recovery must:
 
 1. Revalidate the account, character ownership, and restrictions.
-2. Establish the new controlling generation.
-3. Send current authorized state and negotiated capabilities.
-4. Reconcile identified pending durable operations.
-5. Resume ordinary command admission.
+2. Establish a new controlling generation and stream context.
+3. Send current authorized state under the negotiated contract.
+4. Reconcile identified pending durable operations through their original scoped keys.
+5. Resume admission only under the world's established readiness/uncertainty policy.
+
+M3 implements attachment and current output, not step 4's durable lookup. A session that survives restart under a future M4 policy still needs a fresh attachment; it cannot revive an old generation. A result lookup is authorized independently of possession of an operation key.
 
 ### Text rendering and accessibility
 
@@ -570,6 +686,16 @@ Cookies require secure transport, HttpOnly, an appropriate SameSite policy, and 
 
 Automated operator authentication, organizational identity-provider integration, and account recovery delivery are open design decisions. Do not silently enable Basic Auth as a fallback or reuse a human's permanent session token for automation.
 
+### Durable identity choice — M4
+
+Choose between PostgreSQL-owned local accounts/sessions and an external identity provider with stable issuer/subject-to-account mappings. This document does not silently select a provider or durable local session policy. Preserve explicit character/world authorization independently of display names and reusable email addresses.
+
+The selected contract must define registry migration, account linking/conflicts, absolute session expiry, revocation, active-connection invalidation, disabled/deleted accounts, restart reauthentication, cleanup bounds, and security-data retention. A migration must not partially duplicate identities or copy credentials into world content/artifacts.
+
+For locally persisted opaque sessions, storing a token verifier/hash rather than the bearer token is a proposed hardening measure; it is not an implemented schema. Password verification and high-entropy token lookup are different mechanisms—do not impose Argon2 on every ordinary session request. Preserve the existing cookie/exact-Origin protections and bounded verification/session resources.
+
+**Example:** policy may allow an unexpired durable session after restart, but the character must attach anew. Test expiry across restart, live revocation, mapping conflicts, disabled accounts, and failed migration without partial identity creation.
+
 ### Authorization
 
 Roles are convenient groupings of explicit capabilities. Check capability and target scope for every operation, including at execution time.
@@ -586,6 +712,18 @@ Roles are convenient groupings of explicit capabilities. Check capability and ta
 Production publication and destructive repair should support independent approval. Privileged users must not gain access to secrets or private player data merely because they can restart the world.
 
 Require an approved stronger authentication policy for privileged production access, normally MFA through an identity provider or a reviewed equivalent, before operational beta.
+
+### Privileged control and audit — M6
+
+Capabilities are scoped by action and environment/world/target. Status viewing does not imply secret access; moderation does not imply arbitrary inventory repair; publication requests do not imply approval or activation; drain does not imply unrestricted SQL. Deny by default and test direct API requests that bypass hidden UI controls.
+
+Specify trusted issuer/identity mapping, required authentication assurance, session/reauthentication policy, revocation propagation, automation credentials/rotation, and time-bounded break-glass approval/review. For a token-based provider, validate signature, issuer, audience, expiry, and provider-specific assurance evidence. A role claim alone does not prove MFA. Do not invent a provider or default privileged credential in implementation.
+
+Every required audit records actor, action/capability, target scope, reason, correlation/operation identity, timestamp, and bounded safe before/after summaries. A database mutation and its audit commit together; audit failure aborts that mutation. External multi-step operations need durable intent/progress/outcome records rather than a claim that all steps share one SQL transaction. Denied attempts go through a bounded security-event path.
+
+Revalidate grants for long-running work before irreversible steps under policy. A committed account restriction denies new admission and converges to live-attachment invalidation even if the initiating operator disconnects. Never include passwords, tokens, raw frames, or unrestricted chat bodies in audit/log records.
+
+**Examples and evidence:** a staging moderator cannot activate production by changing a target ID; a revoked operator cannot finish an unauthorized irreversible step; required-audit failure cannot leave a repaired item committed; insufficient authentication assurance cannot authorize takeover. Exercise cross-scope denial, grant removal, automation rotation, emergency-access expiry, and independent review.
 
 ### Browser and transport protections
 
@@ -604,19 +742,37 @@ A private reporting route and operational retention policy must be real, approve
 
 ### CLI
 
-The developer CLI coordinates project initialization, validation, local test execution, and packaging through shared libraries. Exact command names are deferred until implemented.
+The reported implemented commands are `worldwright content validate <path>` and `worldwright play <path>`. M3's server is invoked through `worldwright-server serve`. Check actual flags and paths in their guides/source; this design does not introduce additional executable command names.
 
-Local operations must provide machine-readable diagnostics, stable exit semantics, and safe path handling. Scaffolding must not overwrite user files without an explicit conflict policy. Generated projects include the selected template/content license notices.
+M5 adds validation/packaging, manifest inspection, isolated preview, and publication-request workflows; M8 adds improved scaffolding and migration tooling. Local operations need machine-readable diagnostics, stable exit semantics, safe paths, and explicit overwrite/conflict policy. Templates carry approved software/content notices and must be tested from a clean generated project.
 
-Remote publication is a distinct privileged workflow. Possession of the CLI does not grant access to any production server.
+Remote publication is a distinct privileged operation, scoped to artifact digest, target, and expected current release. A durable request/status does not imply approval or successful activation. Possession of the CLI does not grant production authority.
+
+### Preview isolation contract — M5
+
+Preview has its own controlled process, disposable state, filesystem area, test identities, and least-privilege credentials. Reject production connection strings/secrets inherited through environment or mounts. Enforce denied production network/control access and disable or redirect external side effects. Bound CPU/memory/storage, concurrent sessions/processes, lifetime, and cleanup work.
+
+A process boundary alone is not a sandbox for untrusted native extensions; only reviewed trusted game code is supported. A preview reward stays in preview and cannot become production value. Test launch/stop, crashes, expired runs, quota rejection, and denied production access independently of the UI.
 
 ### Studio
 
-Begin with structured files and a shared validator. Studio later adds editing, graph navigation, preview, and publication requests over the same content contracts.
+M7 provides schema-aware room/exit/reference-game editing over M5 preview/publication and M6 authority/audit. It does not create a second validator, preview server, or privileged database editor.
 
-Draft saves use revision tokens or equivalent optimistic concurrency to detect conflicting edits. Preview runs use isolated state and credentials. A preview may execute trusted game code and therefore requires process/environment isolation from production, not just a different UI tab.
+| State/artifact | Required behavior |
+|---|---|
+| Editable draft | Stable entity IDs, explicit dirty/save state, optimistic revision conflict checks |
+| Validated snapshot | Full shared validation; diagnostics identify the exact snapshot |
+| Packaged artifact | Immutable digest; supported-schema round trip without invented fields |
+| Running preview | Displays the pinned snapshot/digest, lifecycle and bounded text output |
+| Publication request | Exact reviewed digest, target scope, expected current release and status |
 
-Studio never uses production database credentials and does not patch live entity tables.
+A display-title change must not change entity identity. Deletion identifies incoming/outgoing references rather than silently rewriting them. Import/export and save/reload preserve all supported fields; strict schema v1 still rejects unknown fields. Asynchronous validation cannot be presented as applying to a later unsaved edit. Use the existing validator's JSON-pointer/diagnostic contract; illustrative roadmap diagnostic paths are not a new schema.
+
+After an edit, an existing preview still runs its earlier snapshot until explicitly replaced. Changing packaged bytes invalidates earlier approval. Stale current-release conflicts require refreshed validation/review under policy, not last-write-wins publication. Show submission, approval, staging, and activation as distinct states.
+
+The builder acceptance scenario creates a small zone, encounters/fixes a reference error, previews the exact artifact, handles a publication conflict, and submits the reviewed bytes. Include keyboard-only operation, field labels/error summaries, visible focus, zoom/reflow, non-color-only status, manual assistive-technology checks, and bounded announcements. An ARIA attribute is not completed accessibility evidence.
+
+Destructive confirmations identify target, scope, consequences and recovery path: deleting a draft is not deleting published content. Preserve unsaved edits, restore focus after dialogs, and verify cancellation leaves state unchanged. Studio never uses production database credentials or patches live entity tables.
 
 ### Console
 
@@ -665,17 +821,30 @@ Initial reload policy is restart-required unless a field is explicitly documente
 - Breaking changes ship with a tested migration chain or a specific, safe refusal explaining operator action.
 - Automatic migration must preserve a recovery copy and must not log secrets.
 
-### Proposed schema history
+<a id="proposed-schema-history"></a>
+
+### Schema and compatibility status
 
 | Domain | Version | State | Change / migration |
 |---|---|---|---|
-| Operator configuration | 1 | Proposed, unpublished | Establish explicit version and validated settings; no legacy format assumed |
-| Content definitions | 1 | Proposed, unpublished | Namespaced IDs and reference validation |
-| Browser protocol | 1 | Proposed, unpublished | Typed commands/results and reconnect negotiation |
-| Game-state schema | Not assigned | Open | Define after first reference-game persistence model |
-| Database schema | Not assigned | Open | Create reviewed migrations from the persistence design |
+| Operator configuration | 1 | Proposed, unpublished | TOML target design; current server flags are not evidence of this config schema |
+| Content definitions | 1 | Reported implemented in M2 | Strict room/exit schema and deterministic conversion; authoritative contract in `docs/content/SCHEMA_V1.md` |
+| Browser protocol | 1 | Reported implemented in M3, development contract | Strict DTOs, in-memory results, stream-local correlation; no durable replay |
+| Durable protocol extension | Not assigned | M4 design required | Separate durable key/outcome/reconciliation semantics; no silent v1 reinterpretation |
+| Artifact manifest | Not assigned | M5 proposal | Precisely defined payload digest, compatibility and provenance; roadmap JSON is illustrative |
+| Game-state schema | Not assigned | M4 design required | Chosen valuable-operation projection and migration policy |
+| Database schema | Not assigned | M4 design required | Reviewed constraints, writer authority, receipts, audit, outbox and migrations |
+| SDK compatibility policy | Not assigned | M8 stabilization work | Provisional interfaces exist; supported windows/deprecation remain open |
 
-There are no deployed migrations claimed by this table. When a version is released, record actual compatibility, examples, and tested upgrade paths here or in a linked authoritative history.
+This corrects the older table that called content/protocol v1 unpublished proposals. It does not claim any deployed database migrations or new protocol version. Record actual released schemas and tested upgrade paths in authoritative histories as they exist.
+
+### M4 migration and retention requirements
+
+Applied database migrations are immutable; corrections are new migrations. Test clean installation and upgrades from every supported prior schema on real PostgreSQL. Startup refuses unsupported schemas before admission. Use expand/migrate/contract where a supported compatibility window requires it; do not assume the first local durable slice already has a rolling-upgrade promise.
+
+Classify semantic changes as breaking even when syntax is unchanged. For example, interpreting an ownership field as an account rather than a character requires a reviewed data migration, not just a renamed Rust type. Identity-registry migration must preserve stable mappings or fail with an actionable conflict; no silent account merging.
+
+Receipt, audit, account, chat-if-collected, and network/security data need distinct retention/access/deletion policies. M4 specifies the retry window and preservation of business uniqueness; M6 implements and exercises the broader operating policy. The existing no-chat-body logging rule remains in force—retention decisions do not authorize collecting otherwise prohibited data.
 
 ## Failure and Overload Policy
 
@@ -683,7 +852,7 @@ There are no deployed migrations claimed by this table. When a version is releas
 |---|---|
 | Invalid command | Structured error; no world mutation |
 | Ingress queue full | Reject admission or close abusive connection; never grow without bound |
-| Slow client / output queue full | Coalesce safe replaceable updates or disconnect; do not silently drop critical results |
+| Slow client / output queue full | M3 disconnects the saturated/closed route; future coalescing requires an explicit replaceable-update contract, never silent loss of critical results |
 | Database unavailable | Stop admitting durable mutations; fail readiness as appropriate; no speculative success |
 | Unknown transaction outcome | Suspend state-changing execution and resolve or restart safely |
 | Invalid content artifact | Reject activation; keep known-good release or remain in maintenance |
@@ -697,6 +866,22 @@ There are no deployed migrations claimed by this table. When a version is releas
 Liveness means the process can make supervisory progress. Readiness means it can safely serve the intended workload. A database outage must not cause endless liveness-triggered restart loops that obscure the incident.
 
 Metrics must distinguish admission time, queue wait, rule evaluation, transaction time, and delivery lag. Avoid high-cardinality labels containing account IDs, character names, request IDs, or raw commands; use access-controlled logs for necessary correlation.
+
+### Controlled drain and readiness — M6
+
+The roadmap's conceptual progression is `Running → Draining → Quiescent → Stopping → Stopped`. ARCHITECTURE's Ready state corresponds to Running; Quiescent/Stopping are drain/teardown substates, not new claimed enum variants.
+
+1. Mark not-ready and close new admission/attachments as specified.
+2. Notify clients through bounded output without waiting indefinitely for readers.
+3. Complete or explicitly reject admitted in-memory work under the drain budget.
+4. Settle/reconcile the pending durable transaction; do not classify a wait timeout as rollback.
+5. Stop new background durable work and preserve committed outbox entries/progress.
+6. Close owner, connections, pools and supervisors under the deadline.
+7. If forced to terminate, retain the original durable-key reconciliation path and require coherent restart before readiness.
+
+Test idle shutdown, sustained traffic, stalled readers, dependency loss, and uncertainty during COMMIT. Quiescent means no unresolved/admitted mutation remains under policy; forced termination may occur without reaching it. Do not assert safe quiescence merely because the process exited.
+
+M4 readiness includes coherent projection and current write authority; M5 includes activation recovery; M6 includes drain/operational dependency status. Liveness remains distinct so a database outage does not create a useless restart loop. Correlation distinguishes stream/request/runtime identifiers from durable operation, writer, and release identities. Metrics have bounded labels, and alerts require a named owner/action before support commitments are made.
 
 ## Verification Strategy
 
@@ -729,53 +914,122 @@ Metrics must distinguish admission time, queue wait, rule evaluation, transactio
 8. **Operational:** drain, backup, restore, deployment compatibility, and incident rehearsal.
 9. **Cross-game:** a second game reuses the SDK without special cases in core infrastructure.
 
-Before claiming a feature verified, record its actual toolchain and checks. The current core/workspace checks passed on Linux Rust 1.85.0, as detailed in [VERIFICATION.md](docs/VERIFICATION.md). They do not establish production end-to-end, persistence, authorization, Windows, or pinned remote CI behavior.
+Before claiming a feature verified, record its actual revision, toolchain, platform, dependency source, commands and unexecuted checks. Preserve separate historical evidence scopes:
+
+| Evidence | Reported scope | Does not establish |
+|---|---|---|
+| Earlier Linux core/content/local-play record | Supplied design cites Rust 1.85.0 with provenance limits in `docs/VERIFICATION.md` | Linux Transport completion, hosted CI or production operation |
+| Transport v0.1 Windows-local gate | Roadmap reports Rust 1.85.1, 164 unit/integration tests and 2 compile-fail doctests; 32 server library, 2 server smoke, 14 protocol tests and seven real loopback acceptance cases | Counts are not additive; no Linux Transport rerun, durable database, deployment or hosted-CI claim |
+| This documentation revision | Supplied-document reconciliation and Markdown checks | No repository compilation, test execution, migration or deployment verification |
+
+The reported Windows gate also includes formatting, compilation, Clippy, build and rustdoc. Do not carry historical counts into a new revision as if rerun. The shared completion commands remain:
+
+```bash
+cargo fmt --all -- --check
+cargo check --workspace --all-targets --locked --offline
+cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings
+cargo test --workspace --locked --offline
+cargo build --workspace --locked --offline
+cargo doc --workspace --no-deps --locked --offline
+```
+
+Run from the actual workspace root with the recorded cache/vendor source. Missing offline dependencies are a reported limitation, not a passing gate; record any preparatory retrieval separately without silently changing the lockfile. Persistence acceptance additionally requires real PostgreSQL tests and process-level interruption, not mocks alone. These commands were not run for this documentation update.
+
+### Roadmap failure-coverage crosswalk
+
+| Work package / invariant | Required negative or interruption case | Evidence boundary |
+|---|---|---|
+| M2–M3 / WW-I05, WW-I07, WW-I11 | Stale queued generation, stale detach, full ingress/output, malformed/duplicate fields, Unicode byte bounds | Deterministic race and real loopback acceptance tests |
+| M4.2 / WW-I09 | Competing takeover, transaction already holding fence lock, resumed stale writer | Real PostgreSQL connection/process races |
+| M4.4–M4.5 / WW-I01, WW-I03 | Same key/different intent, fresh keys/same entitlement, concurrent first use | Constraints, transaction tests and receipt assertions |
+| M4.6–M4.8 / WW-I04 | Required audit failure, COMMIT reply loss, crash before projection, restart before output | Fault injection and process interruption; no false terminal failure |
+| M5 / WW-I08 | Changed reviewed bytes, stale expected release, removed durable reference, activation interruption | Artifact/compatibility and staging recovery tests |
+| M5/M7 / WW-I06 | Preview reaches production, stale validation/preview result mistaken for current draft | Isolation and workflow tests independent of UI controls |
+| M6 / WW-I06, WW-I09, WW-I10 | Insufficient assurance, cross-world target, drain during ambiguity, restored old epoch, duplicate outbox delivery | Authorization tests and independently exercised recovery runbook |
+| M8 / WW-I12 | Second game needs transport game-name branch or unsafe fence removal for speed | Reuse/gap audit, downstream compatibility and benchmark regression |
+
+Use ROAD-MAP Appendix A for work-package/verification records and Appendix B for the full failure catalog. Each test maps to an observable invariant and includes actual database/version/isolation, fixture/artifact identity, failure point, outcome, and limitation where applicable.
 
 For test/implementation conflicts, first determine the intended contract. Update the incorrect side and record the reason; do not edit tests solely to obtain a green run.
 
 ## Delivery Gates
 
-Aligned with the phases in the README:
+The expanded [ROAD-MAP.md](ROAD-MAP.md) owns the **eight-milestone** sequence. This supersedes the older six-phase table; it does not renumber existing WW-Dxx/WW-Ixx identifiers or assert changes to the uninspected README.
 
-| Phase | Design work that must be resolved | Demonstration |
+| Milestone | Design/implementation scope | Evidence and status boundary |
 |---|---|---|
-| 1. Foundation | Ownership/license approval, crate boundaries, version policy, CI | Reviewed skeleton, reproducible checks, documented defaults |
-| 2. Playable slice | Command pipeline, session attachment, state owner, browser messages | Two players can look, move, and communicate |
-| 3. Durable gameplay | Schema, receipts, writer fencing, recovery, game-rule effects | Reward and inventory survive tested failure windows |
-| 4. Builder workflow | Content schema, validation diagnostics, artifact compatibility | Reviewed zone staged and activated without dangling references |
-| 5. Operational beta | Privileged auth, moderation, audit, secrets, backup/restore | Restricted beta with named service owner and measured recovery |
-| 6. Toolkit maturity | SDK stability, editor ergonomics, migration support | Second game and independent developer complete the workflow |
+| M1 — Foundation and Core | Pinned workspace, typed IDs/contracts, rules/effects, scheduling primitives, deterministic test support | Reported baseline complete; actual CI execution remains distinct from configured workflows |
+| M2 — Runtime, Content, and Local Play | Single owner, attachment generations, staged Look/Move/Say, strict JSON v1, named exits and terminal host | Reported complete with earlier Linux provenance limits; no authentication or persistence in Local Play |
+| M3 — Multiplayer Transport v0.1 | Bounded protocol, local registry/sessions, owner service, loopback gateway and reference browser | Reported Windows-local verification; Linux Transport rerun, hosted CI and deployment pending |
+| M4 — Durable Gameplay v0.1 | Schema/migrations, transactional writer epochs, identity choice, one item/reward operation, scoped receipts, atomic audit/outbox, uncertain outcomes and restart | **Next active, planned**: one valuable operation survives duplicate/failure/restart tests without added value, false success or accepted stale writer |
+| M5 — Content Release and Preview v0.1 | Immutable manifests, package/compatibility checks, staging/maintenance activation, known-good recovery, isolated preview, CLI publication requests | Planned: reviewed exact artifact previews/activates in staging; incompatible/stale/tampered candidates fail; supported rollback demonstrated |
+| M6 — Operational Control v0.1 | Capability-scoped APIs, privileged assurance, transactional audit, observability, drain/shutdown, backup/restore/takeover runbooks | Planned: unauthorized changes fail, allowed changes are attributable, documented restore produces a coherent playable world |
+| M7 — Builder Workflow and Studio v0.1 | Schema-aware editing, shared diagnostics, M5 preview and M6-controlled publication integration, accessibility and destructive-action handling | Planned: builder creates/validates/previews a zone and submits exact reviewed bytes without production credentials |
+| M8 — Toolkit Maturity | Independent second game, compatibility/deprecation, justified gameplay systems, scaffolding/migrations, measured performance | Planned: reuse without game-specific transport/core-invariant branches; upgrade/tooling/performance evidence |
 
-Do not defer identity, ownership, or transaction invariants until the operational beta. Later phases strengthen earlier foundations rather than retrofitting basic correctness.
+### Handoffs and non-goals
+
+M4 consumes M3 without weakening authority, queue limits, or text safety. M5 consumes durable-reference compatibility and writer control. M6 consumes transaction and release mechanisms. M7 consumes shared validation, isolated preview/publication, authorization and audit rather than duplicating them. M8 uses real independent reuse to stabilize contracts.
+
+M4 is one valuable-state slice, not a requirement for all inventory/combat/progression systems. M5 delivers preview infrastructure before Studio and does not certify production. M6 does not imply a completed Console interface simply because control APIs exist. M8 is not a promise of active-active simulation, untrusted plugins, or numerical capacity without measurement.
+
+Security starts with the earliest affected slice; it is not deferred to M6. Design, fixtures, and UI research may overlap milestones, but activation must respect dependency gates. Licensing/governance approval remains an external-publication decision rather than a retroactive assertion that a completed local foundation has legal approval.
+
+Use roadmap statuses: planned, in progress, blocked, implemented awaiting verification, locally verified, and verified for the stated environment. Every transition names revision/evidence, scope, remaining limitations, decisions, and migration impact. No new milestone is marked complete by this document.
 
 ## Open Decisions
 
-| ID | Decision still required | Accountable role | Must be resolved before |
+| ID | Decision still required | Accountable role to assign | Gate |
 |---|---|---|---|
-| WW-O01 | Copyright owner, final license, inbound contribution terms | Authorized project owner | Public code publication |
-| WW-O02 | Verify selected bootstrap Rust 1.85.1 / edition 2024; establish supported toolchain matrix and future external dependency versions | Engineering lead | Reproducible foundation build |
-| WW-O03 | Account recovery and privileged MFA/identity-provider approach | Security owner | External beta |
-| WW-O04 | Exact SDK traits, content schema, and protocol specification | Engineering/tooling leads | Publishing supported interfaces; development protocol v1 is specified, while stable protocol/SDK policy remains open |
-| WW-O05 | Database schema and durability/replication configuration | Engineering/service owners | Durable gameplay acceptance |
-| WW-O06 | Receipt retention, chat privacy, audit retention | Security/community/product owners | Operational beta |
-| WW-O07 | Hosting target, domains, ports, process supervisor, secret provider | Service owner | Deployment implementation |
-| WW-O08 | Concurrency target, latency budget, RPO, RTO, support hours | Product/service owners | Operational beta go/no-go |
-| WW-O09 | Reference-game rules and persistent versus ephemeral state | Game design lead | Durable gameplay |
-| WW-O10 | Packaging of Studio and Console | Tooling/service owners | Shipping those interfaces |
-| WW-O11 | Supported SDK compatibility window and deprecation policy | Maintainers | Stable SDK release |
-| WW-O12 | Adoption of contribution/conduct/security policies; maintainers, primary/alternate reporting channels, appeals, and response coverage | Project/security/community owners | Opening external collaboration and beta operations |
+| WW-O01 | Copyright owner, final license, inbound terms and template/content rights | Authorized project owner | External publication/contributions; no approval inferred from local M1 completion |
+| WW-O02 | Supported toolchain/platform/dependency matrix beyond reported Rust 1.85.1 bootstrap and earlier verification exceptions | Engineering lead | Platform/CI claims and future supported releases |
+| WW-O03 | Local durable identity versus provider, stable account mapping, recovery, privileged MFA and automation | Security/identity owner | M4 identity implementation; M6 privileged exposure |
+| WW-O04 | New durable protocol semantics, future content/manifest extensions, provisional SDK evolution | Engineering/tooling leads | Before introducing new contracts; M2 content v1 and M3 protocol v1 already reported implemented |
+| WW-O05 | PostgreSQL schema, constraints, isolation/durability, supported deployment, migrations, authority/takeover and restore safety | Engineering/data/service owners | M4 durable acceptance; M6 restore |
+| WW-O06 | Receipt retry window/cleanup, audit/account/network-data retention, chat privacy and deletion/access rules | Security/privacy/product owners | M4 receipt guarantees; M6 operating policy |
+| WW-O07 | Hosting, production domains/ports, edge/TLS/proxy trust, supervisor and secret provider/rotation | Service/security owner | Non-loopback deployment; production gate |
+| WW-O08 | Capacity/workload/latency targets, RPO/RTO measurement boundaries and support coverage | Product/service owners | M6 operational go/no-go; M8 capacity/support claims |
+| WW-O09 | First valuable operation and necessary persistent/ephemeral projection; meaningful second-game choice | Game design/product owner | M4 scope; M8 reuse exercise |
+| WW-O10 | Studio/Console packaging and draft storage model | Tooling/service owners | M6/M7 interface implementation; no service split implied |
+| WW-O11 | SDK/protocol supported windows, source compatibility, deprecation and migration policy | Maintainers | Public compatibility claims; M8 stabilization |
+| WW-O12 | Policy adoption, maintainers, reporting/appeals, vulnerability response and service ownership | Project/security/community owners | External collaboration, beta operations and support commitments |
 
-An open decision is not permission for each component to invent a different answer. Resolve it once, document it, and test the resulting contract.
+### Roadmap owner-decision crosswalk
+
+Roadmap D01–D07 group ownership decisions; WW-Dxx records design rationale; WW-Oxx tracks unresolved choices. Preserve these namespaces rather than treating identical numbers as equivalent.
+
+| Roadmap decision | Related open decisions | Required output |
+|---|---|---|
+| D01 — Ownership/licensing/contributions | WW-O01, WW-O12 | Authorized policies and scoped reuse/contribution rights |
+| D02 — Deployment/secrets | WW-O07 | Reviewed topology, certificate/proxy/secret controls and deployment tests |
+| D03 — Identity/privileged assurance | WW-O03 | Stable identity lifecycle, migration and assurance policy with tests |
+| D04 — PostgreSQL/recovery | WW-O05, recovery portion of WW-O08 | Schema/fence/migration decision and measured restore-safe recovery plan |
+| D05 — Retention/data handling | WW-O06 | Retry window, retention/access/deletion schedule and safe cleanup tests |
+| D06 — Compatibility/deprecation | WW-O04, WW-O11; supported-toolchain input from WW-O02 | Supported-version matrix, migration/deprecation tests and documentation |
+| D07 — Service/support/vulnerability reporting/capacity | WW-O08, WW-O12 | Named operating model, reporting routes and workload-backed capacity evidence |
+
+WW-O09 and WW-O10 additionally resolve implementation/product scope within those gates. Role names here are responsibilities to assign, not named approvers or evidence of staffing.
+
+Decision closure records context, alternatives, selected outcome, accountable approval, date, consequences, compatibility/migration impact, and linked tests/docs. Until approved, roadmap examples remain proposals. Changes that move/split scope update the roadmap chart and both companion documents in the same pass.
 
 ## Maintenance and Licensing
 
-- Keep this document synchronized with code, schemas, migration behavior, and public contracts.
-- Keep ARCHITECTURE synchronized with crate dependencies, process placement, deployment, and trust boundaries.
-- Keep README entry points and component status accurate as implementations become available.
-- Keep [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) aligned with these contracts; distinguish drafted policies from adopted, staffed procedures.
-- Use [DEFINITIONS.md](DEFINITIONS.md) for MU* vocabulary and separate gameplay-style support from legacy-engine compatibility.
-- Add actual interface specifications and operating runbooks as their owners establish authoritative procedures.
-- Keep software, templates, sample content, and branding license scopes explicit.
+- Keep DESIGN synchronized with behavioral contracts, schemas, migration/retry semantics and rationale.
+- Keep ARCHITECTURE synchronized with ownership, dependencies, placement, deployment and trust boundaries.
+- Keep ROAD-MAP synchronized when a milestone starts, completes, splits, reorders, blocks, or is abandoned; use its work-package and evidence templates.
+- Keep README build/run/configure/use instructions and IMPLEMENTATION source/status mapping current with actual code.
+- Update `docs/PROTOCOL_V1.md`, `docs/SERVER.md`, schema histories and runbooks when their real contracts change; do not manufacture new endpoints or fields from examples.
+- Record actual platform, revision, dependency source, commands/results and unexecuted checks in `docs/VERIFICATION.md`.
+- Keep [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) aligned; drafted policy is not adopted, staffed enforcement.
+- Use [DEFINITIONS.md](DEFINITIONS.md) for terminology and keep software, templates, sample content and branding license scopes explicit.
+
+### Revision 0.2 alignment record
+
+This edition replaces six-phase delivery with the expanded roadmap's M1–M8 sequence; corrects content/protocol v1 status and historical verification scope; separates stream-local correlation from durable keys; expands transaction/fencing/restart and restore authority; binds review/publication to immutable bytes; places preview in M5 and Studio integration in M7; and maps owner decisions without renumbering WW-Dxx/WW-Ixx/WW-Oxx identifiers.
+
+Existing local content example and transport/auth limits are retained as supplied-document facts. No new runtime/API/schema implementation, provider, production port, compatibility window, legal decision, or recovery target is selected by this update. Only DESIGN and ARCHITECTURE are revised here; other referenced repository files were not inspected or modified. Source/build/integration/deployment verification remains a separate implementation task.
+
+Before merging, verify actual source contracts, resolve documentary disagreements, classify breaking changes and migrations, keep diagrams/status consistent, and distinguish historical local evidence from hosted CI and production checks. Use observables, not “works” language, for exit gates.
 
 The README's **MIT OR Apache-2.0 recommendation remains pending authorized approval**. This document does not create license files, grant rights, establish ownership, or change that status.
 
