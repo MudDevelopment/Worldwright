@@ -10,6 +10,8 @@ mod validation;
 pub use diagnostic::{ContentReport, Diagnostic, Severity, terminal_safe};
 pub use instantiate::{WorldInstantiation, WorldLookup, instantiate};
 pub use loader::{
-    ContentLimits, MAX_DEPTH, MAX_DIAGNOSTICS, MAX_INPUT_BYTES, load_bytes, load_file,
+    ContentLimits, MAX_DEPTH, MAX_DIAGNOSTICS, MAX_INPUT_BYTES, load_bytes, load_draft_bytes,
+    load_file, serialize_draft, validate_draft,
 };
+pub use schema::{DraftRoomV1, DraftWorldV1};
 pub use validated::{ValidatedRoom, ValidatedWorldContent};

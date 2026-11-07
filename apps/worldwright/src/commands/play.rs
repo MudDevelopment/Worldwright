@@ -11,6 +11,7 @@ use std::{
 use worldwright_content::{
     ValidatedWorldContent, WorldLookup, instantiate, load_file, terminal_safe,
 };
+use worldwright_release::Sha256Digest;
 use worldwright_sdk::{
     GameModule,
     command::{ActorContext, CommandEnvelope, CommandIntent},
@@ -30,7 +31,15 @@ pub(super) fn play(path: &Path) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let mut session = match Session::new(&content) {
+    play_content(&content, DisplayMode::Local)
+}
+
+pub(super) fn preview(content: &ValidatedWorldContent, digest: Sha256Digest) -> ExitCode {
+    play_content(content, DisplayMode::Preview(digest))
+}
+
+fn play_content(content: &ValidatedWorldContent, mode: DisplayMode) -> ExitCode {
+    let mut session = match Session::new(content) {
         Ok(session) => session,
         Err(error) => {
             let _ = writeln!(
@@ -44,12 +53,13 @@ pub(super) fn play(path: &Path) -> ExitCode {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let prompt = stdin.is_terminal() && stdout.is_terminal();
-    match run_session(
+    match run_session_with_mode(
         &mut session,
         &mut stdin.lock(),
         &mut stdout.lock(),
         &mut io::stderr().lock(),
         prompt,
+        mode,
     ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -61,6 +71,11 @@ pub(super) fn play(path: &Path) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+enum DisplayMode {
+    Local,
+    Preview(Sha256Digest),
 }
 
 #[derive(Debug)]
@@ -247,6 +262,7 @@ impl Session {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn run_session(
     session: &mut Session,
     input: &mut impl BufRead,
@@ -254,11 +270,31 @@ fn run_session(
     errors: &mut impl Write,
     prompt: bool,
 ) -> Result<(), PlayError> {
+    run_session_with_mode(session, input, output, errors, prompt, DisplayMode::Local)
+}
+
+fn run_session_with_mode(
+    session: &mut Session,
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    errors: &mut impl Write,
+    prompt: bool,
+    mode: DisplayMode,
+) -> Result<(), PlayError> {
     let result = (|| {
-        writeln!(
-            output,
-            "Worldwright Local Play v0.1 — one local player; no login, network, or persistence."
-        )?;
+        match mode {
+            DisplayMode::Local => writeln!(
+                output,
+                "Worldwright Local Play v0.1 — one local player; no login, network, or persistence."
+            )?,
+            DisplayMode::Preview(digest) => {
+                writeln!(output, "Artifact digest: {digest}")?;
+                writeln!(
+                    output,
+                    "Worldwright Isolated Preview v0.1 — local artifact only; no login, network, persistence, or production credentials."
+                )?;
+            }
+        }
         writeln!(output, "{HELP}")?;
         session.look(output)?;
         loop {

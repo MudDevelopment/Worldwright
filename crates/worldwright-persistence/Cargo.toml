@@ -8,6 +8,8 @@ description = "Worldwright durable PostgreSQL storage adapter"
 
 [dependencies]
 worldwright-core.workspace = true
+worldwright-release.workspace = true
+worldwright-operations.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true

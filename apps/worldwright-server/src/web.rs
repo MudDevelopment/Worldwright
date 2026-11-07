@@ -1,6 +1,6 @@
 use crate::{
     auth,
-    world::{DisconnectReason, Outbound, SubmitError, WorldHandle, cancel_first},
+    world::{AttachError, DisconnectReason, Outbound, SubmitError, WorldHandle, cancel_first},
 };
 use axum::{
     Router,
@@ -42,6 +42,7 @@ pub(crate) struct AppState {
     pub(crate) allowed_origin: String,
     pub(crate) auth: auth::AuthService,
     pub(crate) world: WorldHandle,
+    pub(crate) operator: Option<std::sync::Arc<crate::operator::OperatorService>>,
 }
 
 struct ConnectionContext<'a> {
@@ -56,7 +57,8 @@ struct ConnectionContext<'a> {
 }
 
 pub(crate) fn router(state: AppState) -> Router {
-    Router::new()
+    let operator_enabled = state.operator.is_some();
+    let router = Router::new()
         .route("/", get(index))
         .route("/app.js", get(app_js))
         .route("/app.css", get(app_css))
@@ -65,8 +67,15 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
         .layer(axum::extract::DefaultBodyLimit::max(4096))
-        .layer(middleware::map_response(security_headers))
-        .with_state(state)
+        .layer(middleware::map_response(security_headers));
+    let router = if operator_enabled {
+        router
+            .merge(crate::operator::routes())
+            .merge(crate::operator::submission_routes())
+    } else {
+        router
+    };
+    router.with_state(state)
 }
 
 async fn security_headers(mut response: Response) -> Response {
@@ -401,6 +410,16 @@ async fn handshake(
                     .await
                 {
                     Ok(actor) => actor,
+                    Err(AttachError::Draining) => {
+                        fatal(
+                            outbound,
+                            cancel_tx,
+                            ErrorCode::TemporarilyUnavailable,
+                            "server is draining",
+                        )
+                        .await;
+                        return (None, request_ids);
+                    }
                     Err(_) => {
                         fatal(
                             outbound,
@@ -562,6 +581,19 @@ async fn gameplay_loop(
                         {
                             break;
                         }
+                    }
+                    Err(SubmitError::Draining) => {
+                        let _ = queue(
+                            outbound,
+                            cancel_tx,
+                            Outbound::Message(ServerMessage::Error {
+                                request_id: Some(request_id),
+                                code: ErrorCode::TemporarilyUnavailable,
+                                message: "server is draining".to_owned(),
+                                fatal: false,
+                            }),
+                        )
+                        .await;
                     }
                     Err(SubmitError::Closed) => {
                         fatal(

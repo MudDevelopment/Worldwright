@@ -1,6 +1,20 @@
+## M7 Studio review context
+
+Migration `20261110000100_studio_workflow.sql` adds nullable JSONB
+`studio_review_context` to publication requests. The database cheaply requires
+schema version 1 and zero diagnostics; Rust read paths additionally bind the
+stored snapshot/payload digest and preview/artifact digest. Legacy requests
+remain nullable. The M7 PostgreSQL acceptance test is ignored and compile-only.
+
 # Durable Gameplay Persistence v1
 
 ## Status and scope
+
+**Current status:** M4 and the M5 content-release persistence extension are
+implemented awaiting live PostgreSQL verification. Eight M4 database tests and
+eight M5 database tests compile but have not run. Current Windows evidence is
+200 test-binary tests passed, 0 failed, 16 ignored, with 2 doctests passed
+separately.
 
 This document is the implementation contract for Milestone 4. The schema is defined by `migrations/20261020000100_durable_gameplay.sql`. PostgreSQL is authoritative only when the server is started in explicit durable mode. Existing local mode remains available and continues to use the bounded JSON account registry and process-local sessions.
 
@@ -13,6 +27,14 @@ The first durable slice contains:
 - Transactional item transfer between character inventories.
 - Scoped operation receipts, audit rows, and outbox rows.
 - Inventory/balance reconstruction and receipt replay after process restart.
+
+The M5 migration additionally stores exact `.wwr` artifact bytes keyed by
+artifact SHA-256 and unique release ID, publication requests, activation
+attempts/audit, active/known-good/pending release pointers, maintenance state,
+and release read guards. Publication transitions are requested to
+approved/rejected, approved to activating, and activating to activated/failed.
+Production activation is refused; rollback is a separately reviewed request
+for the current known-good digest. See [RELEASE_V1.md](RELEASE_V1.md).
 
 Room movement remains ephemeral in this increment. A restart reconstructs identities, balances, and inventory from PostgreSQL but places characters at the validated content entry room. Persisting location requires the runtime prepare/commit boundary described under Deferred Work; it must not be approximated by committing after an in-memory Move.
 
@@ -614,4 +636,5 @@ Required database cases are:
 - Restart reconstruction returns the committed balance/item owner and original receipt.
 - Receipt, audit, and outbox cardinality matches the transaction result.
 
-Until those ignored tests run against an approved disposable PostgreSQL instance, the implementation may be compile-verified but Milestone 4 database behavior must remain marked unverified.
+Until the eight M4 and eight M5 ignored tests run against an approved
+disposable PostgreSQL instance, M4/M5 database behavior remains unverified.

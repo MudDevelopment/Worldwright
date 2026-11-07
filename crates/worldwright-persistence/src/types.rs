@@ -2,7 +2,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use uuid::Uuid;
-use worldwright_core::ids::{AccountId, CharacterId, ItemId, OperationId, WorldId, WriterId};
+use worldwright_core::ids::{
+    AccountId, ActivationId, AuthorityIncarnationId, CharacterId, CorrelationId, GrantId, ItemId,
+    OperationId, OperatorSessionId, PublicationId, RecoveryJobId, WorldId, WriterId,
+};
+use worldwright_operations::{
+    Capability, Environment, OperatorClaims, OperatorKind, StudioReviewContext,
+};
+use worldwright_release::{
+    DeploymentTarget, PublicationKind, PublicationStatus, ReleaseId, Sha256Digest,
+};
 
 pub const MAX_DURABLE_INVENTORY_ITEMS: usize = 256;
 pub const MAX_DURABLE_SESSIONS: usize = 1024;
@@ -14,6 +23,7 @@ pub struct WriterLease {
     pub(crate) world: WorldId,
     pub(crate) writer: WriterId,
     pub(crate) epoch: u64,
+    pub(crate) incarnation: AuthorityIncarnationId,
 }
 impl WriterLease {
     pub fn world(self) -> WorldId {
@@ -25,6 +35,15 @@ impl WriterLease {
     pub fn epoch(self) -> u64 {
         self.epoch
     }
+    pub fn incarnation(self) -> AuthorityIncarnationId {
+        self.incarnation
+    }
+}
+
+/// Holds a shared lock on the world's release row while an in-memory command
+/// executes, preventing activation from crossing that command boundary.
+pub struct ReleaseReadGuard {
+    pub(crate) _transaction: sqlx::Transaction<'static, sqlx::Postgres>,
 }
 
 pub struct SeedAccount {
@@ -165,6 +184,204 @@ pub struct InventorySnapshot {
     pub items: Vec<InventoryItem>,
 }
 
+pub struct OperatorContext<'a> {
+    pub claims: &'a OperatorClaims,
+    pub environment: Environment,
+    pub world: WorldId,
+    pub correlation: worldwright_core::ids::CorrelationId,
+    pub reason: &'a str,
+}
+
+pub struct BootstrapOperator<'a> {
+    pub subject: &'a str,
+    pub display_name: &'a str,
+    pub kind: OperatorKind,
+    pub environment: Environment,
+    pub world: WorldId,
+    pub capabilities: &'a [Capability],
+    pub reason: &'a str,
+    pub correlation: worldwright_core::ids::CorrelationId,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OperationalStatus {
+    pub active_release: Option<Sha256Digest>,
+    pub writer_epoch: u64,
+    pub authority_incarnation: worldwright_core::ids::AuthorityIncarnationId,
+    pub outbox_backlog: u64,
+    pub outbox_oldest_seconds: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecoveryJob {
+    pub job: worldwright_core::ids::RecoveryJobId,
+    pub source_incarnation: worldwright_core::ids::AuthorityIncarnationId,
+    pub active_release: Option<Sha256Digest>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PublicationRecord {
+    pub(crate) request: PublicationId,
+    pub(crate) world: WorldId,
+    pub(crate) artifact_digest: Sha256Digest,
+    pub(crate) release_id: ReleaseId,
+    pub(crate) kind: PublicationKind,
+    pub(crate) target: DeploymentTarget,
+    pub(crate) expected_current: Option<Sha256Digest>,
+    pub(crate) requested_by: String,
+    pub(crate) status: PublicationStatus,
+    pub(crate) reviewed_by: Option<String>,
+    pub(crate) review_reason: Option<String>,
+    pub(crate) activation_executor: Option<String>,
+    pub(crate) review_context: Option<StudioReviewContext>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseState {
+    pub(crate) active: Option<Sha256Digest>,
+    pub(crate) known_good: Option<Sha256Digest>,
+    pub(crate) pending: Option<ActivationId>,
+    pub(crate) maintenance: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredArtifact {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) digest: Sha256Digest,
+    pub(crate) release_id: ReleaseId,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationPlan {
+    pub(crate) activation: ActivationId,
+    pub(crate) request: PublicationId,
+    pub(crate) world: WorldId,
+    pub(crate) artifact: StoredArtifact,
+    pub(crate) kind: PublicationKind,
+    pub(crate) target: DeploymentTarget,
+    pub(crate) previous: Option<Sha256Digest>,
+    pub(crate) executor: String,
+    pub(crate) authorization_version: i16,
+    pub(crate) lease: WriterLease,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DurableContentReferences {
+    pub(crate) room_definitions: Vec<String>,
+    pub(crate) item_definitions: Vec<String>,
+}
+
+impl PublicationRecord {
+    pub fn request(&self) -> PublicationId {
+        self.request
+    }
+    pub fn world(&self) -> WorldId {
+        self.world
+    }
+    pub fn artifact_digest(&self) -> Sha256Digest {
+        self.artifact_digest
+    }
+    pub fn release_id(&self) -> &ReleaseId {
+        &self.release_id
+    }
+    pub fn kind(&self) -> PublicationKind {
+        self.kind
+    }
+    pub fn target(&self) -> DeploymentTarget {
+        self.target
+    }
+    pub fn expected_current(&self) -> Option<Sha256Digest> {
+        self.expected_current
+    }
+    pub fn requested_by(&self) -> &str {
+        &self.requested_by
+    }
+    pub fn status(&self) -> PublicationStatus {
+        self.status
+    }
+    pub fn reviewed_by(&self) -> Option<&str> {
+        self.reviewed_by.as_deref()
+    }
+    pub fn review_reason(&self) -> Option<&str> {
+        self.review_reason.as_deref()
+    }
+    pub fn activation_executor(&self) -> Option<&str> {
+        self.activation_executor.as_deref()
+    }
+    pub fn review_context(&self) -> Option<&StudioReviewContext> {
+        self.review_context.as_ref()
+    }
+}
+
+impl ReleaseState {
+    pub fn active(&self) -> Option<Sha256Digest> {
+        self.active
+    }
+    pub fn known_good(&self) -> Option<Sha256Digest> {
+        self.known_good
+    }
+    pub fn pending(&self) -> Option<ActivationId> {
+        self.pending
+    }
+    pub fn maintenance(&self) -> bool {
+        self.maintenance
+    }
+}
+
+impl StoredArtifact {
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    pub fn digest(&self) -> Sha256Digest {
+        self.digest
+    }
+    pub fn release_id(&self) -> &ReleaseId {
+        &self.release_id
+    }
+}
+
+impl ActivationPlan {
+    pub fn activation(&self) -> ActivationId {
+        self.activation
+    }
+    pub fn request(&self) -> PublicationId {
+        self.request
+    }
+    pub fn world(&self) -> WorldId {
+        self.world
+    }
+    pub fn artifact(&self) -> &StoredArtifact {
+        &self.artifact
+    }
+    pub fn kind(&self) -> PublicationKind {
+        self.kind
+    }
+    pub fn target(&self) -> DeploymentTarget {
+        self.target
+    }
+    pub fn previous(&self) -> Option<Sha256Digest> {
+        self.previous
+    }
+    pub fn executor(&self) -> &str {
+        &self.executor
+    }
+    pub fn authorization_version(&self) -> i16 {
+        self.authorization_version
+    }
+    pub fn lease(&self) -> WriterLease {
+        self.lease
+    }
+}
+
+impl DurableContentReferences {
+    pub fn room_definitions(&self) -> &[String] {
+        &self.room_definitions
+    }
+    pub fn item_definitions(&self) -> &[String] {
+        &self.item_definitions
+    }
+}
+
 macro_rules! id_serde {
     ($module:ident, $ty:ty, $option_module:ident) => {
         #[allow(dead_code)]
@@ -245,7 +462,14 @@ id_value!(
     ItemId,
     OperationId,
     WorldId,
-    WriterId
+    WriterId,
+    PublicationId,
+    ActivationId,
+    AuthorityIncarnationId,
+    CorrelationId,
+    GrantId,
+    OperatorSessionId,
+    RecoveryJobId
 );
 
 pub(crate) fn i64_from_u64(value: u64, positive: bool) -> Result<i64, crate::PersistenceError> {
@@ -359,6 +583,7 @@ impl fmt::Debug for WriterLease {
             .field("world", &self.world)
             .field("writer", &self.writer)
             .field("epoch", &self.epoch)
+            .field("incarnation", &self.incarnation)
             .finish()
     }
 }

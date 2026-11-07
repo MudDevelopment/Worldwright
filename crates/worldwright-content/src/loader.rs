@@ -85,6 +85,15 @@ pub fn load_bytes(
     bytes: &[u8],
     limits: ContentLimits,
 ) -> Result<ValidatedWorldContent, ContentReport> {
+    let draft = load_draft_bytes(source, bytes, limits)?;
+    validate_draft(source, draft, limits)
+}
+
+pub fn load_draft_bytes(
+    source: &str,
+    bytes: &[u8],
+    limits: ContentLimits,
+) -> Result<schema::DraftWorldV1, ContentReport> {
     limits.check(source)?;
     if bytes.len() > limits.max_bytes {
         return Err(ContentReport::single(
@@ -133,7 +142,37 @@ pub fn load_bytes(
                 message,
             )
         })?;
-    validation::validate(source, document, limits.max_diagnostics)
+    Ok(document)
+}
+
+pub fn validate_draft(
+    source: &str,
+    draft: schema::DraftWorldV1,
+    limits: ContentLimits,
+) -> Result<ValidatedWorldContent, ContentReport> {
+    limits.check(source)?;
+    validation::validate(source, draft, limits.max_diagnostics)
+}
+
+pub fn serialize_draft(
+    source: &str,
+    draft: &schema::DraftWorldV1,
+    limits: ContentLimits,
+) -> Result<Vec<u8>, ContentReport> {
+    limits.check(source)?;
+    let mut bytes = serde_json::to_vec_pretty(draft)
+        .map_err(|error| ContentReport::single(source, "WWC_SCHEMA", "", error.to_string()))?;
+    bytes.push(b'\n');
+    if bytes.is_empty() || bytes.len() > limits.max_bytes {
+        return Err(ContentReport::single(
+            source,
+            "WWC_LIMIT",
+            "",
+            "serialized draft exceeds byte limit",
+        ));
+    }
+    load_draft_bytes(source, &bytes, limits)?;
+    Ok(bytes)
 }
 fn parse_code(message: &str, default: &'static str) -> &'static str {
     if message.starts_with("WWC_LIMIT:") {

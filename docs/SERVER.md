@@ -1,6 +1,14 @@
-# Worldwright Server Transport v0.1
+# Worldwright Server Transport and Durable Releases v0.1
 
-`worldwright-server` is the local development composition root for the authenticated browser transport slice. It loads validated world content and a separate account registry, owns one in-memory world runtime, and exposes bounded HTTP/WebSocket routes. It is not a production deployment, durable account service, TLS terminator, or database-backed server.
+**Status:** M4/M5 implemented awaiting live PostgreSQL verification. Current
+Windows evidence is recorded in [milestone-5-report.md](verification/milestone-5-report.md).
+
+`worldwright-server` supports local JSON/process-local mode and explicit
+PostgreSQL durable mode. Durable startup loads only the exact active artifact
+from PostgreSQL, verifies its digest/content/world compatibility, acquires a
+writer, reconstructs durable identities, and refuses no-active, pending, or
+maintenance state. It is not a production deployment, TLS terminator, or M6
+production authorization service.
 
 ## Bootstrap and run
 
@@ -56,6 +64,14 @@ worldwright-server --version|-V
 worldwright-server status
 worldwright-server hash-password
 worldwright-server serve --content <path> --accounts <path> --origin <origin> [--bind <socket-address>] [--allow-insecure-http]
+worldwright-server serve --database-url-env <ENV_NAME> --acquire-writer --origin <origin> [--bind <socket-address>] [--allow-insecure-http]
+worldwright-server database migrate --database-url-env <ENV_NAME>
+worldwright-server database seed --database-url-env <ENV_NAME> --content <path> --accounts <path>
+worldwright-server release request ...
+worldwright-server release review ...
+worldwright-server release status ...
+worldwright-server release activate ...
+worldwright-server release recover ...
 ```
 
 The default bind is `127.0.0.1:3000`; every non-loopback bind is rejected. `serve` requires each content, account, and origin option exactly once. Duplicate, missing, malformed, unknown, or extra options are usage failures with exit code 2. Help, version, and status return 0. Password hashing and server startup/runtime failures return 1. `status` reports protocol/browser transport implementation and process-local state; it is not a readiness probe.
@@ -88,4 +104,15 @@ The HTTP body limit and protocol frame/message limit are 4 KiB and 16 KiB respec
 
 ## Non-goals and limitations
 
-This increment deliberately does not provide PostgreSQL, durable accounts or sessions, restart recovery, durable receipts, registration, recovery, MFA, roles, moderation, inventory, combat, NPCs, scheduling integration, Studio/Console behavior, public deployment, built-in TLS termination, proxy-header trust, containers, stable SDK/protocol compatibility, rate limiting beyond bounded password verification, or production capacity/availability evidence. Browser assets have automated source/transport tests; no interactive browser accessibility assessment has been performed.
+M4/M5 provide PostgreSQL durable accounts/sessions, valuable-state receipts,
+artifact publication/activation, restart reconstruction, recovery, and release
+read guards. Remaining limits include no live M6 PostgreSQL/recovery execution,
+no hot reload, no content/data migration, no public
+deployment, no built-in TLS termination, no production capacity evidence, and
+no interactive browser accessibility assessment. Eight M4 and eight M5
+database tests compile but have not run.
+
+Durable operator serving accepts the all-or-none flags
+`--operator-key-env`, `--operator-issuer`, `--operator-audience`, and
+`--environment staging|production`. Keys are resolved from the environment and
+are never command-line values or output.

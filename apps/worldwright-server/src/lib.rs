@@ -1,24 +1,42 @@
 mod application;
 mod auth;
 mod cli;
+mod lifecycle;
+mod metrics;
+mod operator;
+mod release_cli;
+mod release_runtime;
 mod web;
 mod world;
 
 use std::{error::Error, fmt, future::Future, net::SocketAddr, path::PathBuf, process::ExitCode};
+use worldwright_operations::Environment;
 
 pub use application::BoundServer;
 
 pub enum StorageConfig {
-    Local { accounts_path: PathBuf },
-    Postgres { database_url: String },
+    Local {
+        accounts_path: PathBuf,
+        content_path: PathBuf,
+    },
+    Postgres {
+        database_url: String,
+    },
+}
+
+pub struct OperatorConfig {
+    pub signing_key: Vec<u8>,
+    pub issuer: String,
+    pub audience: String,
+    pub environment: Environment,
 }
 
 pub struct ServerConfig {
     pub bind: SocketAddr,
     pub allowed_origin: String,
-    pub content_path: PathBuf,
     pub storage: StorageConfig,
     pub allow_insecure_http: bool,
+    pub operator: Option<OperatorConfig>,
 }
 
 #[derive(Debug)]

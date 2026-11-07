@@ -1,33 +1,51 @@
-//! Builder application placeholder. No UI, preview process, or file editor yet.
-
-use std::ffi::OsStr;
 use std::process::ExitCode;
+use worldwright_studio::{
+    cli::{Command, parse},
+    workspace::Workspace,
+};
 
-fn main() -> ExitCode {
-    let mut arguments = std::env::args_os().skip(1);
-    let first = arguments.next();
-    if arguments.next().is_some() {
-        eprintln!("worldwright-studio: expected one of --help, --version, or status");
-        return ExitCode::from(2);
-    }
-
-    match first.as_deref().and_then(OsStr::to_str) {
-        Some("--help" | "-h") => {
-            println!("Worldwright Studio (scaffold only)");
-            println!("Usage: worldwright-studio <--help|--version|status>");
-            println!("No editor, content publication, or graphical window exists yet.");
+#[tokio::main]
+async fn main() -> ExitCode {
+    match parse(std::env::args_os().skip(1)) {
+        Ok(Command::Help) => {
+            println!("Worldwright Studio");
+            println!(
+                "Usage: worldwright-studio serve --workspace <path> [--content <path>] [--bind 127.0.0.1:PORT] [--preview-command <path>] [--release-endpoint http://127.0.0.1:PORT] [--operator-token-env ENV]"
+            );
+            println!("Draft revisions are append-only and use shared authoritative validation.");
+            println!(
+                "Preview runs the isolated worldwright preview supervisor; publication uses the authenticated loopback operator API when configured."
+            );
+            ExitCode::SUCCESS
         }
-        Some("--version" | "-V") => {
+        Ok(Command::Version) => {
             println!("worldwright-studio {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
         }
-        Some("status") => {
-            println!("worldwright-studio: scaffold only; no builder UI implemented");
-            println!("Protocol: {}", worldwright_protocol::STATUS);
+        Ok(Command::Status) => {
+            println!(
+                "Worldwright Studio draft editing, shared validation, immutable packaging, isolated preview, and controlled publication requests are implemented"
+            );
+            ExitCode::SUCCESS
         }
-        _ => {
-            eprintln!("worldwright-studio: operation not implemented; use --help (scaffold only)");
-            return ExitCode::from(2);
+        Ok(Command::Serve(options)) => {
+            match Workspace::open_or_create(&options.workspace, options.content.as_deref()) {
+                Ok(workspace) => match worldwright_studio::web::serve(options, workspace).await {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(error) => {
+                        eprintln!("worldwright-studio: {error}");
+                        ExitCode::from(1)
+                    }
+                },
+                Err(_) => {
+                    eprintln!("worldwright-studio: workspace initialization failed");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!("worldwright-studio: {error}");
+            ExitCode::from(2)
         }
     }
-    ExitCode::SUCCESS
 }

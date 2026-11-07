@@ -39,6 +39,7 @@ struct SessionRow {
 }
 #[derive(FromRow)]
 struct WriterRow {
+    authority_incarnation: uuid::Uuid,
     writer_epoch: i64,
 }
 
@@ -176,12 +177,16 @@ impl PostgresStore {
         world: WorldId,
         writer: worldwright_core::ids::WriterId,
     ) -> Result<WriterLease, PersistenceError> {
-        let row: Option<WriterRow> = sqlx::query_as("UPDATE worldwright_worlds SET writer_epoch = writer_epoch + 1, active_writer_id = $2, updated_at = clock_timestamp() WHERE world_id = $1 AND writer_epoch < 9223372036854775807 RETURNING writer_epoch").bind(uuid_of(world)).bind(uuid_of(writer)).fetch_optional(&self.pool).await?;
+        let row: Option<WriterRow> = sqlx::query_as("UPDATE worldwright_worlds SET writer_epoch = writer_epoch + 1, active_writer_id = $2, updated_at = clock_timestamp() WHERE world_id = $1 AND writer_epoch < 9223372036854775807 RETURNING authority_incarnation, writer_epoch").bind(uuid_of(world)).bind(uuid_of(writer)).fetch_optional(&self.pool).await?;
         let row = row.ok_or(PersistenceError::NotFound)?;
         Ok(WriterLease {
             world,
             writer,
             epoch: u64_from_i64(row.writer_epoch, true)?,
+            incarnation: worldwright_core::ids::AuthorityIncarnationId::from_u128(
+                row.authority_incarnation.as_u128(),
+            )
+            .map_err(|_| PersistenceError::InvalidData)?,
         })
     }
     pub async fn verify_world(

@@ -12,7 +12,10 @@ path = "src/main.rs"
 
 [dependencies]
 worldwright-content.workspace = true
+worldwright-release.workspace = true
 worldwright-sdk.workspace = true
+serde_json.workspace = true
+getrandom.workspace = true
 
 [lints]
 workspace = true

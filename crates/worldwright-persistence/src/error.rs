@@ -16,6 +16,12 @@ pub enum PersistenceError {
     CounterExhausted,
     InvalidData,
     UnknownOutcome,
+    ReleaseConflict,
+    InvalidTransition,
+    ExpectedReleaseConflict,
+    ProductionGateRequired,
+    OperatorDenied,
+    RecoveryConflict,
 }
 
 impl fmt::Display for PersistenceError {
@@ -35,6 +41,16 @@ impl fmt::Display for PersistenceError {
             Self::CounterExhausted => "persistence counter is exhausted",
             Self::InvalidData => "persistence data is invalid",
             Self::UnknownOutcome => "persistence commit outcome is unknown",
+            Self::ReleaseConflict => "persistence release conflicts with durable state",
+            Self::InvalidTransition => "persistence release transition is invalid",
+            Self::ExpectedReleaseConflict => {
+                "persistence expected release conflicts with durable state"
+            }
+            Self::ProductionGateRequired => {
+                "persistence production activation requires an operator gate"
+            }
+            Self::OperatorDenied => "operator authorization was denied",
+            Self::RecoveryConflict => "recovery job state conflicts with durable state",
         };
         formatter.write_str(message)
     }

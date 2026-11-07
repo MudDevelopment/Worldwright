@@ -286,9 +286,27 @@ impl crate::store::PostgresStore {
         actor: &AuthenticatedActor<'_>,
     ) -> Result<InventorySnapshot, PersistenceError> {
         let mut tx = self.pool().begin().await?;
-        self.authorize(&mut tx, actor).await?;
-        let (balance, version, _room): (i64, i64, String) = sqlx::query_as("SELECT balance, version, room_definition FROM worldwright_characters WHERE character_id = $1 AND account_id = $2 AND world_id = $3").bind(uuid_of(actor.character)).bind(uuid_of(actor.account)).bind(uuid_of(actor.world)).fetch_optional(&mut *tx).await?.ok_or(PersistenceError::Unauthorized)?;
-        let rows: Vec<InventoryRow> = sqlx::query_as("SELECT item_id, definition_id, version FROM worldwright_item_instances WHERE world_id = $1 AND owner_character_id = $2 ORDER BY item_id LIMIT 257").bind(uuid_of(actor.world)).bind(uuid_of(actor.character)).fetch_all(&mut *tx).await?;
+        self.inventory_in_transaction(&mut tx, actor).await
+    }
+
+    pub async fn inventory_with_lease(
+        &self,
+        lease: WriterLease,
+        actor: &AuthenticatedActor<'_>,
+    ) -> Result<InventorySnapshot, PersistenceError> {
+        let mut tx = self.pool().begin().await?;
+        self.fence(&mut tx, lease).await?;
+        self.inventory_in_transaction(&mut tx, actor).await
+    }
+
+    async fn inventory_in_transaction(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        actor: &AuthenticatedActor<'_>,
+    ) -> Result<InventorySnapshot, PersistenceError> {
+        self.authorize(tx, actor).await?;
+        let (balance, version, _room): (i64, i64, String) = sqlx::query_as("SELECT balance, version, room_definition FROM worldwright_characters WHERE character_id = $1 AND account_id = $2 AND world_id = $3").bind(uuid_of(actor.character)).bind(uuid_of(actor.account)).bind(uuid_of(actor.world)).fetch_optional(&mut **tx).await?.ok_or(PersistenceError::Unauthorized)?;
+        let rows: Vec<InventoryRow> = sqlx::query_as("SELECT item_id, definition_id, version FROM worldwright_item_instances WHERE world_id = $1 AND owner_character_id = $2 ORDER BY item_id LIMIT 257").bind(uuid_of(actor.world)).bind(uuid_of(actor.character)).fetch_all(&mut **tx).await?;
         if rows.len() > MAX_DURABLE_INVENTORY_ITEMS {
             return Err(PersistenceError::InvalidData);
         }
@@ -319,11 +337,14 @@ impl crate::store::PostgresStore {
         tx: &mut Transaction<'_, Postgres>,
         lease: WriterLease,
     ) -> Result<(), PersistenceError> {
-        let row: Option<(i64, Option<uuid::Uuid>)> = sqlx::query_as("SELECT writer_epoch, active_writer_id FROM worldwright_worlds WHERE world_id = $1 FOR UPDATE").bind(uuid_of(lease.world)).fetch_optional(&mut **tx).await?;
-        let Some((epoch, writer)) = row else {
+        let row: Option<(i64, Option<uuid::Uuid>, uuid::Uuid)> = sqlx::query_as("SELECT writer_epoch, active_writer_id, authority_incarnation FROM worldwright_worlds WHERE world_id = $1 FOR UPDATE").bind(uuid_of(lease.world)).fetch_optional(&mut **tx).await?;
+        let Some((epoch, writer, incarnation)) = row else {
             return Err(PersistenceError::StaleWriter);
         };
-        if u64_from_i64(epoch, true)? != lease.epoch || writer != Some(uuid_of(lease.writer)) {
+        if u64_from_i64(epoch, true)? != lease.epoch
+            || writer != Some(uuid_of(lease.writer))
+            || incarnation != uuid_of(lease.incarnation())
+        {
             return Err(PersistenceError::StaleWriter);
         }
         Ok(())

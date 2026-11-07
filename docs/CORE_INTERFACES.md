@@ -1,6 +1,12 @@
 # Core Interfaces — Current Implementation
 
-The core now includes reusable interfaces and a real **in-process Look/Move/Say runtime**. JSON content loading, Local Play, and authenticated Transport v0.1 are implemented in their owning crates/applications; this core remains independent of the network gateway. [RUNTIME.md](RUNTIME.md) documents execution, attachment validation, atomicity, routing, and limits. Persistence and durable reconciliation remain future work in [DESIGN.md](../DESIGN.md).
+The core now includes reusable interfaces and a real **in-process
+Look/Move/Say runtime**. JSON content loading, Local Play, authenticated
+Transport v0.1, durable gameplay, and release/preview are implemented in their
+owning crates/applications; this core remains independent of network and
+persistence adapters. [RUNTIME.md](RUNTIME.md) documents execution, attachment
+validation, atomicity, routing, and limits. M4/M5 PostgreSQL behavior remains
+awaiting live verification.
 
 ## Module Map
 

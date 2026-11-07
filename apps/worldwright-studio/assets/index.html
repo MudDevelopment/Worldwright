@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worldwright Studio</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#room-editor">Skip to room editor</a>
+
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">Worldwright</p>
+      <p class="wordmark">Studio <span>v0.1</span></p>
+    </div>
+    <div class="status-strip" aria-label="Workflow status">
+      <span class="status-chip" id="revision-status">Revision —</span>
+      <span class="status-chip" id="dirty-status">○ Loading draft</span>
+      <span class="status-chip" id="validation-status">◇ Not validated</span>
+      <span class="status-chip" id="preview-chip">□ Preview idle</span>
+    </div>
+  </header>
+
+  <div id="live-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <main class="studio-grid">
+    <nav class="room-nav" aria-labelledby="rooms-heading">
+      <div class="panel-heading">
+        <p class="step">Draft map</p>
+        <h1 id="rooms-heading">Rooms</h1>
+      </div>
+      <label for="room-search">Search rooms</label>
+      <input id="room-search" type="search" autocomplete="off">
+      <div class="room-actions">
+        <button id="add-room" type="button">Add room</button>
+        <label class="file-button" for="import-file">Import JSON</label>
+        <input
+          id="import-file"
+          class="visually-hidden-input"
+          type="file"
+          accept=".json,application/json"
+        >
+      </div>
+      <ol id="room-list" class="room-list" aria-label="Draft rooms"></ol>
+    </nav>
+
+    <section class="editor-panel" id="room-editor" tabindex="-1" aria-labelledby="editor-heading">
+      <div class="editor-intro">
+        <p class="step">01 / Shape the draft</p>
+        <h2 id="editor-heading">Cartographer’s workshop</h2>
+        <p>Stable identities hold the world together. Titles and descriptions can evolve around them.</p>
+      </div>
+
+      <section id="conflict-panel" class="notice notice-danger" hidden aria-labelledby="conflict-heading">
+        <h3 id="conflict-heading">A newer revision exists</h3>
+        <p id="conflict-text"></p>
+        <p>Your unsaved edits remain in this browser. Reload only if you intend to discard them.</p>
+        <button id="reload-draft" type="button" class="danger-outline">Reload saved draft</button>
+      </section>
+
+      <section class="diagnostics" aria-labelledby="diagnostics-heading">
+        <div class="section-row">
+          <h3 id="diagnostics-heading">Diagnostics</h3>
+          <span id="diagnostic-summary">Not validated</span>
+        </div>
+        <ol id="diagnostic-list"></ol>
+      </section>
+
+      <form id="world-form">
+        <fieldset class="world-fields">
+          <legend>World identity</legend>
+          <div class="field-grid">
+            <div class="field">
+              <label for="namespace">Namespace</label>
+              <input id="namespace" required maxlength="64" aria-describedby="namespace-help">
+              <small id="namespace-help">Stable prefix shared by room identities.</small>
+            </div>
+            <div class="field">
+              <label for="entry-room">Entry room</label>
+              <select id="entry-room" required></select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="room-fields">
+          <legend>Selected room</legend>
+          <div class="room-title-row">
+            <div class="field identity-field">
+              <label for="room-id">Stable room ID</label>
+              <input id="room-id" readonly aria-describedby="room-id-help">
+              <small id="room-id-help">Created once; display-title edits never change this identity.</small>
+            </div>
+            <button id="delete-room" type="button" class="danger-outline">Delete room…</button>
+          </div>
+          <div class="field">
+            <label for="room-title">Display title</label>
+            <input id="room-title" required maxlength="256">
+          </div>
+          <div class="field">
+            <label for="room-description">Description</label>
+            <textarea id="room-description" required maxlength="8192" rows="7"></textarea>
+          </div>
+          <div class="field checkbox-field">
+            <input id="allow-unreachable" type="checkbox">
+            <label for="allow-unreachable">Allow this room to be unreachable</label>
+          </div>
+        </fieldset>
+
+        <fieldset class="exit-fields">
+          <div class="section-row">
+            <legend>Exits</legend>
+            <button id="add-exit" type="button" class="quiet-button">Add exit</button>
+          </div>
+          <p id="exit-help">Each label must be unique in this room and point to an existing room.</p>
+          <div id="exit-list" aria-describedby="exit-help"></div>
+        </fieldset>
+
+        <div class="editor-actions">
+          <button id="save-draft" type="submit" class="primary-action">Save new revision</button>
+          <button id="export-draft" type="button" class="quiet-button">Export saved JSON</button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="workflow-rail" aria-labelledby="workflow-heading">
+      <div class="panel-heading">
+        <p class="step">Controlled path</p>
+        <h2 id="workflow-heading">Workflow</h2>
+      </div>
+
+      <section class="workflow-card" aria-labelledby="validate-heading">
+        <p class="card-number">02</p>
+        <h3 id="validate-heading">Validate snapshot</h3>
+        <p>Runs the same authoritative validator used by packaging and loading.</p>
+        <button id="validate-draft" type="button">Validate saved revision</button>
+      </section>
+
+      <section class="workflow-card" aria-labelledby="package-heading">
+        <p class="card-number">03</p>
+        <h3 id="package-heading">Package artifact</h3>
+        <form id="package-form">
+          <div class="field">
+            <label for="release-id">Release ID</label>
+            <input id="release-id" required maxlength="64" value="studio-draft">
+          </div>
+          <div class="field">
+            <label for="builder-identity">Builder identity</label>
+            <input id="builder-identity" required maxlength="128" value="worldwright-studio">
+          </div>
+          <button id="package-artifact" type="submit">Package validated bytes</button>
+        </form>
+        <p id="package-note" class="supporting-text">Validate a clean saved revision first.</p>
+        <label for="artifact-select">Selected artifact</label>
+        <select id="artifact-select"></select>
+        <p id="artifact-identity" class="digest">No artifact selected</p>
+      </section>
+
+      <section class="workflow-card" aria-labelledby="preview-heading">
+        <p class="card-number">04</p>
+        <h3 id="preview-heading">Preview exact bytes</h3>
+        <p id="preview-pinned">No artifact is running.</p>
+        <div class="field">
+          <label for="preview-seconds">Maximum lifetime (seconds)</label>
+          <input id="preview-seconds" type="number" min="1" max="3600" value="900">
+        </div>
+        <div class="button-row">
+          <button id="preview-start" type="button">Start preview</button>
+          <button id="preview-stop" type="button" class="quiet-button">Stop</button>
+        </div>
+        <pre id="preview-output" tabindex="0" aria-label="Preview output"></pre>
+        <form id="preview-input-form">
+          <label for="preview-input">Preview command</label>
+          <div class="inline-form">
+            <input id="preview-input" maxlength="1024" autocomplete="off">
+            <button id="preview-send" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="workflow-card" aria-labelledby="publish-heading">
+        <p class="card-number">05</p>
+        <h3 id="publish-heading">Request publication</h3>
+        <p id="publish-artifact">A successful preview of the selected artifact is required.</p>
+        <form id="publish-form">
+          <div class="field-grid compact">
+            <div class="field">
+              <label for="publication-kind">Kind</label>
+              <select id="publication-kind">
+                <option value="activate">Activate</option>
+                <option value="rollback">Rollback</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="publication-target">Target</label>
+              <select id="publication-target">
+                <option value="staging">Staging</option>
+                <option value="production">Production</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="expected-current">Expected current digest <span>(optional)</span></label>
+            <input id="expected-current" pattern="[0-9a-f]{64}" maxlength="64">
+          </div>
+          <div class="field">
+            <label for="publication-reason">Reason</label>
+            <input id="publication-reason" required maxlength="512">
+          </div>
+          <div class="field">
+            <label for="change-summary">Change summary for reviewer</label>
+            <textarea id="change-summary" required maxlength="1024" rows="4"></textarea>
+          </div>
+          <button id="submit-publication" type="submit">Submit review request</button>
+        </form>
+        <p id="publication-note" class="supporting-text">Submission is not approval or activation.</p>
+        <ol id="publication-list" class="publication-list"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="add-room-dialog" aria-labelledby="add-room-heading" aria-describedby="add-room-copy">
+    <form id="add-room-form" method="dialog">
+      <h2 id="add-room-heading">Add a stable place</h2>
+      <p id="add-room-copy">Choose the permanent namespaced identity before writing its display copy.</p>
+      <div class="field">
+        <label for="new-room-id">Stable room ID</label>
+        <input id="new-room-id" required>
+      </div>
+      <div class="field">
+        <label for="new-room-title">Display title</label>
+        <input id="new-room-title" required maxlength="256">
+      </div>
+      <p id="add-room-error" class="dialog-error"></p>
+      <div class="dialog-actions">
+        <button type="button" data-dialog-cancel="add-room-dialog" class="quiet-button">Cancel</button>
+        <button id="confirm-add-room" type="submit">Add to draft</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-room-dialog" aria-labelledby="delete-room-heading" aria-describedby="delete-room-scope">
+    <form id="delete-room-form" method="dialog">
+      <p class="danger-kicker">Destructive draft edit</p>
+      <h2 id="delete-room-heading">Delete room from local draft</h2>
+      <p id="delete-room-scope">
+        This changes only the unsaved local draft. Cancel, or reload the last saved revision, to recover.
+      </p>
+      <div id="delete-impact"></div>
+      <div class="field">
+        <label for="delete-room-confirmation">Type the exact room ID to confirm</label>
+        <input id="delete-room-confirmation" autocomplete="off">
+      </div>
+      <p id="delete-room-error" class="dialog-error"></p>
+      <div class="dialog-actions">
+        <button type="button" data-dialog-cancel="delete-room-dialog" class="quiet-button">Cancel</button>
+        <button id="confirm-delete-room" type="submit" class="danger-action">Delete from draft</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="stale-artifact-dialog" aria-labelledby="stale-heading" aria-describedby="stale-copy">
+    <form id="stale-artifact-form" method="dialog">
+      <p class="danger-kicker">Pinned snapshot differs</p>
+      <h2 id="stale-heading">Submit an older artifact?</h2>
+      <p id="stale-copy"></p>
+      <p>The review remains tied to the older artifact; current unsaved and saved changes are excluded.</p>
+      <div class="dialog-actions">
+        <button type="button" data-dialog-cancel="stale-artifact-dialog" class="quiet-button">Cancel</button>
+        <button id="confirm-stale-artifact" type="submit">Continue with pinned artifact</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="production-dialog" aria-labelledby="production-heading" aria-describedby="production-copy">
+    <form id="production-form" method="dialog">
+      <p class="danger-kicker">Production target</p>
+      <h2 id="production-heading">Request production activation</h2>
+      <p id="production-copy"></p>
+      <p>This creates a review request; an authorized reviewer and activation workflow still decide the outcome. Recovery uses the approved rollback process.</p>
+      <div class="field">
+        <label for="production-confirmation">Type the displayed confirmation phrase</label>
+        <code id="production-phrase"></code>
+        <input id="production-confirmation" autocomplete="off">
+      </div>
+      <p id="production-error" class="dialog-error"></p>
+      <div class="dialog-actions">
+        <button type="button" data-dialog-cancel="production-dialog" class="quiet-button">Cancel</button>
+        <button id="confirm-production" type="submit" class="danger-action">Submit production request</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

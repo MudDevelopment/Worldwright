@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-description = "Worldwright content-authoring application scaffold"
+description = "Worldwright local draft workspace builder"
 
 [[bin]]
 name = "worldwright-studio"
@@ -12,7 +12,19 @@ path = "src/main.rs"
 
 [dependencies]
 worldwright-content.workspace = true
-worldwright-protocol.workspace = true
+worldwright-release.workspace = true
+worldwright-core.workspace = true
+worldwright-operations.workspace = true
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+getrandom.workspace = true
+
+[dev-dependencies]
+tower.workspace = true
+http-body-util.workspace = true
 
 [lints]
 workspace = true

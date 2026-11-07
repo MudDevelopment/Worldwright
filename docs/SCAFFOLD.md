@@ -1,10 +1,23 @@
+## Current Studio status
+
+`worldwright-studio` is an implemented loopback builder workspace, not a
+scaffold. It provides append-only schema-v1 draft editing, shared validation,
+immutable artifact packaging, official preview integration, and authenticated
+publication requests. See [STUDIO_V1.md](STUDIO_V1.md). Manual browser
+accessibility and live operator/PostgreSQL evidence remain pending.
+
 # Worldwright Initial Rust Scaffold
+
+This is a historical M1-M3 scaffold record. Current M4/M5 implementation and
+evidence are in [RELEASE_V1.md](RELEASE_V1.md),
+[PERSISTENCE_V1.md](PERSISTENCE_V1.md), and
+[milestone-5-report.md](verification/milestone-5-report.md).
 
 This document describes the files actually supplied in this package. The larger designs in [DESIGN.md](../DESIGN.md) and [ARCHITECTURE.md](../ARCHITECTURE.md) remain targets, not implemented features.
 
 ## Scope
 
-- Ten Cargo members: four application binaries and six libraries.
+- Eleven Cargo members: four application binaries and seven libraries.
 - Package version `0.1.0-dev.0`; all members have `publish = false` through workspace inheritance.
 - Rust 1.85.1 selected in `rust-toolchain.toml`, edition 2024, resolver 3, manifest minimum 1.85. This is a bootstrap choice, not a verified MSRV/support matrix or latest-version claim.
 - Core remains standard-library-only. Content uses pinned Serde/JSON dependencies. Bootstrap fetches the committed lockfile before offline checks.
@@ -22,17 +35,20 @@ The local runtime supports Look/Move/Say, authoritative attachments, and atomic 
 | `worldwright` | `apps/worldwright/src/main.rs` | Help/version/status, `content validate <path>`, and runtime-backed `play <path>` |
 | `worldwright-server` | `apps/worldwright-server/src/main.rs` | Protocol-v1 authenticated loopback browser transport, bounded owner, CLI/status/hash/serve commands |
 | `worldwright-studio` | `apps/worldwright-studio/src/main.rs` | Metadata-only builder placeholder; no window or web UI |
-| `worldwright-console` | `apps/worldwright-console/src/main.rs` | Metadata-only operator placeholder; no administration |
+| `worldwright-console` | `apps/worldwright-console/src/main.rs` | Local MFA credential/token issuer and loopback operator API client |
 | `worldwright-core` | `crates/worldwright-core/src/lib.rs` | Typed IDs/commands/effects, rule planning/registration, logical scheduler; `WorldStub` still refuses startup |
 | `worldwright-content` | `crates/worldwright-content/src/lib.rs` | Strict JSON v1 loader, semantic/graph validation, private validated types, builder conversion |
 | `worldwright-protocol` | `crates/worldwright-protocol/src/lib.rs` | Validated protocol-v1 client/server DTOs, envelopes, bounds, and version negotiation |
-| `worldwright-persistence` | `crates/worldwright-persistence/src/lib.rs` | `PersistenceStub`; connection always returns an error |
+| `worldwright-persistence` | `crates/worldwright-persistence/src/lib.rs` | PostgreSQL durable gameplay and release/publication adapter; DB tests remain ignored |
+| `worldwright-release` | `crates/worldwright-release/src/lib.rs` | Deterministic bounded `.wwr` packaging, inspection, and verification |
 | `worldwright-sdk` | `crates/worldwright-sdk/src/lib.rs` | Provisional core/content re-exports and status |
 | `worldwright-testkit` | `crates/worldwright-testkit/src/lib.rs` | Deterministic clock/RNG/world fixtures and tests; `ScenarioStub` still refuses execution |
 
 The server's `src/application.rs` is the implemented local network-service composition root; default/no-command startup remains a usage failure, while `serve` binds only loopback. The separate core `runtime` module executes local Look/Move/Say commands with attachment and staged-plan validation; it returns in-memory results, not durable receipts. Testkit supplies the real two-room fixture. See [RUNTIME.md](RUNTIME.md), [SERVER.md](SERVER.md), and [PROTOCOL_V1.md](PROTOCOL_V1.md).
 
-Studio and Console have separate binary packages because the requested scaffold includes the full suite. This does not settle whether future UI routes will run inside the server or as independently packaged applications.
+Studio and Console have separate binary packages because the suite has
+independent local client boundaries. This does not settle whether future UI
+routes will run inside the server or as independently packaged applications.
 
 ## Dependency Boundaries
 
@@ -42,7 +58,7 @@ Studio and Console have separate binary packages because the requested scaffold 
 - Testkit depends on core, content, and SDK, never a server application.
 - Server composes core, content, protocol, persistence, and SDK.
 - CLI depends on content and SDK.
-- Studio depends on content and protocol; Console depends only on protocol.
+- Studio depends on content and protocol; Console depends on core operational IDs and the operations contract.
 
 Server composition dependencies for Tokio/Axum/authentication are now used by the local Transport v0.1 executable; persistence/database declarations remain boundaries rather than an installed durable service. Applications are never dependencies of libraries.
 
@@ -70,7 +86,11 @@ cargo test-all
 
 ## Application Behavior
 
-Studio and Console retain metadata behavior. The server additionally accepts `hash-password` and `serve`; the developer CLI accepts `content validate <path>` and `play <path>`. See [content guide](content/README.md), [Local Play](LOCAL_PLAY.md), and [SERVER.md](SERVER.md).
+Studio retains metadata behavior. Console supplies local MFA credentials/tokens
+and a bounded loopback operator client. The server additionally accepts
+`hash-password` and `serve`; the developer CLI accepts `content validate
+<path>` and `play <path>`. See [content guide](content/README.md), [Local
+Play](LOCAL_PLAY.md), and [SERVER.md](SERVER.md).
 
 | Argument | Expected exit code | Meaning |
 |---|---|---|
@@ -89,26 +109,39 @@ cargo run -p worldwright-studio --locked --offline -- status
 cargo run -p worldwright-console --locked --offline -- status
 ```
 
-The server `serve` command listens only on an explicitly permitted loopback address and contacts no database. `status` is a local metadata report, not a readiness probe. The default/no-command server path is a usage error. The developer CLI supports `content validate` and `play`; account/hash and server options are documented in [SERVER.md](SERVER.md).
+The server local `serve` command listens only on an explicitly permitted
+loopback address and is process-local; explicit durable serve uses PostgreSQL
+and the active release artifact. `status` is a metadata report, not a
+readiness probe. The developer CLI supports validate/package/inspect/play/
+preview; account/database/release options are documented in [SERVER.md](SERVER.md)
+and [RELEASE_V1.md](RELEASE_V1.md).
 
 ## Test Placement
 
 Library tests live beside the relevant stubs. The server composition root also has a refusal test.
 
-Server, Studio, and Console include `tests/app_smoke.rs` through their own integration-test wrappers. Console's wrapper was moved from the undiscovered `test/` directory to `tests/`. The developer CLI now has feature-specific smoke/content tests rather than assertions that all functionality is a scaffold. Cargo does not discover root-level integration tests in a virtual workspace.
+Server, Studio, and Console include application smoke coverage through their
+own integration-test wrappers. Console's wrapper was moved from the
+undiscovered `test/` directory to `tests/`. The developer CLI now has
+feature-specific smoke/content tests. Cargo does not discover root-level
+integration tests in a virtual workspace.
 
 These tests are intended to change as actual features replace stubs. A test requiring `NotImplemented` is a scaffold guard, not a permanent product requirement. Replace it with positive and negative feature tests in the same change, documenting the newly supported behavior.
 
 ## First Implementation Tasks
 
-Transport v0.1 is implemented and locally verified on the pinned Windows toolchain. The next major task is durable gameplay/persistence; Studio and Console remain stubs.
+Transport v0.1 is implemented and locally verified on the pinned Windows
+toolchain. M4-M6 are implemented awaiting live PostgreSQL and recovery
+execution. Studio and Console administration are implemented loopback clients;
+Studio's live publication and manual browser evidence remain pending.
 
 1. Run the supplied workflow on the approved pinned toolchain and activate both CI jobs; keep Cargo.lock committed.
 2. Approve ownership, outbound licensing, and inbound contribution terms before public distribution.
 3. Build on the implemented local runtime; review its trusted-host, in-memory-only boundary.
 4. Build on the implemented JSON v1 content loader and validated builder conversion; preserve its untrusted-input boundary.
 5. Exercise the implemented Local Play adapter; preserve runtime-backed actions and bounded terminal input/output.
-6. Add transport and persistence integrations separately with reviewed dependencies and failure tests.
+6. Execute live M4-M6 PostgreSQL, authorization, backup/restore, and takeover
+   evidence before any production-readiness assessment.
 
 Do not start by adding all planned dependencies or implementing several incomplete service stacks at once.
 

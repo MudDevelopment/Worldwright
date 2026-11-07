@@ -2158,7 +2158,10 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 name = "worldwright"
 version = "0.1.0-dev.0"
 dependencies = [
+ "getrandom 0.3.4",
+ "serde_json",
  "worldwright-content",
+ "worldwright-release",
  "worldwright-sdk",
 ]
 
@@ -2166,7 +2169,13 @@ dependencies = [
 name = "worldwright-console"
 version = "0.1.0-dev.0"
 dependencies = [
- "worldwright-protocol",
+ "argon2",
+ "getrandom 0.3.4",
+ "rpassword",
+ "serde",
+ "serde_json",
+ "worldwright-core",
+ "worldwright-operations",
 ]
 
 [[package]]
@@ -2184,6 +2193,19 @@ name = "worldwright-core"
 version = "0.1.0-dev.0"
 
 [[package]]
+name = "worldwright-operations"
+version = "0.1.0-dev.0"
+dependencies = [
+ "base64",
+ "hmac",
+ "serde",
+ "serde_json",
+ "sha2",
+ "worldwright-core",
+ "worldwright-release",
+]
+
+[[package]]
 name = "worldwright-persistence"
 version = "0.1.0-dev.0"
 dependencies = [
@@ -2194,6 +2216,8 @@ dependencies = [
  "tokio",
  "uuid",
  "worldwright-core",
+ "worldwright-operations",
+ "worldwright-release",
 ]
 
 [[package]]
@@ -2202,6 +2226,16 @@ version = "0.1.0-dev.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "worldwright-release"
+version = "0.1.0-dev.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "worldwright-content",
 ]
 
 [[package]]
@@ -2225,13 +2259,17 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
+ "sha2",
+ "sqlx",
  "tokio",
  "tokio-tungstenite",
  "tower",
  "worldwright-content",
  "worldwright-core",
+ "worldwright-operations",
  "worldwright-persistence",
  "worldwright-protocol",
+ "worldwright-release",
  "worldwright-sdk",
 ]
 
@@ -2239,8 +2277,18 @@ dependencies = [
 name = "worldwright-studio"
 version = "0.1.0-dev.0"
 dependencies = [
+ "axum",
+ "getrandom 0.3.4",
+ "http-body-util",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tower",
  "worldwright-content",
- "worldwright-protocol",
+ "worldwright-core",
+ "worldwright-operations",
+ "worldwright-release",
 ]
 
 [[package]]

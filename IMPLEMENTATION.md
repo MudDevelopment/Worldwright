@@ -1,10 +1,14 @@
 # Implementation handoff
 
-**Updated:** October 21, 2026 — alignment with the expanded [ROAD-MAP.md](ROAD-MAP.md), [DESIGN.md](DESIGN.md), and [ARCHITECTURE.md](ARCHITECTURE.md).
+**Updated:** November 6, 2026 — Milestones 4 and 5 implementation/evidence synchronization.
 
 This file records the latest reported implementation, the next implementation priority, and historical increment notes. The roadmap owns detailed scope and acceptance criteria; this handoff does not duplicate its implementation examples or invent new source interfaces.
 
-> **Evidence boundary:** This is a documentation-only update based on the supplied documents. Repository source, linked verification logs, migrations, and build artifacts were not independently inspected here. Implementation and test results below are reported historical evidence, not new runs. Planned work is not implemented simply because its design is now more detailed.
+> **Evidence boundary:** M4-M6 are implemented awaiting live PostgreSQL and
+> recovery execution. Current Windows evidence is recorded in
+> [milestone-6-report.md](docs/verification/milestone-6-report.md): 206
+> test-binary tests passed, 0 failed, 18 ignored, and 2 doctests passed
+> separately. Ignored PostgreSQL tests were compiled, not executed.
 
 ## Status at a glance
 
@@ -13,10 +17,10 @@ This file records the latest reported implementation, the next implementation pr
 | M1 — Foundation and Core | Reported baseline complete: typed contracts, workspace boundaries, deterministic test support |
 | M2 — Runtime, Content, and Local Play | Reported complete; earlier Linux evidence retains its documented provenance limits |
 | M3 — Multiplayer Transport v0.1 | Latest implemented increment; reported Windows-local verification |
-| M4 — Durable Gameplay v0.1 | **Next active implementation priority; planned, not implemented** |
-| M5 — Content Release and Preview v0.1 | Planned: immutable artifacts, controlled activation, isolated preview, CLI publication requests |
-| M6 — Operational Control v0.1 | Planned: scoped administration, audit, observability, drain, restore and takeover procedures |
-| M7 — Builder Workflow and Studio v0.1 | Planned: builder UI consumes M5 preview/release and M6 authorization/audit contracts |
+| M4 — Durable Gameplay v0.1 | **Implemented awaiting live PostgreSQL verification**; eight M4 DB tests compile but have not run |
+| M5 — Content Release and Preview v0.1 | **Implemented awaiting live PostgreSQL verification**; eight M5 DB tests compile but have not run |
+| M6 - Operational Control v0.1 | Implemented awaiting live PostgreSQL and recovery execution |
+| M7 — Builder Workflow and Studio v0.1 | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
 | M8 — Toolkit Maturity | Planned: independent second-game reuse, SDK compatibility, tooling and measured performance |
 
 Design and fixture work may overlap milestones, but later activation must respect prerequisite gates. No production readiness or legal approval follows from a local increment's completion.
@@ -37,7 +41,7 @@ Run the local account/hash and server workflow in [SERVER.md](docs/SERVER.md). T
 - Login sessions and attachment authority are process-local, not durable across restart.
 - Protocol v1 request IDs correlate one stream. They are not durable idempotency keys; `accepted` is admission, and `command_result` is in-memory execution, not a database receipt.
 - Loopback development does not establish public deployment, built-in TLS, or trusted proxy-header behavior.
-- PostgreSQL, durable identity/revocation, saved valuable state, recovery, content activation, Studio/Console behavior, and stable SDK policy remain future work.
+- Live PostgreSQL/recovery evidence, Studio behavior, deployment validation, and a stable SDK policy remain future work.
 
 ### Reported verification and remaining work
 
@@ -55,7 +59,19 @@ See [VERIFICATION.md](docs/VERIFICATION.md) and the [transport report](docs/veri
 
 **Still pending:** Linux Transport rerun at a pinned revision, observed hosted CI, approved dependency-artifact acceptance as applicable to the verification record, and deployment-specific checks. Earlier Linux core/content/local-play results do not satisfy the Transport rerun. A configured CI workflow is not an observed successful run.
 
-## Next active increment: Milestone 4 — Durable Gameplay v0.1 — Planned
+## Milestone 4 and 5 implementation map
+
+The current implementation includes durable PostgreSQL identity/session/item/reward
+flows, deterministic `.wwr` artifacts, inspect/preview, publication review,
+offline staging activation, recovery, rollback, active-artifact startup, and
+release read guards. Production activation now requires the M6 auth-v1
+request/review path and a current MFA-backed database grant. See [RELEASE_V1.md](docs/RELEASE_V1.md) and the
+[activation runbook](docs/operations/RELEASE_ACTIVATION.md).
+
+The eight M4 and eight M5 database tests compile but have not run. Do not call
+the overall milestone complete or locally verified.
+
+## Historical planning record: Milestone 4 — Durable Gameplay v0.1
 
 ### Goal and entry decisions
 
@@ -95,6 +111,13 @@ Preserve M3 queue bounds, exact attachment authority, origin checks, safe text r
 M4's exit gate requires the selected valuable operation to withstand duplicate requests, concurrency, forced failures, and restart with verified writer exclusion and consistent receipts/audit/outbox. Document what remains process-local. Do not mark the increment complete on the strength of an illustrative schema or mocked database alone.
 
 M4 does not promise full-world persistence, durable chat, universal replay, event sourcing, active-active worlds, or production backup readiness. M5 consumes its durable-reference and writer contracts for release/preview. M6 adds exercised operational backup/restore and takeover policy, including preventing restored authority from matching a pre-restore process's old credentials. M7 consumes those mechanisms through Studio rather than bypassing them.
+
+## M6 verification handoff
+
+M6 is implemented awaiting live PostgreSQL and recovery execution. Remaining
+evidence includes authenticated production authorization against current DB
+grants, backup/restore execution, RPO/RTO measurement, audit retention
+operation, and takeover exercise. No production readiness claim is made.
 
 ## Previous increment: Local Play v0.1
 
@@ -147,3 +170,11 @@ The following statements belong to the earlier content-loading snapshot only; th
 Keep proposed, implemented, locally verified, hosted-CI verified, and deployment-verified states separate. Record exact revisions, toolchains, dependency provenance, commands, outcomes, and unresolved gaps before changing milestone status.
 
 Update this handoff with ROAD-MAP, README, DESIGN, ARCHITECTURE and the relevant protocol, server, security and verification documents when behavior changes. Preserve historical evidence with its increment scope; do not overwrite it with later counts or copy it forward as a new run.
+
+## Current M7 implementation
+
+`worldwright-studio` is implemented as a loopback browser workspace with
+structured drafts, immutable artifacts, official preview integration, and
+authenticated publication request/status integration. It is implemented
+awaiting live PostgreSQL/operator publication and manual browser/accessibility
+evidence. M8 is next planned work.

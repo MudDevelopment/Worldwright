@@ -1,15 +1,20 @@
 mod error;
+mod operational;
+mod operational_queries;
 mod operations;
+mod releases;
 mod store;
 mod types;
 
 pub use error::PersistenceError;
 pub use store::PostgresStore;
 pub use types::{
-    AuthenticatedActor, IdentityRecord, InventoryItem, InventorySnapshot,
-    MAX_DURABLE_INVENTORY_ITEMS, MAX_DURABLE_SESSIONS, RECEIPT_FORMAT_VERSION, RewardOutcome,
+    ActivationPlan, AuthenticatedActor, BootstrapOperator, DurableContentReferences,
+    IdentityRecord, InventoryItem, InventorySnapshot, MAX_DURABLE_INVENTORY_ITEMS,
+    MAX_DURABLE_SESSIONS, OperationalStatus, OperatorContext, PublicationRecord,
+    RECEIPT_FORMAT_VERSION, RecoveryJob, ReleaseReadGuard, ReleaseState, RewardOutcome,
     RewardResult, RewardSpec, SESSION_TTL_SECONDS, SeedAccount, SeedWorld, SessionPrincipal,
-    TransferOutcome, TransferResult, TransferSpec, WriterLease, session_token_hash,
+    StoredArtifact, TransferOutcome, TransferResult, TransferSpec, WriterLease, session_token_hash,
 };
 
 #[cfg(test)]
@@ -22,8 +27,19 @@ mod database_tests {
     use std::{
         str::FromStr,
         sync::atomic::{AtomicU64, Ordering},
+        time::Duration,
     };
-    use worldwright_core::ids::{AccountId, CharacterId, ItemId, OperationId, WorldId, WriterId};
+    use worldwright_core::ids::{
+        AccountId, ActivationId, CharacterId, CorrelationId, GrantId, ItemId, OperationId,
+        PublicationId, RecoveryJobId, WorldId, WriterId,
+    };
+    use worldwright_operations::{
+        Assurance, Capability, Environment, OperatorClaims, OperatorKind, StudioReviewContext,
+    };
+    use worldwright_release::{
+        DeploymentTarget, PackageOptions, PublicationKind, PublicationStatus, ReviewDecision,
+        Sha256Digest, package_bytes,
+    };
 
     static SCHEMA_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -932,6 +948,1167 @@ mod database_tests {
             2
         );
         let _ = bob;
+        db.finish().await;
+    }
+
+    fn release_artifact(release_id: &str) -> Vec<u8> {
+        release_artifact_with_builder(release_id, "test-builder")
+    }
+
+    fn release_artifact_with_builder(release_id: &str, builder_identity: &str) -> Vec<u8> {
+        package_bytes(
+            "release-test",
+            include_bytes!("../../../examples/two-room/world.json"),
+            PackageOptions {
+                release_id: release_id.parse().unwrap(),
+                source_revision: "test-revision".to_owned(),
+                builder_identity: builder_identity.to_owned(),
+            },
+        )
+        .unwrap()
+    }
+
+    async fn release_audit_actions(db: &TestDb, world: WorldId) -> Vec<String> {
+        sqlx::query_scalar(
+            "SELECT action FROM worldwright_release_audit WHERE world_id = $1 ORDER BY audit_id",
+        )
+        .bind(types::uuid_of(world))
+        .fetch_all(db.store.pool_for_test())
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_publication_identity_review_and_activation_workflow() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let artifact = release_artifact("release-staging");
+        let digest = worldwright_release::Sha256Digest::from_bytes(&artifact);
+        let request = worldwright_core::ids::PublicationId::from_u128(10).unwrap();
+        let record = db
+            .store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("publication");
+        assert_eq!(record.artifact_digest(), digest);
+        let second_request = worldwright_core::ids::PublicationId::from_u128(11).unwrap();
+        assert!(
+            db.store
+                .submit_publication(
+                    second_request,
+                    world,
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    None,
+                    "requester",
+                )
+                .await
+                .is_ok()
+        );
+        assert!(matches!(
+            db.store
+                .review_publication(request, "requester", ReviewDecision::Approve, "approve")
+                .await,
+            Err(PersistenceError::InvalidTransition)
+        ));
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
+            .await
+            .expect("review");
+        let plan = db
+            .store
+            .begin_activation(
+                request,
+                worldwright_core::ids::ActivationId::from_u128(20).unwrap(),
+                WriterId::from_u128(2).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("begin");
+        db.store.complete_activation(plan).await.expect("complete");
+        let active = db.store.active_artifact(world).await.expect("active");
+        assert_eq!(active.digest(), digest);
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_expected_and_production_gates_are_enforced() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let artifact = release_artifact("release-production");
+        let request = worldwright_core::ids::PublicationId::from_u128(30).unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Production,
+                Some(worldwright_release::Sha256Digest::from_bytes(b"wrong")),
+                "requester",
+            )
+            .await
+            .expect_err("stale expected release must fail");
+        let request = worldwright_core::ids::PublicationId::from_u128(31).unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Production,
+                None,
+                "requester",
+            )
+            .await
+            .expect("publication");
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
+            .await
+            .expect("review");
+        assert!(matches!(
+            db.store
+                .begin_activation(
+                    request,
+                    worldwright_core::ids::ActivationId::from_u128(32).unwrap(),
+                    WriterId::from_u128(2).unwrap(),
+                    "operator",
+                )
+                .await,
+            Err(PersistenceError::ProductionGateRequired)
+        ));
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_begin_reconstruct_recover_and_complete() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let artifact = release_artifact("release-recover");
+        let request = worldwright_core::ids::PublicationId::from_u128(40).unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("publication");
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
+            .await
+            .expect("review");
+        db.store
+            .begin_activation(
+                request,
+                worldwright_core::ids::ActivationId::from_u128(41).unwrap(),
+                WriterId::from_u128(2).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("begin");
+        let reconstructed = db.reconnect_store().await;
+        let plan = reconstructed
+            .recover_activation(world, WriterId::from_u128(3).unwrap(), "recovery")
+            .await
+            .expect("recover");
+        assert_eq!(plan.executor(), "recovery");
+        reconstructed
+            .complete_activation(plan)
+            .await
+            .expect("complete");
+        let active = reconstructed.active_artifact(world).await.expect("active");
+        assert_eq!(
+            active.digest(),
+            worldwright_release::Sha256Digest::from_bytes(&artifact)
+        );
+        reconstructed.close_for_test().await;
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_failure_preserves_pointer_and_clears_maintenance() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let artifact = release_artifact("release-fail");
+        let request = worldwright_core::ids::PublicationId::from_u128(50).unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("publication");
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
+            .await
+            .expect("review");
+        let plan = db
+            .store
+            .begin_activation(
+                request,
+                worldwright_core::ids::ActivationId::from_u128(51).unwrap(),
+                WriterId::from_u128(2).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("begin");
+        db.store
+            .fail_activation(plan, "smoke_failed")
+            .await
+            .expect("fail");
+        let state = db.store.release_state(world).await.expect("state");
+        assert_eq!(state.active(), None);
+        assert_eq!(state.pending(), None);
+        assert!(!state.maintenance());
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_second_activation_and_rollback_restore_known_good() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let first = release_artifact("release-first");
+        let second = release_artifact("release-second");
+        let first_digest = worldwright_release::Sha256Digest::from_bytes(&first);
+        let second_digest = worldwright_release::Sha256Digest::from_bytes(&second);
+
+        db.store
+            .submit_publication(
+                worldwright_core::ids::PublicationId::from_u128(60).unwrap(),
+                world,
+                &first,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("first publication");
+        db.store
+            .review_publication(
+                worldwright_core::ids::PublicationId::from_u128(60).unwrap(),
+                "reviewer",
+                ReviewDecision::Approve,
+                "approve",
+            )
+            .await
+            .expect("first review");
+        let first_plan = db
+            .store
+            .begin_activation(
+                worldwright_core::ids::PublicationId::from_u128(60).unwrap(),
+                worldwright_core::ids::ActivationId::from_u128(61).unwrap(),
+                WriterId::from_u128(2).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("first begin");
+        db.store
+            .complete_activation(first_plan)
+            .await
+            .expect("first complete");
+
+        db.store
+            .submit_publication(
+                worldwright_core::ids::PublicationId::from_u128(62).unwrap(),
+                world,
+                &second,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                Some(first_digest),
+                "requester",
+            )
+            .await
+            .expect("second publication");
+        db.store
+            .review_publication(
+                worldwright_core::ids::PublicationId::from_u128(62).unwrap(),
+                "reviewer",
+                ReviewDecision::Approve,
+                "approve",
+            )
+            .await
+            .expect("second review");
+        let second_plan = db
+            .store
+            .begin_activation(
+                worldwright_core::ids::PublicationId::from_u128(62).unwrap(),
+                worldwright_core::ids::ActivationId::from_u128(63).unwrap(),
+                WriterId::from_u128(3).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("second begin");
+        db.store
+            .complete_activation(second_plan)
+            .await
+            .expect("second complete");
+        let state = db.store.release_state(world).await.expect("second state");
+        assert_eq!(state.active(), Some(second_digest));
+        assert_eq!(state.known_good(), Some(first_digest));
+
+        let rollback_request = worldwright_core::ids::PublicationId::from_u128(64).unwrap();
+        db.store
+            .submit_publication(
+                rollback_request,
+                world,
+                &first,
+                PublicationKind::Rollback,
+                DeploymentTarget::Staging,
+                Some(second_digest),
+                "requester",
+            )
+            .await
+            .expect("rollback publication");
+        db.store
+            .review_publication(
+                rollback_request,
+                "reviewer",
+                ReviewDecision::Approve,
+                "rollback",
+            )
+            .await
+            .expect("rollback review");
+        let rollback_plan = db
+            .store
+            .begin_activation(
+                rollback_request,
+                worldwright_core::ids::ActivationId::from_u128(65).unwrap(),
+                WriterId::from_u128(4).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("rollback begin");
+        db.store
+            .complete_activation(rollback_plan)
+            .await
+            .expect("rollback complete");
+        let state = db.store.release_state(world).await.expect("rollback state");
+        assert_eq!(state.active(), Some(first_digest));
+        assert_eq!(state.known_good(), Some(first_digest));
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_conflicts_and_rejection_cannot_activate() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let first = release_artifact_with_builder("release-conflict", "first");
+        let changed = release_artifact_with_builder("release-conflict", "second");
+        let request = worldwright_core::ids::PublicationId::from_u128(70).unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &first,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("first publication");
+        assert!(matches!(
+            db.store
+                .submit_publication(
+                    worldwright_core::ids::PublicationId::from_u128(71).unwrap(),
+                    world,
+                    &changed,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    None,
+                    "requester",
+                )
+                .await,
+            Err(PersistenceError::ReleaseConflict)
+        ));
+        let rejected = worldwright_core::ids::PublicationId::from_u128(72).unwrap();
+        db.store
+            .submit_publication(
+                rejected,
+                world,
+                &release_artifact("release-rejected"),
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("rejected publication");
+        db.store
+            .review_publication(rejected, "reviewer", ReviewDecision::Reject, "reject")
+            .await
+            .expect("reject");
+        assert!(matches!(
+            db.store
+                .begin_activation(
+                    rejected,
+                    worldwright_core::ids::ActivationId::from_u128(73).unwrap(),
+                    WriterId::from_u128(2).unwrap(),
+                    "operator",
+                )
+                .await,
+            Err(PersistenceError::InvalidTransition)
+        ));
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_audit_records_request_review_start_and_complete() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let request = worldwright_core::ids::PublicationId::from_u128(80).unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &release_artifact("release-audit"),
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("publication");
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
+            .await
+            .expect("review");
+        let plan = db
+            .store
+            .begin_activation(
+                request,
+                worldwright_core::ids::ActivationId::from_u128(81).unwrap(),
+                WriterId::from_u128(2).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("begin");
+        db.store.complete_activation(plan).await.expect("complete");
+        assert_eq!(
+            release_audit_actions(&db, world).await,
+            vec![
+                "publication_requested",
+                "publication_approved",
+                "activation_started",
+                "activation_succeeded",
+            ]
+        );
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn release_read_guard_blocks_activation_until_dropped() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let base_artifact = release_artifact("release-read-guard-base");
+        let base_digest = worldwright_release::Sha256Digest::from_bytes(&base_artifact);
+        let base_request = worldwright_core::ids::PublicationId::from_u128(90).unwrap();
+        db.store
+            .submit_publication(
+                base_request,
+                world,
+                &base_artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .expect("publication");
+        db.store
+            .review_publication(base_request, "reviewer", ReviewDecision::Approve, "approve")
+            .await
+            .expect("review");
+        let base_plan = db
+            .store
+            .begin_activation(
+                base_request,
+                worldwright_core::ids::ActivationId::from_u128(91).unwrap(),
+                WriterId::from_u128(1).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("base begin");
+        db.store
+            .complete_activation(base_plan)
+            .await
+            .expect("base complete");
+        let second_artifact = release_artifact("release-read-guard-second");
+        let second_request = worldwright_core::ids::PublicationId::from_u128(92).unwrap();
+        db.store
+            .submit_publication(
+                second_request,
+                world,
+                &second_artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                Some(base_digest),
+                "requester",
+            )
+            .await
+            .expect("second publication");
+        db.store
+            .review_publication(
+                second_request,
+                "reviewer",
+                ReviewDecision::Approve,
+                "approve",
+            )
+            .await
+            .expect("second review");
+        let lease = db
+            .store
+            .acquire_writer(world, WriterId::from_u128(2).unwrap())
+            .await
+            .expect("writer");
+        let guard = db
+            .store
+            .begin_release_read(lease, base_digest)
+            .await
+            .expect("read guard");
+        let blocked = tokio::time::timeout(
+            Duration::from_millis(250),
+            db.store.begin_activation(
+                second_request,
+                worldwright_core::ids::ActivationId::from_u128(93).unwrap(),
+                WriterId::from_u128(3).unwrap(),
+                "operator",
+            ),
+        )
+        .await;
+        assert!(blocked.is_err(), "activation crossed the read guard");
+        drop(guard);
+        let plan = db
+            .store
+            .begin_activation(
+                second_request,
+                worldwright_core::ids::ActivationId::from_u128(94).unwrap(),
+                WriterId::from_u128(3).unwrap(),
+                "operator",
+            )
+            .await
+            .expect("activation after guard");
+        db.store
+            .fail_activation(plan, "operator_aborted")
+            .await
+            .expect("fail");
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn operational_bootstrap_is_unique_and_scoped() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let capabilities = [Capability::ViewStatus];
+        let input = BootstrapOperator {
+            subject: "operator",
+            display_name: "Operator",
+            kind: OperatorKind::Human,
+            environment: Environment::Staging,
+            world: WorldId::from_u128(1).unwrap(),
+            capabilities: &capabilities,
+            reason: "initial bootstrap",
+            correlation: CorrelationId::from_u128(1).unwrap(),
+        };
+        db.store
+            .bootstrap_operator(
+                &input,
+                OperationId::from_u128(1).unwrap(),
+                &[GrantId::from_u128(1).unwrap()],
+            )
+            .await
+            .expect("bootstrap");
+        assert!(matches!(
+            db.store
+                .bootstrap_operator(
+                    &input,
+                    OperationId::from_u128(2).unwrap(),
+                    &[GrantId::from_u128(2).unwrap()],
+                )
+                .await,
+            Err(PersistenceError::OperatorDenied)
+        ));
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn m6_authorized_release_and_operator_audit_acceptance() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let all = [
+            Capability::ManageOperators,
+            Capability::ViewStatus,
+            Capability::ModerateAccount,
+            Capability::RequestRelease,
+            Capability::ReviewRelease,
+            Capability::ActivateRelease,
+            Capability::InitiateRecovery,
+            Capability::BackupWorld,
+            Capability::RestoreWorld,
+            Capability::DrainWorld,
+        ];
+        let grants = (1..=all.len())
+            .map(|id| GrantId::from_u128(id as u128).unwrap())
+            .collect::<Vec<_>>();
+        let admin_input = BootstrapOperator {
+            subject: "admin",
+            display_name: "Admin",
+            kind: OperatorKind::Human,
+            environment: Environment::Staging,
+            world,
+            capabilities: &all,
+            reason: "first operator",
+            correlation: CorrelationId::from_u128(1).unwrap(),
+        };
+        db.store
+            .bootstrap_operator(&admin_input, OperationId::from_u128(1).unwrap(), &grants)
+            .await
+            .expect("bootstrap");
+        let claim = |subject: &str, session: u128| OperatorClaims {
+            issuer: "issuer".into(),
+            audience: "audience".into(),
+            subject: subject.into(),
+            session_id: format!("{session:032x}"),
+            kind: OperatorKind::Human,
+            assurance: Assurance::Mfa,
+            issued_at: 1000,
+            expires_at: 1600,
+            auth_time: 1000,
+            break_glass_reason: None,
+        };
+        let admin_claim = claim("admin", 100);
+        let requester_claim = claim("requester", 101);
+        let reviewer_claim = claim("reviewer", 102);
+        fn op_context<'a>(
+            claims: &'a OperatorClaims,
+            world: WorldId,
+            correlation: u128,
+            reason: &'a str,
+        ) -> OperatorContext<'a> {
+            OperatorContext {
+                claims,
+                environment: Environment::Staging,
+                world,
+                correlation: CorrelationId::from_u128(correlation).unwrap(),
+                reason,
+            }
+        }
+        let admin = op_context(&admin_claim, world, 10, "manage operators");
+        db.store
+            .create_operator(
+                &admin,
+                "requester",
+                "Requester",
+                OperatorKind::Human,
+                OperationId::from_u128(10).unwrap(),
+            )
+            .await
+            .expect("requester");
+        db.store
+            .create_operator(
+                &admin,
+                "reviewer",
+                "Reviewer",
+                OperatorKind::Human,
+                OperationId::from_u128(11).unwrap(),
+            )
+            .await
+            .expect("reviewer");
+        let request_caps = [Capability::RequestRelease];
+        db.store
+            .grant(
+                &admin,
+                GrantId::from_u128(100).unwrap(),
+                "requester",
+                request_caps[0],
+                Environment::Staging,
+                world,
+                None,
+                OperationId::from_u128(12).unwrap(),
+            )
+            .await
+            .expect("request grant");
+        for (id, capability) in [Capability::ReviewRelease, Capability::ActivateRelease]
+            .into_iter()
+            .enumerate()
+        {
+            db.store
+                .grant(
+                    &admin,
+                    GrantId::from_u128(101 + id as u128).unwrap(),
+                    "reviewer",
+                    capability,
+                    Environment::Staging,
+                    world,
+                    None,
+                    OperationId::from_u128(13 + id as u128).unwrap(),
+                )
+                .await
+                .expect("review grant");
+        }
+        for (operation, subject) in [
+            (OperationId::from_u128(10).unwrap(), "requester"),
+            (OperationId::from_u128(11).unwrap(), "reviewer"),
+        ] {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM worldwright_operator_audit WHERE operation_id = $1 AND action = $2")
+                .bind(types::uuid_of(operation))
+                .bind("operator_created")
+                .fetch_one(db.store.pool_for_test())
+                .await
+                .expect("audit count");
+            assert_eq!((count, subject), (1, subject));
+        }
+        let requester = op_context(&requester_claim, world, 20, "request release");
+        let production = OperatorContext {
+            environment: Environment::Production,
+            ..requester
+        };
+        assert!(matches!(
+            db.store
+                .authorize_operator(&production, Capability::RequestRelease)
+                .await,
+            Err(PersistenceError::OperatorDenied)
+        ));
+        let artifact = release_artifact("m6-authorized");
+        let request = PublicationId::from_u128(200).unwrap();
+        let record = db
+            .store
+            .submit_publication_authorized(
+                &requester,
+                request,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                OperationId::from_u128(20).unwrap(),
+            )
+            .await
+            .expect("authorized request");
+        assert_eq!(record.status(), PublicationStatus::Requested);
+        assert!(
+            db.store
+                .review_publication_authorized(
+                    &requester,
+                    request,
+                    ReviewDecision::Approve,
+                    OperationId::from_u128(21).unwrap()
+                )
+                .await
+                .is_err()
+        );
+        let reviewer = op_context(&reviewer_claim, world, 21, "review release");
+        db.store
+            .review_publication_authorized(
+                &reviewer,
+                request,
+                ReviewDecision::Approve,
+                OperationId::from_u128(22).unwrap(),
+            )
+            .await
+            .expect("review");
+        assert_eq!(
+            release_audit_actions(&db, world).await,
+            vec!["publication_requested", "publication_approved"]
+        );
+        let old_lease = db
+            .store
+            .acquire_writer(world, WriterId::from_u128(500).unwrap())
+            .await
+            .expect("writer");
+        let plan = db
+            .store
+            .begin_activation_authorized(
+                &reviewer,
+                request,
+                ActivationId::from_u128(201).unwrap(),
+                WriterId::from_u128(501).unwrap(),
+                OperationId::from_u128(23).unwrap(),
+            )
+            .await
+            .expect("begin");
+        db.store
+            .revoke_operator_session(
+                &admin,
+                "reviewer",
+                reviewer_claim.session_id().unwrap(),
+                OperationId::from_u128(24).unwrap(),
+            )
+            .await
+            .expect("revoke");
+        assert!(matches!(
+            db.store
+                .complete_activation_authorized(
+                    &reviewer,
+                    plan.clone(),
+                    OperationId::from_u128(25).unwrap()
+                )
+                .await,
+            Err(PersistenceError::OperatorDenied)
+        ));
+        let state = db.store.release_state(world).await.expect("state");
+        assert!(state.pending().is_some());
+        assert!(matches!(
+            db.store
+                .rotate_authority(
+                    &admin,
+                    WriterId::from_u128(502).unwrap(),
+                    OperationId::from_u128(26).unwrap(),
+                )
+                .await,
+            Err(PersistenceError::RecoveryConflict)
+        ));
+        db.store
+            .fail_activation_authorized(
+                &admin,
+                plan,
+                "operator_aborted",
+                OperationId::from_u128(27).unwrap(),
+            )
+            .await
+            .expect("abort pending activation");
+        let incarnation = db
+            .store
+            .rotate_authority(
+                &admin,
+                WriterId::from_u128(502).unwrap(),
+                OperationId::from_u128(28).unwrap(),
+            )
+            .await
+            .expect("rotate");
+        assert_ne!(incarnation.incarnation(), old_lease.incarnation());
+        assert_eq!(incarnation.epoch(), 1);
+        let moderation = op_context(&admin_claim, world, 30, "suspend account");
+        db.store
+            .set_account_disabled(
+                &moderation,
+                AccountId::from_u128(1).unwrap(),
+                true,
+                OperationId::from_u128(29).unwrap(),
+            )
+            .await
+            .expect("suspend account");
+        let backup = op_context(&admin_claim, world, 31, "backup world");
+        let job = RecoveryJobId::from_u128(300).unwrap();
+        let started = db
+            .store
+            .begin_recovery_job(
+                &backup,
+                job,
+                "backup",
+                OperationId::from_u128(30).unwrap(),
+                serde_json::json!({"phase":"test"}),
+            )
+            .await
+            .expect("begin recovery job");
+        assert_eq!(started.job, job);
+        db.store
+            .complete_recovery_job(
+                &backup,
+                "backup",
+                job,
+                "succeeded",
+                Some([1; 32]),
+                Some([2; 32]),
+                None,
+                OperationId::from_u128(31).unwrap(),
+                serde_json::json!({"phase":"succeeded"}),
+            )
+            .await
+            .expect("complete recovery job");
+        for (operation, action) in [
+            (OperationId::from_u128(20).unwrap(), "release_requested"),
+            (OperationId::from_u128(22).unwrap(), "release_approved"),
+            (OperationId::from_u128(23).unwrap(), "activation_started"),
+            (OperationId::from_u128(29).unwrap(), "account_suspended"),
+            (OperationId::from_u128(30).unwrap(), "backup_started"),
+            (OperationId::from_u128(31).unwrap(), "backup_succeeded"),
+        ] {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM worldwright_operator_audit WHERE operation_id = $1 AND action = $2")
+                .bind(types::uuid_of(operation)).bind(action).fetch_one(db.store.pool_for_test()).await.expect("audit count");
+            assert_eq!(count, 1);
+        }
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn studio_review_context_is_bound_authorized_and_round_trips() {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.expect("seed");
+        let world = WorldId::from_u128(1).unwrap();
+        let capabilities = [Capability::ManageOperators, Capability::ViewStatus];
+        let grants = [
+            GrantId::from_u128(301).unwrap(),
+            GrantId::from_u128(302).unwrap(),
+        ];
+        let admin_claim = OperatorClaims {
+            issuer: "issuer".into(),
+            audience: "audience".into(),
+            subject: "admin".into(),
+            session_id: format!("{:032x}", 301u128),
+            kind: OperatorKind::Human,
+            assurance: Assurance::Mfa,
+            issued_at: 1000,
+            expires_at: 1600,
+            auth_time: 1000,
+            break_glass_reason: None,
+        };
+        let admin = OperatorContext {
+            claims: &admin_claim,
+            environment: Environment::Staging,
+            world,
+            correlation: CorrelationId::from_u128(301).unwrap(),
+            reason: "studio setup",
+        };
+        db.store
+            .bootstrap_operator(
+                &BootstrapOperator {
+                    subject: "admin",
+                    display_name: "Admin",
+                    kind: OperatorKind::Human,
+                    environment: Environment::Staging,
+                    world,
+                    capabilities: &capabilities,
+                    reason: "first operator",
+                    correlation: CorrelationId::from_u128(302).unwrap(),
+                },
+                OperationId::from_u128(301).unwrap(),
+                &grants,
+            )
+            .await
+            .expect("bootstrap");
+        db.store
+            .create_operator(
+                &admin,
+                "requester",
+                "Requester",
+                OperatorKind::Human,
+                OperationId::from_u128(303).unwrap(),
+            )
+            .await
+            .expect("operator");
+        db.store
+            .grant(
+                &admin,
+                GrantId::from_u128(304).unwrap(),
+                "requester",
+                Capability::RequestRelease,
+                Environment::Staging,
+                world,
+                None,
+                OperationId::from_u128(304).unwrap(),
+            )
+            .await
+            .expect("grant");
+        db.store
+            .grant(
+                &admin,
+                GrantId::from_u128(305).unwrap(),
+                "requester",
+                Capability::ViewStatus,
+                Environment::Staging,
+                world,
+                None,
+                OperationId::from_u128(305).unwrap(),
+            )
+            .await
+            .expect("view grant");
+        let requester_claim = OperatorClaims {
+            issuer: "issuer".into(),
+            audience: "audience".into(),
+            subject: "requester".into(),
+            session_id: format!("{:032x}", 305u128),
+            kind: OperatorKind::Human,
+            assurance: Assurance::Mfa,
+            issued_at: 1000,
+            expires_at: 1600,
+            auth_time: 1000,
+            break_glass_reason: None,
+        };
+        let requester = OperatorContext {
+            claims: &requester_claim,
+            environment: Environment::Staging,
+            world,
+            correlation: CorrelationId::from_u128(305).unwrap(),
+            reason: "studio submission",
+        };
+        let artifact = release_artifact("studio-context");
+        let verified =
+            worldwright_release::verify_bytes("studio-context", &artifact, None).unwrap();
+        let context = StudioReviewContext {
+            schema_version: 1,
+            draft_revision: 7,
+            snapshot_sha256: verified.manifest().payload_sha256().to_string(),
+            validation_diagnostic_count: 0,
+            preview_artifact_sha256: verified.artifact_digest().to_string(),
+            preview_completed_at: 1_700_000_000,
+            change_summary: "Studio change".into(),
+        };
+        let request = PublicationId::from_u128(306).unwrap();
+        let record = db
+            .store
+            .submit_publication_authorized_with_context(
+                &requester,
+                request,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                context.clone(),
+                OperationId::from_u128(306).unwrap(),
+            )
+            .await
+            .expect("submission");
+        let count = || async {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*)::BIGINT FROM worldwright_publication_requests WHERE world_id = $1",
+            )
+            .bind(types::uuid_of(world))
+            .fetch_one(db.store.pool_for_test())
+            .await
+            .unwrap()
+        };
+        assert_eq!(count().await, 1);
+        assert_eq!(record.review_context(), Some(&context));
+        assert_eq!(
+            db.store
+                .publication(request)
+                .await
+                .unwrap()
+                .review_context(),
+            Some(&context)
+        );
+        assert_eq!(
+            db.store
+                .publication_authorized(&requester, request)
+                .await
+                .unwrap()
+                .review_context(),
+            Some(&context)
+        );
+        let mut bad_preview = context.clone();
+        bad_preview.preview_artifact_sha256 = "11".repeat(32);
+        assert!(matches!(
+            db.store
+                .submit_publication_authorized_with_context(
+                    &requester,
+                    PublicationId::from_u128(307).unwrap(),
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    None,
+                    bad_preview,
+                    OperationId::from_u128(307).unwrap()
+                )
+                .await,
+            Err(PersistenceError::InvalidData)
+        ));
+        assert_eq!(count().await, 1);
+        let mut bad_snapshot = context.clone();
+        bad_snapshot.snapshot_sha256 = "22".repeat(32);
+        assert!(matches!(
+            db.store
+                .submit_publication_authorized_with_context(
+                    &requester,
+                    PublicationId::from_u128(308).unwrap(),
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    None,
+                    bad_snapshot,
+                    OperationId::from_u128(308).unwrap()
+                )
+                .await,
+            Err(PersistenceError::InvalidData)
+        ));
+        assert_eq!(count().await, 1);
+        assert!(matches!(
+            db.store
+                .submit_publication_authorized_with_context(
+                    &requester,
+                    PublicationId::from_u128(309).unwrap(),
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    Some(Sha256Digest::from_digest_bytes([0x33; 32])),
+                    context.clone(),
+                    OperationId::from_u128(309).unwrap()
+                )
+                .await,
+            Err(PersistenceError::ExpectedReleaseConflict)
+        ));
+        assert_eq!(count().await, 1);
+        db.store
+            .revoke_grant(
+                &admin,
+                GrantId::from_u128(304).unwrap(),
+                OperationId::from_u128(310).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            db.store
+                .submit_publication_authorized_with_context(
+                    &requester,
+                    PublicationId::from_u128(311).unwrap(),
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    None,
+                    context.clone(),
+                    OperationId::from_u128(311).unwrap()
+                )
+                .await,
+            Err(PersistenceError::OperatorDenied)
+        ));
+        assert_eq!(count().await, 1);
+        assert_eq!(
+            db.store
+                .publication(request)
+                .await
+                .unwrap()
+                .review_context(),
+            Some(&context)
+        );
         db.finish().await;
     }
 }

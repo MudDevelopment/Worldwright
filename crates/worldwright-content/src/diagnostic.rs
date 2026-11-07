@@ -1,12 +1,14 @@
 //! Structured bounded diagnostics. Rendering never emits raw source text.
+use serde::Serialize;
 use std::{error::Error, fmt};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Severity {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub code: &'static str,

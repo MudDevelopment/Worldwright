@@ -4,18 +4,18 @@
 
 | Attribute | Value |
 |---|---|
-| Document version | 0.2 — expanded-roadmap alignment; proposed contracts remain subject to approval |
-| Updated | October 21, 2026 |
-| Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): eight dependency-ordered milestones; M4 is next active, not implemented |
+| Document version | 0.3 — current M4/M5 implementation alignment |
+| Updated | November 6, 2026 |
+| Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): M4/M5 awaiting PostgreSQL verification; M6 implemented awaiting PostgreSQL/recovery execution |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
-| Implementation status | Content loading, local runtime, Local Play, and authenticated process-local Transport v0.1 implemented; Windows local evidence is recorded in verification, while remote CI, deployment, persistence, and hosted operation remain unverified |
+| Implementation status | M4 durable gameplay and M5 release/preview are implemented awaiting live PostgreSQL verification; current Windows evidence is recorded in verification |
 | Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ROAD-MAP.md](ROAD-MAP.md) |
 
-> **Scope and authority:** This document describes the target system; “must” states a requirement, not completion. The reported M1–M2 baseline includes single-owner in-memory execution, strict content loading, and Local Play. M3 adds authenticated, bounded loopback transport and has reported Windows-local evidence. Earlier Linux core/content/local-play evidence does not prove a Linux Transport rerun. Persistence, controlled releases, operations, Studio, and toolkit maturity remain planned M4–M8 work.
+> **Scope and authority:** This document describes target and current system design; “must” states a requirement, not blanket completion. M3 transport, M4 durable gameplay, and M5 release/preview are implemented slices awaiting their stated live PostgreSQL evidence. M6–M8 remain planned.
 >
-> **Synchronization basis:** This documentation-only revision compares the supplied DESIGN and ARCHITECTURE documents with the expanded ROAD-MAP. Repository source, manifests, migrations, and linked verification logs were not independently inspected. Retained implementation details and numerical limits are reported contracts, not newly verified code. New examples and state labels are design guidance, not finalized schemas or API constants.
+> **Synchronization basis:** Current source, migrations, release contract, and verification report are authoritative for implemented behavior. Historical planning sections remain labeled as such.
 >
 > **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROAD-MAP owns milestone scope, dependency order, blocking decisions, and exit evidence. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
 
@@ -289,7 +289,7 @@ Deterministic test scenarios do not establish general production replay: release
 
 ### M4 scope and design entry gate
 
-[ROAD-MAP M4](ROAD-MAP.md#milestone-4--durable-gameplay-v01) is the next active increment and remains planned. It proves **one** PostgreSQL-backed item or reward operation, not persistence of every runtime field. Select the operation and identity/session approach before implementation; preserve M3 authority, bounded admission, exact routing, and separate Move/Look behavior.
+[ROAD-MAP M4](ROAD-MAP.md#milestone-4--durable-gameplay-v01) is implemented awaiting live PostgreSQL verification. It covers durable identity/session and valuable-state flows, not persistence of every runtime field. M5 consumes its writer/read-guard and durable-reference contracts.
 
 A one-time item entitlement is a proposed first candidate, not an adopted reference-game rule. Inventory trading, a full economy, durable chat, universal command replay, event sourcing, automatic failover, and distributed world mutation are excluded unless separately approved. Development restart/retry evidence belongs to M4; production backup/restore and service readiness require M6.
 
@@ -742,17 +742,26 @@ A private reporting route and operational retention policy must be real, approve
 
 ### CLI
 
-The reported implemented commands are `worldwright content validate <path>` and `worldwright play <path>`. M3's server is invoked through `worldwright-server serve`. Check actual flags and paths in their guides/source; this design does not introduce additional executable command names.
-
-M5 adds validation/packaging, manifest inspection, isolated preview, and publication-request workflows; M8 adds improved scaffolding and migration tooling. Local operations need machine-readable diagnostics, stable exit semantics, safe paths, and explicit overwrite/conflict policy. Templates carry approved software/content notices and must be tested from a clean generated project.
+The implemented developer commands include `worldwright content
+validate/package/inspect`, `worldwright play`, and `worldwright preview`. The
+server provides local/durable `serve`, database migrate/seed, and release
+request/review/status/activate/recover workflows. Exact flags and paths are in
+the release and server guides. M8 adds improved scaffolding and migration
+tooling.
 
 Remote publication is a distinct privileged operation, scoped to artifact digest, target, and expected current release. A durable request/status does not imply approval or successful activation. Possession of the CLI does not grant production authority.
 
 ### Preview isolation contract — M5
 
-Preview has its own controlled process, disposable state, filesystem area, test identities, and least-privilege credentials. Reject production connection strings/secrets inherited through environment or mounts. Enforce denied production network/control access and disable or redirect external side effects. Bound CPU/memory/storage, concurrent sessions/processes, lifetime, and cleanup work.
+Preview runs the verified artifact in its own child process with in-memory
+state, no database configuration, a cleared environment, ownership-safe
+temporary slots, at most four workers, and a hard 3600-second lifetime. It
+exposes no network service, but it is not an OS sandbox or egress firewall.
 
-A process boundary alone is not a sandbox for untrusted native extensions; only reviewed trusted game code is supported. A preview reward stays in preview and cannot become production value. Test launch/stop, crashes, expired runs, quota rejection, and denied production access independently of the UI.
+Content remains non-executable data and only the reviewed ReferenceGame code
+runs. Automated evidence covers environment clearing, tamper rejection,
+timeouts, quota refusal, stale-slot recovery, and ownership-safe cleanup. Real
+production-access denial remains unverified.
 
 ### Studio
 
@@ -961,10 +970,10 @@ The expanded [ROAD-MAP.md](ROAD-MAP.md) owns the **eight-milestone** sequence. T
 | M1 — Foundation and Core | Pinned workspace, typed IDs/contracts, rules/effects, scheduling primitives, deterministic test support | Reported baseline complete; actual CI execution remains distinct from configured workflows |
 | M2 — Runtime, Content, and Local Play | Single owner, attachment generations, staged Look/Move/Say, strict JSON v1, named exits and terminal host | Reported complete with earlier Linux provenance limits; no authentication or persistence in Local Play |
 | M3 — Multiplayer Transport v0.1 | Bounded protocol, local registry/sessions, owner service, loopback gateway and reference browser | Reported Windows-local verification; Linux Transport rerun, hosted CI and deployment pending |
-| M4 — Durable Gameplay v0.1 | Schema/migrations, transactional writer epochs, identity choice, one item/reward operation, scoped receipts, atomic audit/outbox, uncertain outcomes and restart | **Next active, planned**: one valuable operation survives duplicate/failure/restart tests without added value, false success or accepted stale writer |
-| M5 — Content Release and Preview v0.1 | Immutable manifests, package/compatibility checks, staging/maintenance activation, known-good recovery, isolated preview, CLI publication requests | Planned: reviewed exact artifact previews/activates in staging; incompatible/stale/tampered candidates fail; supported rollback demonstrated |
+| M4 — Durable Gameplay v0.1 | Schema/migrations, transactional writer epochs, identity/session, valuable state, scoped receipts, atomic audit/outbox, uncertain outcomes and restart | **Implemented awaiting live PostgreSQL verification** |
+| M5 — Content Release and Preview v0.1 | Immutable manifests, package/compatibility checks, staging/maintenance activation, known-good recovery, isolated preview, CLI publication requests | **Implemented awaiting live PostgreSQL verification** |
 | M6 — Operational Control v0.1 | Capability-scoped APIs, privileged assurance, transactional audit, observability, drain/shutdown, backup/restore/takeover runbooks | Planned: unauthorized changes fail, allowed changes are attributable, documented restore produces a coherent playable world |
-| M7 — Builder Workflow and Studio v0.1 | Schema-aware editing, shared diagnostics, M5 preview and M6-controlled publication integration, accessibility and destructive-action handling | Planned: builder creates/validates/previews a zone and submits exact reviewed bytes without production credentials |
+| M7 — Builder Workflow and Studio v0.1 | Schema-aware editing, shared diagnostics, M5 preview and M6-controlled publication integration, accessibility and destructive-action handling | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
 | M8 — Toolkit Maturity | Independent second game, compatibility/deprecation, justified gameplay systems, scaffolding/migrations, measured performance | Planned: reuse without game-specific transport/core-invariant branches; upgrade/tooling/performance evidence |
 
 ### Handoffs and non-goals
@@ -1034,3 +1043,13 @@ Before merging, verify actual source contracts, resolve documentary disagreement
 The README's **MIT OR Apache-2.0 recommendation remains pending authorized approval**. This document does not create license files, grant rights, establish ownership, or change that status.
 
 **Baseline success:** a small persistent world that is understandable, testable, recoverable, and reusable—not a collection of disconnected tools with impressive names.
+
+## M7 settled decisions
+
+The implemented Studio slice uses one fixed local workspace and immutable
+create-new revisions. It edits only adopted schema-v1 rooms and exits,
+delegates semantic validation to `worldwright-content`, packages exact saved
+bytes, and reuses the existing M5 preview command. Publication requests carry
+the exact artifact and `StudioReviewContext` through the authenticated M6
+server; submission is not approval or activation. Live PostgreSQL/operator
+publication and manual browser accessibility evidence remain pending.

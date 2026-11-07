@@ -2,12 +2,14 @@ use crate::{ServerConfig, ServerError, StorageConfig};
 use std::sync::Arc;
 use std::{future::Future, net::SocketAddr};
 use tokio::net::TcpListener;
+use tokio::time::{Duration, timeout};
 
 pub struct BoundServer {
     listener: TcpListener,
     router: axum::Router,
     world: crate::world::WorldHandle,
     allowed_origin: String,
+    lifecycle: crate::lifecycle::LifecycleController,
 }
 
 impl BoundServer {
@@ -17,18 +19,28 @@ impl BoundServer {
         }
         crate::cli::validate_origin(&config.allowed_origin, config.allow_insecure_http)
             .map_err(|_| ServerError::Configuration("origin is not valid for this mode"))?;
-        let content = worldwright_content::load_file(&config.content_path, Default::default())
-            .map_err(|_| ServerError::startup("world content failed validation"))?;
+        let operator_config = config.operator;
         let world_id = worldwright_core::ids::WorldId::from_u128(1)
             .map_err(|_| ServerError::startup("world identity failed"))?;
-        let (auth, registrations, durable) = match config.storage {
-            StorageConfig::Local { accounts_path } => {
+        let mut operator_store = None;
+        let (content, auth, registrations, durable, _startup_release_guard) = match config.storage {
+            StorageConfig::Local {
+                accounts_path,
+                content_path,
+            } => {
+                if operator_config.is_some() {
+                    return Err(ServerError::Configuration(
+                        "operator control requires PostgreSQL storage",
+                    ));
+                }
+                let content = worldwright_content::load_file(&content_path, Default::default())
+                    .map_err(|_| ServerError::startup("world content failed validation"))?;
                 let auth = crate::auth::AuthService::load_local(
                     &accounts_path,
                     !config.allow_insecure_http,
                 )?;
                 let registrations = auth.registrations();
-                (auth, registrations, None)
+                (content, auth, registrations, None, None)
             }
             StorageConfig::Postgres { database_url } => {
                 let store = worldwright_persistence::PostgresStore::connect(&database_url)
@@ -38,6 +50,22 @@ impl BoundServer {
                     .verify_migrations()
                     .await
                     .map_err(|_| ServerError::startup("durable migrations are not current"))?;
+                let active = store
+                    .active_artifact(world_id)
+                    .await
+                    .map_err(|_| ServerError::startup("durable active release is not ready"))?;
+                let verified = worldwright_release::verify_bytes(
+                    "durable active release",
+                    active.bytes(),
+                    Some(active.digest()),
+                )
+                .map_err(|_| ServerError::startup("durable active release is invalid"))?;
+                if verified.manifest().release_id() != active.release_id() {
+                    return Err(ServerError::startup(
+                        "durable active release identity is invalid",
+                    ));
+                }
+                let content = verified.content().clone();
                 store
                     .verify_world(world_id, content.namespace(), content.schema_version())
                     .await
@@ -48,23 +76,51 @@ impl BoundServer {
                     .acquire_writer(world_id, writer)
                     .await
                     .map_err(|_| ServerError::startup("writer acquisition failed"))?;
+                let startup_release_guard = store
+                    .begin_release_read(lease, active.digest())
+                    .await
+                    .map_err(|_| {
+                        ServerError::startup("durable active release changed during startup")
+                    })?;
                 let item_definition = format!("{}:items.welcome_token", content.namespace());
                 let durable = crate::world::DurableContext {
                     store: Arc::new(store.clone()),
                     lease,
                     world: world_id,
+                    release_digest: active.digest(),
                     item_definition,
                 };
+                operator_store = Some(store.clone());
                 let (auth, registrations) = crate::auth::AuthService::postgres(
                     store,
                     world_id,
                     !config.allow_insecure_http,
                 )
                 .await?;
-                (auth, registrations, Some(durable))
+                (
+                    content,
+                    auth,
+                    registrations,
+                    Some(durable),
+                    Some(startup_release_guard),
+                )
             }
         };
         let world = crate::world::WorldHandle::new_with_durable(content, registrations, durable)?;
+        let lifecycle = crate::lifecycle::LifecycleController::new();
+        let operator = operator_config.map(|config| {
+            Arc::new(crate::operator::OperatorService {
+                store: operator_store.expect("operator requires PostgreSQL"),
+                key: Arc::new(config.signing_key),
+                issuer: config.issuer,
+                audience: config.audience,
+                environment: config.environment,
+                world: world_id,
+                lifecycle: lifecycle.clone(),
+                metrics: crate::metrics::Metrics::new(),
+                drain_gate: Arc::new(tokio::sync::Mutex::new(())),
+            })
+        });
         let listener = match TcpListener::bind(config.bind).await {
             Ok(listener) => listener,
             Err(error) => {
@@ -76,12 +132,14 @@ impl BoundServer {
             allowed_origin: config.allowed_origin.clone(),
             auth,
             world: world.clone(),
+            operator,
         });
         Ok(Self {
             listener,
             router,
             world,
             allowed_origin: config.allowed_origin,
+            lifecycle,
         })
     }
 
@@ -105,16 +163,39 @@ where
     F: Future<Output = ()> + Send + 'static,
 {
     let world_for_shutdown = server.world.clone();
+    let lifecycle = server.lifecycle.clone();
+    let mut lifecycle_rx = lifecycle.subscribe();
     let graceful = async move {
-        shutdown.await;
-        world_for_shutdown.shutdown().await;
+        let operator_initiated = tokio::select! {
+            _ = shutdown => false,
+            _ = lifecycle_rx.changed() => true,
+        };
+        world_for_shutdown.begin_drain();
+        lifecycle.drain();
+        let _ = timeout(Duration::from_secs(30), world_for_shutdown.drain()).await;
+        complete_graceful_lifecycle(&lifecycle, operator_initiated);
     };
     let result = axum::serve(server.listener, server.router)
         .with_graceful_shutdown(graceful)
         .await
         .map_err(ServerError::io);
+    server
+        .lifecycle
+        .transition(crate::lifecycle::LifecycleState::Stopping);
     server.world.shutdown().await;
+    server
+        .lifecycle
+        .transition(crate::lifecycle::LifecycleState::Stopped);
     result
+}
+
+fn complete_graceful_lifecycle(
+    lifecycle: &crate::lifecycle::LifecycleController,
+    operator_initiated: bool,
+) {
+    if !operator_initiated {
+        lifecycle.transition(crate::lifecycle::LifecycleState::Quiescent);
+    }
 }
 
 fn random_writer_id() -> Option<worldwright_core::ids::WriterId> {
@@ -131,6 +212,25 @@ fn random_writer_id() -> Option<worldwright_core::ids::WriterId> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn operator_drain_does_not_claim_quiescence_before_completion_audit() {
+        let operator_lifecycle = crate::lifecycle::LifecycleController::new();
+        assert!(operator_lifecycle.drain());
+        complete_graceful_lifecycle(&operator_lifecycle, true);
+        assert_eq!(
+            operator_lifecycle.state(),
+            crate::lifecycle::LifecycleState::Draining
+        );
+
+        let signal_lifecycle = crate::lifecycle::LifecycleController::new();
+        assert!(signal_lifecycle.drain());
+        complete_graceful_lifecycle(&signal_lifecycle, false);
+        assert_eq!(
+            signal_lifecycle.state(),
+            crate::lifecycle::LifecycleState::Quiescent
+        );
+    }
+
     use axum::{
         Router,
         body::Body,
@@ -211,8 +311,11 @@ mod tests {
         let server = BoundServer::bind(ServerConfig {
             bind: "127.0.0.1:0".parse().expect("bind"),
             allowed_origin: "http://localhost".to_owned(),
-            content_path,
-            storage: crate::StorageConfig::Local { accounts_path },
+            storage: crate::StorageConfig::Local {
+                accounts_path,
+                content_path,
+            },
+            operator: None,
             allow_insecure_http: true,
         })
         .await
@@ -308,10 +411,11 @@ mod tests {
             let server = BoundServer::bind(ServerConfig {
                 bind: "127.0.0.1:0".parse().expect("bind"),
                 allowed_origin: "http://localhost".to_owned(),
-                content_path: content_path.clone(),
                 storage: StorageConfig::Local {
                     accounts_path: accounts_path.clone(),
+                    content_path: content_path.clone(),
                 },
+                operator: None,
                 allow_insecure_http: true,
             })
             .await
