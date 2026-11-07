@@ -1,0 +1,19 @@
+[package]
+name = "worldwright-operations"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Pure Worldwright operator token and control contracts"
+
+[dependencies]
+worldwright-core.workspace = true
+worldwright-release.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hmac.workspace = true
+base64.workspace = true
+
+[lints]
+workspace = true

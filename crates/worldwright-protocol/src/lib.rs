@@ -11,6 +11,10 @@ pub const MAX_TEXT_BYTES: usize = 4096;
 pub const MAX_ERROR_TEXT_BYTES: usize = 512;
 pub const MAX_CHARACTER_NAME_BYTES: usize = 64;
 pub const MAX_EXITS: usize = 64;
+pub const MAX_REWARD_KEY_BYTES: usize = 64;
+pub const MAX_USERNAME_BYTES: usize = 64;
+pub const MAX_DEFINITION_ID_BYTES: usize = 192;
+pub const MAX_INVENTORY_ITEMS: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -36,9 +40,13 @@ pub enum ClientCommand {
     Look,
     Move { exit: String },
     Say { text: String },
+    Inventory,
+    ClaimReward { reward: String },
+    TransferItem { item_id: String, recipient: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServerEnvelope {
     pub protocol_version: u32,
     pub stream_epoch: String,
@@ -79,9 +87,58 @@ pub enum ServerMessage {
         message: String,
         fatal: bool,
     },
+    RewardResult {
+        request_id: String,
+        operation_id: String,
+        outcome: RewardOutcome,
+        balance: u64,
+        item_id: Option<String>,
+        replayed: bool,
+    },
+    TransferResult {
+        request_id: String,
+        operation_id: String,
+        outcome: TransferOutcome,
+        item_id: String,
+        owner_character_id: Option<String>,
+        recipient_name: Option<String>,
+        replayed: bool,
+    },
+    Inventory {
+        request_id: String,
+        balance: u64,
+        character_version: u64,
+        items: Vec<InventoryItem>,
+    },
     Pong {
         nonce: u64,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RewardOutcome {
+    RewardGranted,
+    AlreadyClaimed,
+    InventoryFull,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransferOutcome {
+    ItemTransferred,
+    NotOwned,
+    SameOwner,
+    TargetNotFound,
+    InventoryFull,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InventoryItem {
+    pub item_id: String,
+    pub definition_id: String,
+    pub version: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +164,11 @@ pub enum ErrorCode {
     StaleAttachment,
     SessionReplaced,
     InternalError,
+    DurabilityUnavailable,
+    Conflict,
+    OperationPending,
+    WriterFenced,
+    TemporarilyUnavailable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,6 +269,12 @@ fn validate_client(message: &ClientMessage) -> Result<(), ProtocolError> {
                 ClientCommand::Look => {}
                 ClientCommand::Move { exit } => validate_exit_label(exit)?,
                 ClientCommand::Say { text } => validate_text(text, MAX_TEXT_BYTES)?,
+                ClientCommand::Inventory => {}
+                ClientCommand::ClaimReward { reward } => validate_reward_key(reward)?,
+                ClientCommand::TransferItem { item_id, recipient } => {
+                    validate_instance_id(item_id)?;
+                    validate_username(recipient)?;
+                }
             }
         }
         ClientMessage::Ping { .. } => {}
@@ -281,6 +349,86 @@ fn validate_server(envelope: &ServerEnvelope) -> Result<(), ProtocolError> {
             }
             validate_text(message, MAX_ERROR_TEXT_BYTES)?;
         }
+        ServerMessage::RewardResult {
+            request_id,
+            operation_id,
+            outcome,
+            balance: _balance,
+            item_id,
+            ..
+        } => {
+            validate_request_id(request_id)?;
+            validate_instance_id(operation_id)?;
+            if let Some(item_id) = item_id {
+                validate_instance_id(item_id)?;
+            }
+            match outcome {
+                RewardOutcome::RewardGranted | RewardOutcome::AlreadyClaimed
+                    if item_id.is_none() =>
+                {
+                    return Err(ProtocolError::invalid_message());
+                }
+                RewardOutcome::InventoryFull if item_id.is_some() => {
+                    return Err(ProtocolError::invalid_message());
+                }
+                _ => {}
+            }
+        }
+        ServerMessage::TransferResult {
+            request_id,
+            operation_id,
+            item_id,
+            owner_character_id,
+            recipient_name,
+            outcome,
+            ..
+        } => {
+            validate_request_id(request_id)?;
+            validate_instance_id(operation_id)?;
+            validate_instance_id(item_id)?;
+            if let Some(owner) = owner_character_id {
+                validate_instance_id(owner)?;
+            }
+            if let Some(name) = recipient_name {
+                validate_text(name, MAX_CHARACTER_NAME_BYTES)?;
+            }
+            let valid = match outcome {
+                TransferOutcome::ItemTransferred => {
+                    owner_character_id.is_some() && recipient_name.is_some()
+                }
+                TransferOutcome::NotOwned => {
+                    owner_character_id.is_none() && recipient_name.is_some()
+                }
+                TransferOutcome::SameOwner => {
+                    owner_character_id.is_some() && recipient_name.is_some()
+                }
+                TransferOutcome::TargetNotFound => {
+                    owner_character_id.is_none() && recipient_name.is_none()
+                }
+                TransferOutcome::InventoryFull => {
+                    owner_character_id.is_some() && recipient_name.is_some()
+                }
+            };
+            if !valid {
+                return Err(ProtocolError::invalid_message());
+            }
+        }
+        ServerMessage::Inventory {
+            request_id,
+            character_version,
+            items,
+            ..
+        } => {
+            validate_request_id(request_id)?;
+            if *character_version == 0
+                || items.len() > MAX_INVENTORY_ITEMS
+                || items
+                    .iter()
+                    .any(|item| validate_inventory_item(item).is_err())
+            {
+                return Err(ProtocolError::invalid_message());
+            }
+        }
         ServerMessage::Pong { .. } => {}
     }
     Ok(())
@@ -295,6 +443,77 @@ fn validate_request_id(value: &str) -> Result<(), ProtocolError> {
             .iter()
             .any(|byte| !byte.is_ascii_alphanumeric() && !matches!(byte, b'.' | b'_' | b':' | b'-'))
     {
+        return Err(ProtocolError::invalid_message());
+    }
+    Ok(())
+}
+
+fn validate_reward_key(value: &str) -> Result<(), ProtocolError> {
+    let bytes = value.as_bytes();
+    if bytes.is_empty()
+        || bytes.len() > MAX_REWARD_KEY_BYTES
+        || !bytes[0].is_ascii_lowercase()
+        || bytes[1..].iter().any(|byte| {
+            !byte.is_ascii_lowercase() && !byte.is_ascii_digit() && !matches!(byte, b'_' | b'-')
+        })
+    {
+        return Err(ProtocolError::invalid_message());
+    }
+    Ok(())
+}
+
+fn validate_username(value: &str) -> Result<(), ProtocolError> {
+    let bytes = value.as_bytes();
+    if bytes.is_empty()
+        || bytes.len() > MAX_USERNAME_BYTES
+        || !bytes[0].is_ascii_lowercase()
+        || bytes[1..].iter().any(|byte| {
+            !byte.is_ascii_lowercase() && !byte.is_ascii_digit() && !matches!(byte, b'_' | b'-')
+        })
+    {
+        return Err(ProtocolError::invalid_message());
+    }
+    Ok(())
+}
+
+fn validate_instance_id(value: &str) -> Result<(), ProtocolError> {
+    if value.len() != 32
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        || value.bytes().all(|byte| byte == b'0')
+    {
+        return Err(ProtocolError::invalid_message());
+    }
+    Ok(())
+}
+
+fn validate_definition_id(value: &str) -> Result<(), ProtocolError> {
+    if value.len() < 3 || value.len() > MAX_DEFINITION_ID_BYTES {
+        return Err(ProtocolError::invalid_message());
+    }
+    let Some((namespace, path)) = value.split_once(':') else {
+        return Err(ProtocolError::invalid_message());
+    };
+    if !valid_definition_segment(namespace) || !path.split('.').all(valid_definition_segment) {
+        return Err(ProtocolError::invalid_message());
+    }
+    Ok(())
+}
+
+fn valid_definition_segment(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    !bytes.is_empty()
+        && bytes[0].is_ascii_lowercase()
+        && bytes[1..].iter().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+        })
+}
+
+fn validate_inventory_item(item: &InventoryItem) -> Result<(), ProtocolError> {
+    validate_instance_id(&item.item_id)?;
+    validate_definition_id(&item.definition_id)?;
+    if item.version == 0 {
         return Err(ProtocolError::invalid_message());
     }
     Ok(())
@@ -409,6 +628,38 @@ mod tests {
         assert_eq!(
             decode_client(r#"{"type":"ping","nonce":18446744073709551615}"#),
             Ok(ClientMessage::Ping { nonce: u64::MAX })
+        );
+        assert_eq!(
+            decode_client(
+                r#"{"type":"command","request_id":"inventory-1","command":{"type":"inventory"}}"#
+            ),
+            Ok(ClientMessage::Command {
+                request_id: "inventory-1".to_owned(),
+                command: ClientCommand::Inventory
+            })
+        );
+        assert_eq!(
+            decode_client(
+                r#"{"type":"command","request_id":"reward-1","command":{"type":"claim_reward","reward":"welcome"}}"#
+            ),
+            Ok(ClientMessage::Command {
+                request_id: "reward-1".to_owned(),
+                command: ClientCommand::ClaimReward {
+                    reward: "welcome".to_owned()
+                }
+            })
+        );
+        assert_eq!(
+            decode_client(
+                r#"{"type":"command","request_id":"transfer-1","command":{"type":"transfer_item","item_id":"00000000000000000000000000000001","recipient":"alice_1"}}"#
+            ),
+            Ok(ClientMessage::Command {
+                request_id: "transfer-1".to_owned(),
+                command: ClientCommand::TransferItem {
+                    item_id: "00000000000000000000000000000001".to_owned(),
+                    recipient: "alice_1".to_owned()
+                }
+            })
         );
     }
 
@@ -527,6 +778,171 @@ mod tests {
         })
         .to_string();
         assert_eq!(invalid_client(&frame), ProtocolErrorKind::InvalidMessage);
+    }
+
+    #[test]
+    fn durable_messages_round_trip_and_enforce_bounds() {
+        let operation_id = "00000000000000000000000000000001".to_owned();
+        let item_id = "00000000000000000000000000000002".to_owned();
+        let reward = ServerMessage::RewardResult {
+            request_id: "reward".to_owned(),
+            operation_id: operation_id.clone(),
+            outcome: RewardOutcome::RewardGranted,
+            balance: 100,
+            item_id: Some(item_id.clone()),
+            replayed: false,
+        };
+        let transfer = ServerMessage::TransferResult {
+            request_id: "transfer".to_owned(),
+            operation_id: operation_id.clone(),
+            outcome: TransferOutcome::ItemTransferred,
+            item_id: item_id.clone(),
+            owner_character_id: Some("00000000000000000000000000000003".to_owned()),
+            recipient_name: Some("Alice".to_owned()),
+            replayed: false,
+        };
+        let inventory = ServerMessage::Inventory {
+            request_id: "inventory".to_owned(),
+            balance: 0,
+            character_version: 1,
+            items: vec![InventoryItem {
+                item_id: item_id.clone(),
+                definition_id: "reference:items.token".to_owned(),
+                version: 1,
+            }],
+        };
+        for message in [reward, transfer, inventory] {
+            let frame = encode_server(&valid_envelope(message.clone())).expect("durable frame");
+            let decoded: ServerEnvelope = serde_json::from_str(&frame).expect("durable JSON");
+            assert_eq!(decoded.message, message);
+        }
+        let items = vec![
+            InventoryItem {
+                item_id: item_id.clone(),
+                definition_id: "reference:items.token".to_owned(),
+                version: 1
+            };
+            MAX_INVENTORY_ITEMS
+        ];
+        let at_limit = valid_envelope(ServerMessage::Inventory {
+            request_id: "i".to_owned(),
+            balance: 0,
+            character_version: 1,
+            items,
+        });
+        assert!(validate_server(&at_limit).is_ok());
+        assert_eq!(
+            encode_server(&at_limit).unwrap_err().kind(),
+            ProtocolErrorKind::FrameTooLarge
+        );
+        assert!(
+            encode_server(&valid_envelope(ServerMessage::RewardResult {
+                request_id: "r".to_owned(),
+                operation_id: "00000000000000000000000000000001".to_owned(),
+                outcome: RewardOutcome::InventoryFull,
+                balance: 100,
+                item_id: None,
+                replayed: false
+            }))
+            .is_ok()
+        );
+        let too_many = vec![
+            InventoryItem {
+                item_id: item_id.clone(),
+                definition_id: "reference:items.token".to_owned(),
+                version: 1
+            };
+            MAX_INVENTORY_ITEMS + 1
+        ];
+        assert_eq!(
+            encode_server(&valid_envelope(ServerMessage::Inventory {
+                request_id: "i".to_owned(),
+                balance: 0,
+                character_version: 1,
+                items: too_many
+            }))
+            .unwrap_err()
+            .kind(),
+            ProtocolErrorKind::InvalidMessage
+        );
+        for command in [
+            serde_json::json!({"type":"command","request_id":"r","command":{"type":"claim_reward","reward":""}}),
+            serde_json::json!({"type":"command","request_id":"r","command":{"type":"claim_reward","reward":"A"}}),
+            serde_json::json!({"type":"command","request_id":"r","command":{"type":"transfer_item","item_id":"00000000000000000000000000000000","recipient":"alice"}}),
+            serde_json::json!({"type":"command","request_id":"r","command":{"type":"transfer_item","item_id":"00000000000000000000000000000001","recipient":"Alice"}}),
+        ] {
+            assert_eq!(
+                invalid_client(&command.to_string()),
+                ProtocolErrorKind::InvalidMessage
+            );
+        }
+        assert!(serde_json::from_str::<InventoryItem>(r#"{"item_id":"00000000000000000000000000000001","definition_id":"reference:item","version":1,"extra":true}"#).is_err());
+        assert!(serde_json::from_str::<ServerEnvelope>(r#"{"protocol_version":1,"stream_epoch":"0123456789abcdef0123456789abcdef","sequence":1,"message":{"type":"pong","nonce":1},"extra":true}"#).is_err());
+        assert_eq!(
+            serde_json::to_string(&ErrorCode::DurabilityUnavailable).unwrap(),
+            "\"durability_unavailable\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ErrorCode::TemporarilyUnavailable).unwrap(),
+            "\"temporarily_unavailable\""
+        );
+    }
+
+    #[test]
+    fn durable_result_shapes_reject_impossible_combinations() {
+        let operation_id = "00000000000000000000000000000001".to_owned();
+        let item_id = "00000000000000000000000000000002".to_owned();
+        let invalid = [
+            ServerMessage::RewardResult {
+                request_id: "r".to_owned(),
+                operation_id: operation_id.clone(),
+                outcome: RewardOutcome::RewardGranted,
+                balance: 1,
+                item_id: None,
+                replayed: false,
+            },
+            ServerMessage::RewardResult {
+                request_id: "r".to_owned(),
+                operation_id: operation_id.clone(),
+                outcome: RewardOutcome::InventoryFull,
+                balance: 1,
+                item_id: Some(item_id.clone()),
+                replayed: false,
+            },
+            ServerMessage::TransferResult {
+                request_id: "r".to_owned(),
+                operation_id: operation_id.clone(),
+                outcome: TransferOutcome::NotOwned,
+                item_id: item_id.clone(),
+                owner_character_id: Some(operation_id.clone()),
+                recipient_name: Some("Alice".to_owned()),
+                replayed: false,
+            },
+            ServerMessage::TransferResult {
+                request_id: "r".to_owned(),
+                operation_id: operation_id.clone(),
+                outcome: TransferOutcome::TargetNotFound,
+                item_id: item_id.clone(),
+                owner_character_id: None,
+                recipient_name: Some("Alice".to_owned()),
+                replayed: false,
+            },
+            ServerMessage::TransferResult {
+                request_id: "r".to_owned(),
+                operation_id,
+                outcome: TransferOutcome::InventoryFull,
+                item_id,
+                owner_character_id: None,
+                recipient_name: None,
+                replayed: false,
+            },
+        ];
+        for message in invalid {
+            assert_eq!(
+                encode_server(&valid_envelope(message)).unwrap_err().kind(),
+                ProtocolErrorKind::InvalidMessage
+            );
+        }
     }
 
     #[test]

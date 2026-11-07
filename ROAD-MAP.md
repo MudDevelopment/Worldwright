@@ -1,3 +1,11 @@
+## Current M7 status
+
+M6 and M7 are implemented awaiting live PostgreSQL/recovery/operator evidence
+and manual browser/accessibility evidence. M8 is the next planned increment.
+Studio is a real loopback browser client, not a scaffold or direct database
+client. See [docs/STUDIO_V1.md](docs/STUDIO_V1.md) and
+[M7 verification](docs/verification/milestone-7-report.md).
+
 # Worldwright Road Map
 
 ## Purpose
@@ -10,7 +18,9 @@ A checked box means the repository contains the implementation and its stated ve
 
 ### Document scope and evidence boundary
 
-This expanded edition is based on the supplied `ROAD-MAP.md`. The repository, linked design documents, source code, database migrations, and verification logs were not supplied with it and were not independently inspected during this expansion.
+This edition reflects the current repository, linked contracts, migrations, and
+verification record as of 2026-11-06. Current evidence is Windows-local and
+PostgreSQL tests remain compile-only.
 
 - **Reported baseline** means a capability or test result stated in the original road map, not a new verification claim.
 - **Planned requirement** means behavior to implement and verify in a later increment.
@@ -58,18 +68,22 @@ The supplied road map reports the following baseline:
 
 | Area | Reported capability | Boundary or limitation |
 |---|---|---|
-| Workspace | Rust 1.85.1 workspace with ten packages and a committed lockfile | Package paths, feature combinations, and dependency availability must be checked in the repository |
+| Workspace | Rust 1.85.1 workspace with 11 packages and a committed lockfile | Live PostgreSQL and hosted/deployment evidence remain pending |
 | Domain model | Typed domain identifiers, commands, effects, rules, scheduling primitives, deterministic test support | Scheduling primitives do not imply a deployed scheduler or durable scheduled jobs |
 | Runtime | Non-cloneable, single-owner in-memory runtime | In-memory success is not durable commitment |
 | Authority | Authoritative attachment generations | Stale attachments must remain invalid across queued work and disconnect cleanup |
 | Gameplay | Staged Look, Move, and Say execution | Inventory, combat, progression, and NPC behavior are not part of this baseline |
-| Content | Strict JSON content schema v1 loading and validation | This is not yet a content publication or activation system |
+| Content | Strict JSON v1 plus deterministic release packaging, inspection, and preview | PostgreSQL publication/activation behavior remains unverified at runtime |
 | Instantiation | Deterministic runtime creation and named-exit lookup | Instantiation is not restart reconstruction of durable player state |
-| CLI | `worldwright content validate <path>` and `worldwright play <path>` | Local terminal workflows are not multiplayer persistence workflows |
+| CLI | Content validate/play/package/inspect/preview plus server database/release workflows | Production authorization remains a Milestone 6 boundary |
 | Earlier verification | Linux evidence for runtime, content, and local play | Provenance limits remain recorded in `docs/VERIFICATION.md` |
 | Transport | Local development server/protocol implementation | Milestone 3 evidence is Windows-local; Linux rerun, hosted CI, and deployment verification remain pending |
 
-The server and protocol are locally implemented development slices. Persistence, Studio, and Console remain incomplete. **Durable Gameplay v0.1 is the next active increment.** “Active” here identifies the next implementation priority; it does not assert that the planned persistence work is already implemented.
+The server, persistence, release, protocol, local CLI, and Studio slices are
+implemented. M4 and M5 are implemented awaiting live PostgreSQL verification.
+M6 is implemented awaiting live PostgreSQL and recovery execution. M7 is
+implemented awaiting live PostgreSQL, operator publication, and manual browser
+accessibility evidence. M8 is the next dependency-ordered planned increment.
 
 ### What must not be inferred from the baseline
 
@@ -106,8 +120,10 @@ flowchart LR
     classDef next fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:3px
     classDef planned fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-width:1px
     class M1,M2,M3 complete
-    class M4 next
-    class M5,M6,M7,M8 planned
+    classDef awaiting fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:3px
+    class M4,M5 awaiting
+    class M7 awaiting
+    class M8 planned
 ```
 
 | Visual status | Meaning | Required reading |
@@ -208,7 +224,9 @@ Establish a reproducible Rust workspace and a transport-independent domain found
 
 ### 1.1 Workspace, toolchain, and package boundaries
 
-The reported baseline is Rust 1.85.1, ten packages, and a committed lockfile. Confirm package responsibilities from `Cargo.toml` and `ARCHITECTURE.md`; this document does not invent a package list.
+The current baseline is Rust 1.85.1, 11 packages, and a committed lockfile.
+Current package responsibilities are recorded in `Cargo.toml` and
+`ARCHITECTURE.md`.
 
 **Implementation notes:** pin the supported toolchain, keep dependencies in their owning layers, and make optional features explicit. For new application packages, prefer the established repository convention; if adopting `apps/`, align directory, package, and binary names without relocating existing packages casually.
 
@@ -570,7 +588,7 @@ Run from the actual workspace root. Offline commands require the recorded depend
 
 ## Milestone 4 — Durable Gameplay v0.1
 
-**Status:** Planned; next active implementation increment after Multiplayer Transport v0.1.
+**Status:** Implemented awaiting live PostgreSQL verification.
 
 ### Goal
 
@@ -823,7 +841,16 @@ Use a real PostgreSQL instance with isolated test state. Mocks are useful for un
 
 ## Milestone 5 — Content Release and Preview v0.1
 
-**Status:** Planned.
+**Status:** Implemented awaiting live PostgreSQL verification.
+
+The implemented v0.1 contract is authoritative in
+[RELEASE_V1.md](docs/RELEASE_V1.md). The package is a bounded non-archive
+`.wwr` container with canonical manifest/payload bytes, immutable create-new
+output, inspect JSON, four-slot in-memory preview, and offline staging
+publication/activation/recovery/rollback. Eight M5 database tests compile but
+have not run. The proposal details below are historical planning context where
+they differ from the implementation and must not be read as current syntax or
+schema.
 
 ### Goal and scope
 
@@ -833,24 +860,27 @@ Turn validated content into an immutable, reviewable release artifact that can b
 
 ### 5.1 Immutable content manifests
 
-#### Planned breakout
+#### Implemented v0.1 contract
 
-A manifest records the artifact digest, content schema version, game compatibility, and provenance metadata. Define exactly which bytes are hashed and how the manifest binds to them; avoid a self-referential digest over a manifest that includes its own digest.
+A manifest records release ID, payload digest/length/media type, content schema,
+game compatibility, and provenance. The whole-artifact digest is separate and
+deliberately not self-referential.
 
-**Illustrative manifest, not the accepted schema:**
+**Current manifest shape:**
 
 ```json
 {
   "manifest_version": 1,
-  "release_id": "forest-zone-r3",
+  "release_id": "reference-v1",
   "content_schema_version": 1,
   "game_compatibility": {
-    "game_id": "reference-game",
-    "contract_version": "development-v1"
+    "game_id": "worldwright-reference",
+    "contract_version": 1
   },
-  "payload_digest": {
-    "algorithm": "sha256",
-    "value": "<digest of the precisely defined payload bytes>"
+  "payload": {
+    "media_type": "application/vnd.worldwright.world+json",
+    "byte_length": 123,
+    "sha256": "<64 lowercase hexadecimal characters>"
   },
   "provenance": {
     "source_revision": "<reviewed source revision>",
@@ -865,9 +895,15 @@ A manifest records the artifact digest, content schema version, game compatibili
 
 ### 5.2 Package validation and compatibility checks
 
-Validate package structure, bounded size, file count, allowed paths, supported schema, payload digest, game compatibility, and semantic content references. Reuse the content validator rather than introducing a looser packaging parser.
+Validate one bounded non-archive payload, canonical manifest, supported schema,
+payload digest, game compatibility, and semantic content references. Reuse the
+content validator rather than introducing a looser packaging parser.
 
-**Implementation notes:** if archives are adopted, reject traversal paths, absolute paths, symlink escapes, duplicate entries, and decompression bombs. Define whether identifiers removed by a new release are referenced by durable players/items before activation. Schema compatibility alone does not prove durable-world compatibility.
+**Future-only archive note:** if archives are ever adopted, reject traversal
+paths, absolute paths, symlink escapes, duplicate entries, and decompression
+bombs. None of those archive surfaces exist in the v0.1 container. Define
+whether identifiers removed by a new release are referenced by durable
+players/items before activation.
 
 **Example:** a zone package validates structurally but removes a room occupied by saved characters. Reject activation or require an explicit reviewed migration; do not teleport everyone silently.
 
@@ -875,7 +911,7 @@ Validate package structure, bounded size, file count, allowed paths, supported s
 
 ### 5.3 Staging activation and known-good retention
 
-#### Proposed release progression
+#### Workflow progression
 
 ```text
 Draft -> Validated -> Packaged -> Reviewed -> Staged -> Activated
@@ -883,7 +919,10 @@ Draft -> Validated -> Packaged -> Reviewed -> Staged -> Activated
                     Rejected    Rejected    Rolled back under policy
 ```
 
-These labels are proposed workflow states, not existing database values. Review approval must bind to the immutable artifact digest, not merely a mutable filename.
+Draft, Validated, Packaged, and Staged are workflow concepts, not database
+states. The only v0.1 database states are `requested`, `approved`, `rejected`,
+`activating`, `activated`, and `failed`. Review approval binds to the immutable artifact
+digest, not a mutable filename.
 
 #### Activation sequence
 
@@ -900,9 +939,12 @@ These labels are proposed workflow states, not existing database values. Review 
 
 **Evidence:** successful staging activation, expected-release conflict, crash during activation, retained known-good artifact, and coherent post-activation Look/Move.
 
-### 5.4 Maintenance-mode production activation and rollback policy
+### 5.4 Offline staging activation and rollback policy
 
-Production activation uses maintenance mode rather than promising seamless hot reload. Stop admitting affected mutations, settle/reconcile in-flight durable operations, establish writer authority, activate, verify, and reopen only after readiness succeeds.
+The implemented offline maintenance procedure is staging-only and is not hot
+reload. Stop the durable server, establish writer authority, validate, activate,
+and verify before restart. Production activation is refused in code and remains
+a future M6-gated procedure.
 
 **Rollback distinctions:**
 
@@ -923,23 +965,27 @@ Preview uses its own process/state and no production credentials. The isolation 
 
 | Resource | Preview requirement |
 |---|---|
-| Database | Dedicated disposable state and least-privilege credentials |
-| Network | No production database/control access; restricted egress where needed |
-| Filesystem | Separate output/storage area; no production secrets mounted |
-| Identity | Test identities, not copied live session tokens |
+| Database | No database configuration or persistence |
+| Network | No network service; this is not an egress firewall |
+| Filesystem | Ownership-safe four-slot temporary state |
+| Identity | Ephemeral local identity; no copied live session tokens |
 | External effects | Disabled or replaced with safe test integrations |
-| Capacity | CPU, memory, storage, connection, and lifetime limits |
-| Cleanup | Remove expired preview state without touching production |
+| Capacity | Four workers; default 900 seconds; hard 3600-second lifetime |
+| Cleanup | Ownership-safe slots and 3665-second stale recovery |
 
 **Example:** a builder previews a reward quest. The resulting item exists only in preview state and cannot be transferred into the production world.
 
 **Implementation notes:** content remains data unless executable extensions are explicitly introduced and separately sandboxed. Do not assume a process boundary alone contains arbitrary executable plugins.
 
-**Evidence:** denied production access, distinct credentials, cleanup after crash, bounded previews, and proof that preview actions do not alter production records.
+**Evidence:** cleared environment/no DB configuration, tamper rejection, timeout,
+capacity, and ownership-safe cleanup. Real production-access denial remains
+unverified.
 
 ### 5.6 CLI packaging and publication requests
 
-Provide workflows to validate, package, inspect a manifest, preview, and request publication. Exact command names and flags are **to be designed**; no new executable CLI syntax is asserted here.
+The developer CLI provides validate, package, inspect, and preview. The server
+CLI provides database migrate/seed and release request/review/status/activate/
+recover commands. Exact syntax is recorded in the release contract and runbook.
 
 **Illustrative user flow:** validate a zone, package it into an immutable artifact, preview that artifact, submit its digest with a target environment and expected current release, then receive a durable request identity/status. Submission is not activation approval.
 
@@ -949,19 +995,27 @@ Provide workflows to validate, package, inspect a manifest, preview, and request
 
 ### 5.7 Verification and exit gate
 
-**Exit evidence:** a reviewed zone can be packaged, previewed, activated in staging, rejected when incompatible, and returned to the previous known-good release where rollback is supported.
+**Current gate:** artifact/package/inspect/preview and non-DB activation evidence
+passed locally. Eight M5 database cases compile but have not run. The overall
+Milestone 5 exit gate remains pending live PostgreSQL verification.
 
 The demonstration must include artifact tampering, stale publication requests, preview-to-production isolation, crash-interrupted activation, and a durable-state incompatibility case. Record the exact digest throughout the workflow so the tested, reviewed, and activated artifacts are demonstrably the same bytes.
 
 ## Milestone 6 — Operational Control v0.1
 
-**Status:** Planned.
+**Status:** Implemented awaiting live PostgreSQL and recovery execution. The
+implementation work packages are checked; the live exit gate remains pending.
+M7 is implemented awaiting live evidence; M8 is the next planned gray increment. Production activation is permitted only
+through auth-v1 request, separate review, and current MFA-backed authorization.
 
 ### Goal and entry criteria
 
 Add controlled administration, attribution, observability, and exercised recovery. Operators must be able to explain what changed, who authorized it, and how to restore service without bypassing single-writer and durable-state invariants.
 
-Prerequisites are Milestone 4's transaction/fencing model and Milestone 5's release workflow. Console remains incomplete until implemented and verified; an operator API or runbook does not automatically imply a finished Console UI.
+Prerequisites are Milestone 4's transaction/fencing model and Milestone 5's
+release workflow. Console is a loopback client/local MFA issuer; Studio is a
+real loopback workspace client. PostgreSQL, operator publication, recovery
+execution, and manual browser evidence remain unverified.
 
 ### 6.1 Capability-scoped operator and moderator APIs
 
@@ -1103,11 +1157,17 @@ Include denied cross-scope requests, insufficient privileged authentication, tra
 
 ## Milestone 7 — Builder Workflow and Studio v0.1
 
-**Status:** Planned.
+**Status:** Implemented awaiting live PostgreSQL/operator publication and manual
+browser/accessibility evidence.
 
 ### Goal and scope
 
 Let a builder create and validate a small zone, test it in isolation, and submit the exact reviewed artifact for publication. Studio is a client of shared validation and controlled release workflows, not a privileged shortcut into production data.
+
+The delivered contract is a loopback Studio workspace for schema-v1 rooms and
+exits, shared validation, immutable artifacts, official preview, and
+authenticated publication requests. Live PostgreSQL/operator publication and
+manual browser/accessibility evidence remain unrun.
 
 **Dependencies:** Milestone 5 artifact/preview/publication contracts and Milestone 6 authorization/audit. Collaborative real-time editing, a universal visual scripting language, direct production database editing, and automatic activation of every save are out of scope unless separately approved.
 
@@ -1432,7 +1492,9 @@ A status change records:
 
 ### Expansion record
 
-This edition expands every original major section, adds retrospective detail for Milestones 1–2 shown in the original chart, breaks out each planned task in Milestones 4–8, and adds work-package/recovery examples. It reconciles Milestone 4's label with the source's stated next-active priority while keeping its implementation status planned. It does not mark any new implementation complete, rerun repository tests, approve owner decisions, or modify linked repository documents.
+This edition expands every original major section and retains historical
+planning detail for Milestones 1–3. Current M4/M5 status and evidence are
+recorded at the top of this document and in the current verification report.
 
 ## Appendix A — Work-Package and Verification Templates
 
@@ -1549,3 +1611,12 @@ These are reusable template checkboxes, not claims that work in this expanded ed
 | Second game needs transport special case | 8 | Treat as an abstraction gap, not hidden game branching | Reuse review and contract tests |
 
 Together, these scenarios define the intended progression: trustworthy in-memory behavior, bounded multiplayer transport, durable value, controlled content delivery, exercised operations, safe builder workflows, and evidence-driven toolkit reuse.
+
+## Current M7 evidence boundary
+
+M6 and M7 are implemented awaiting live PostgreSQL/recovery/operator
+publication evidence and manual browser/accessibility evidence. Studio is a
+real loopback browser client with an append-only workspace, not a scaffold or
+direct PostgreSQL client. M8 is next planned. See
+[docs/STUDIO_V1.md](docs/STUDIO_V1.md) and
+[docs/verification/milestone-7-report.md](docs/verification/milestone-7-report.md).

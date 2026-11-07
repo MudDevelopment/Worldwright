@@ -1,7 +1,7 @@
 use worldwright_core::{
     command::{ConnectionGeneration, InputError, PlayerText},
     effect::{Audience, Effect, EffectPlan},
-    ids::{CharacterId, DefinitionId, IdError, WorldId},
+    ids::{CharacterId, DefinitionId, IdError, WorldId, WriterId},
     time::{Tick, TimeError},
 };
 
@@ -11,6 +11,9 @@ fn ids_round_trip_and_reject_zero() {
     assert_eq!(id.to_string().parse::<WorldId>().unwrap(), id);
     assert_eq!(format!("{:032X}", id.get()).parse::<WorldId>().unwrap(), id);
     assert_eq!(WorldId::from_u128(0), Err(IdError::Zero));
+    let writer = WriterId::from_u128(7).unwrap();
+    assert_eq!(writer.to_string().parse::<WriterId>().unwrap(), writer);
+    assert_eq!(WriterId::from_u128(0), Err(IdError::Zero));
     assert_eq!(
         "00000000000000000000000000000000".parse::<WorldId>(),
         Err(IdError::Zero)

@@ -10,7 +10,11 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{sync::Semaphore, task};
-use worldwright_core::ids::{AccountId, CharacterId};
+use worldwright_core::ids::{AccountId, CharacterId, WorldId};
+use worldwright_persistence::{
+    IdentityRecord, PersistenceError, PostgresStore, SESSION_TTL_SECONDS, SessionPrincipal,
+    session_token_hash,
+};
 
 pub(crate) const MAX_REGISTRY_BYTES: usize = 1024 * 1024;
 pub(crate) const MAX_ACCOUNTS: usize = 256;
@@ -27,6 +31,21 @@ pub(crate) struct Principal {
     pub(crate) character_name: String,
 }
 
+#[derive(Clone)]
+pub(crate) struct CharacterRegistration {
+    pub(crate) principal: Principal,
+    pub(crate) room_definition: Option<String>,
+}
+
+#[derive(Clone)]
+enum Backend {
+    Local,
+    Postgres {
+        store: PostgresStore,
+        world: WorldId,
+    },
+}
+
 struct AccountRecord {
     password_hash: String,
     principal: Principal,
@@ -39,6 +58,8 @@ struct Session {
 
 #[derive(Clone)]
 pub(crate) struct AuthService {
+    backend: Backend,
+    registrations: Arc<Vec<CharacterRegistration>>,
     accounts: Arc<HashMap<String, AccountRecord>>,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
     verification_slots: Arc<Semaphore>,
@@ -58,7 +79,7 @@ pub(crate) enum AuthError {
 }
 
 impl AuthService {
-    pub(crate) fn load(path: &Path, cookie_secure: bool) -> Result<Self, crate::ServerError> {
+    pub(crate) fn load_local(path: &Path, cookie_secure: bool) -> Result<Self, crate::ServerError> {
         let metadata = fs::metadata(path).map_err(crate::ServerError::io)?;
         if !metadata.is_file() {
             return Err(crate::ServerError::startup(
@@ -106,9 +127,18 @@ impl AuthService {
                 return Err(crate::ServerError::startup("duplicate account username"));
             }
         }
+        let registrations = accounts
+            .values()
+            .map(|record| CharacterRegistration {
+                principal: record.principal.clone(),
+                room_definition: None,
+            })
+            .collect();
         let dummy_hash = make_hash(DUMMY_PASSWORD)
             .map_err(|_| crate::ServerError::startup("unable to initialize password verifier"))?;
         Ok(Self {
+            backend: Backend::Local,
+            registrations: Arc::new(registrations),
             accounts: Arc::new(accounts),
             sessions: Arc::new(Mutex::new(HashMap::new())),
             verification_slots: Arc::new(Semaphore::new(4)),
@@ -117,6 +147,40 @@ impl AuthService {
             ttl: SESSION_TTL,
             max_sessions: MAX_SESSIONS,
         })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn load(path: &Path, cookie_secure: bool) -> Result<Self, crate::ServerError> {
+        Self::load_local(path, cookie_secure)
+    }
+
+    pub(crate) async fn postgres(
+        store: PostgresStore,
+        world: WorldId,
+        cookie_secure: bool,
+    ) -> Result<(Self, Vec<CharacterRegistration>), crate::ServerError> {
+        let identities = store
+            .identities(world)
+            .await
+            .map_err(|_| crate::ServerError::startup("durable identities failed validation"))?;
+        let registrations = identities
+            .iter()
+            .map(identity_registration)
+            .collect::<Result<Vec<_>, _>>()?;
+        let service = Self {
+            backend: Backend::Postgres { store, world },
+            registrations: Arc::new(registrations.clone()),
+            accounts: Arc::new(HashMap::new()),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            verification_slots: Arc::new(Semaphore::new(4)),
+            dummy_hash: Arc::new(make_hash(DUMMY_PASSWORD).map_err(|_| {
+                crate::ServerError::startup("unable to initialize password verifier")
+            })?),
+            cookie_secure,
+            ttl: SESSION_TTL,
+            max_sessions: MAX_SESSIONS,
+        };
+        Ok((service, registrations))
     }
 
     #[cfg(test)]
@@ -133,6 +197,13 @@ impl AuthService {
         ttl: Duration,
         max_sessions: usize,
     ) -> Self {
+        let registrations = records
+            .iter()
+            .map(|(_, _, principal)| CharacterRegistration {
+                principal: principal.clone(),
+                room_definition: None,
+            })
+            .collect();
         let accounts = records
             .into_iter()
             .map(|(username, password_hash, principal)| {
@@ -146,6 +217,8 @@ impl AuthService {
             })
             .collect();
         Self {
+            backend: Backend::Local,
+            registrations: Arc::new(registrations),
             accounts: Arc::new(accounts),
             sessions: Arc::new(Mutex::new(HashMap::new())),
             verification_slots: Arc::new(Semaphore::new(4)),
@@ -161,6 +234,9 @@ impl AuthService {
         username: String,
         password: String,
     ) -> Result<String, AuthError> {
+        if let Backend::Postgres { store, world } = &self.backend {
+            return self.login_postgres(store, *world, username, password).await;
+        }
         validate_username(&username).map_err(|_| AuthError::InvalidInput)?;
         validate_password(&password).map_err(|_| AuthError::InvalidInput)?;
         let record = self.accounts.get(&username);
@@ -216,24 +292,106 @@ impl AuthService {
         Ok(token)
     }
 
-    pub(crate) fn lookup(&self, token: &str) -> Option<Principal> {
+    async fn login_postgres(
+        &self,
+        store: &PostgresStore,
+        world: WorldId,
+        username: String,
+        password: String,
+    ) -> Result<String, AuthError> {
+        validate_username(&username).map_err(|_| AuthError::InvalidInput)?;
+        validate_password(&password).map_err(|_| AuthError::InvalidInput)?;
+        let identity = store
+            .identity_for_login(world, &username)
+            .await
+            .map_err(|_| AuthError::Internal)?;
+        let hash = identity
+            .as_ref()
+            .map(|identity| identity.password_hash().to_owned())
+            .unwrap_or_else(|| self.dummy_hash.as_ref().clone());
+        let permit = self
+            .verification_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| AuthError::Saturated)?;
+        let password_bytes = password.into_bytes();
+        let valid = task::spawn_blocking(move || {
+            let _permit = permit;
+            let parsed = PasswordHash::new(&hash).map_err(|_| ())?;
+            Argon2::default()
+                .verify_password(&password_bytes, &parsed)
+                .map_err(|_| ())
+                .map(|_| ())
+        })
+        .await
+        .map_err(|_| AuthError::Internal)?
+        .is_ok();
+        let Some(identity) = identity else {
+            return Err(AuthError::Unauthorized);
+        };
+        if !valid {
+            return Err(AuthError::Unauthorized);
+        }
+        let principal = SessionPrincipal {
+            account: identity.account(),
+            character: identity.character(),
+            character_name: identity.character_name().to_owned(),
+        };
+        for _ in 0..8 {
+            let token = random_hex(32).map_err(|_| AuthError::Internal)?;
+            let hash = session_token_hash(&token);
+            match store
+                .create_session(&principal, world, &hash, SESSION_TTL_SECONDS, MAX_SESSIONS)
+                .await
+            {
+                Ok(()) => return Ok(token),
+                Err(PersistenceError::SessionCollision) => continue,
+                Err(PersistenceError::SessionCapacity) => return Err(AuthError::SessionCapacity),
+                Err(PersistenceError::Unauthorized) => return Err(AuthError::Unauthorized),
+                Err(_) => return Err(AuthError::Internal),
+            }
+        }
+        Err(AuthError::Internal)
+    }
+
+    pub(crate) async fn lookup(&self, token: &str) -> Result<Option<Principal>, AuthError> {
+        if let Backend::Postgres { store, world } = &self.backend {
+            return store
+                .session(*world, &session_token_hash(token))
+                .await
+                .map(|session| {
+                    session.map(|session| Principal {
+                        account: session.account,
+                        character: session.character,
+                        character_name: session.character_name,
+                    })
+                })
+                .map_err(|_| AuthError::Internal);
+        }
+        Ok(self.lookup_local(token))
+    }
+
+    fn lookup_local(&self, token: &str) -> Option<Principal> {
         let mut sessions = self.sessions.lock().ok()?;
         let now = Instant::now();
         sessions.retain(|_, session| session.expires_at > now);
         sessions.get(token).map(|session| session.principal.clone())
     }
 
-    pub(crate) fn revoke(&self, token: &str) {
-        if let Ok(mut sessions) = self.sessions.lock() {
+    pub(crate) async fn revoke(&self, token: &str) -> Result<(), AuthError> {
+        if let Backend::Postgres { store, .. } = &self.backend {
+            store
+                .revoke_session(&session_token_hash(token))
+                .await
+                .map_err(|_| AuthError::Internal)?;
+        } else if let Ok(mut sessions) = self.sessions.lock() {
             sessions.remove(token);
         }
+        Ok(())
     }
 
-    pub(crate) fn principals(&self) -> Vec<Principal> {
-        self.accounts
-            .values()
-            .map(|record| record.principal.clone())
-            .collect()
+    pub(crate) fn registrations(&self) -> Vec<CharacterRegistration> {
+        self.registrations.as_ref().clone()
     }
 
     pub(crate) fn cookie_secure(&self) -> bool {
@@ -263,6 +421,55 @@ struct RegistryAccount {
 pub(crate) struct LoginRequest {
     pub(crate) username: String,
     pub(crate) password: String,
+}
+
+pub(crate) fn load_seed_accounts(
+    path: &Path,
+) -> Result<Vec<worldwright_persistence::SeedAccount>, crate::ServerError> {
+    let metadata = fs::metadata(path).map_err(crate::ServerError::io)?;
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_REGISTRY_BYTES as u64 {
+        return Err(crate::ServerError::startup("account registry is invalid"));
+    }
+    let bytes = fs::read(path).map_err(crate::ServerError::io)?;
+    let registry: Registry = serde_json::from_slice(&bytes)
+        .map_err(|_| crate::ServerError::startup("account registry is not valid JSON"))?;
+    if registry.schema_version != 1
+        || registry.accounts.is_empty()
+        || registry.accounts.len() > MAX_ACCOUNTS
+    {
+        return Err(crate::ServerError::startup(
+            "account registry violates schema v1",
+        ));
+    }
+    let mut accounts = Vec::with_capacity(registry.accounts.len());
+    let mut account_ids = std::collections::HashSet::new();
+    let mut character_ids = std::collections::HashSet::new();
+    for (index, record) in registry.accounts.into_iter().enumerate() {
+        let principal = parse_record(index, &record, &mut account_ids, &mut character_ids)?;
+        accounts.push(worldwright_persistence::SeedAccount {
+            account: principal.account,
+            username: record.username,
+            password_hash: record.password_hash,
+            character: principal.character,
+            character_name: principal.character_name,
+        });
+    }
+    Ok(accounts)
+}
+
+fn identity_registration(
+    identity: &IdentityRecord,
+) -> Result<CharacterRegistration, crate::ServerError> {
+    validate_hash(identity.password_hash())
+        .map_err(|_| crate::ServerError::startup("durable password hash is invalid"))?;
+    Ok(CharacterRegistration {
+        principal: Principal {
+            account: identity.account(),
+            character: identity.character(),
+            character_name: identity.character_name().to_owned(),
+        },
+        room_definition: Some(identity.room_definition().to_owned()),
+    })
 }
 
 fn parse_record(
@@ -450,9 +657,9 @@ mod tests {
             .login("alice".to_owned(), "correct horse".to_owned())
             .await
             .expect("login");
-        assert!(service.lookup(&token).is_some());
-        service.revoke(&token);
-        assert!(service.lookup(&token).is_none());
+        assert!(service.lookup(&token).await.unwrap().is_some());
+        service.revoke(&token).await.unwrap();
+        assert!(service.lookup(&token).await.unwrap().is_none());
     }
 
     #[test]
@@ -487,7 +694,7 @@ mod tests {
         assert_eq!(
             AuthService::load(&path, false)
                 .expect("registry")
-                .principals()
+                .registrations()
                 .len(),
             1
         );
@@ -584,7 +791,7 @@ mod tests {
                 .await,
             Err(AuthError::SessionCapacity)
         ));
-        service.revoke(&first);
+        service.revoke(&first).await.expect("revoke");
         assert!(
             service
                 .login("alice".to_owned(), "password".to_owned())
@@ -623,6 +830,6 @@ mod tests {
             .login("alice".to_owned(), "password".to_owned())
             .await
             .expect("login");
-        assert!(service.lookup(&token).is_none());
+        assert!(service.lookup(&token).await.unwrap().is_none());
     }
 }

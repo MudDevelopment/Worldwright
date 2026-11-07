@@ -1,6 +1,7 @@
-//! Private v1 wire types. No public constructor can bypass semantic validation.
+//! Public schema-v1 draft wire types. Drafts are editable wire data; semantic
+//! validation remains authoritative in `ValidatedWorldContent`.
 use serde::{
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
     de::{self, MapAccess, SeqAccess, Visitor},
 };
 use std::{collections::BTreeMap, fmt, marker::PhantomData};
@@ -30,18 +31,19 @@ pub(crate) struct VersionHeader {
     pub schema_version: Option<u64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Document {
+pub struct DraftWorldV1 {
     pub schema_version: u64,
     pub namespace: String,
     pub entry_room: String,
     #[serde(deserialize_with = "rooms")]
-    pub rooms: Vec<Room>,
+    pub rooms: Vec<DraftRoomV1>,
 }
-#[derive(Deserialize)]
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Room {
+pub struct DraftRoomV1 {
     pub id: String,
     pub title: String,
     pub description: String,
@@ -50,6 +52,10 @@ pub(crate) struct Room {
     #[serde(default)]
     pub allow_unreachable: bool,
 }
+
+pub type Document = DraftWorldV1;
+pub type Room = DraftRoomV1;
+
 fn rooms<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Room>, D::Error> {
     struct Rooms(PhantomData<Room>);
     impl<'de> Visitor<'de> for Rooms {

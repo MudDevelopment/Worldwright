@@ -15,7 +15,10 @@ worldwright-core.workspace = true
 worldwright-content.workspace = true
 worldwright-protocol.workspace = true
 worldwright-persistence.workspace = true
+worldwright-release.workspace = true
+worldwright-operations.workspace = true
 worldwright-sdk.workspace = true
+sha2.workspace = true
 argon2.workspace = true
 axum.workspace = true
 futures-util.workspace = true
@@ -23,7 +26,9 @@ getrandom.workspace = true
 rpassword.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sqlx.workspace = true
 tokio.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true

@@ -5,10 +5,31 @@
 | Field | Value |
 |---|---|
 | Document version | 0.1 |
-| Updated | October 20, 2026 |
-| Status | Proposed security policy and implementation requirements; operational adoption pending |
+| Updated | November 6, 2026 |
+| Status | M4/M5 controls await live PostgreSQL verification; M6 is implemented awaiting live PostgreSQL/recovery execution and is not production ready |
 | Accountable roles | Security owner and service owner, with authorized project-owner oversight |
 | Related documents | [README](README.md), [Design](DESIGN.md), [Architecture](ARCHITECTURE.md), [Contributing](CONTRIBUTING.md), [Conduct](CODE_OF_CONDUCT.md) |
+
+## Current M4/M5 controls
+
+Durable writes use writer fencing, receipts, atomic audit/outbox work, release
+read guards, maintenance/pending activation state, and stale-writer refusal.
+Release artifacts use immutable create-new filesystem output and insert-only
+application APIs; they are bounded, canonical, digest-verified, and validated
+through the strict content loader. Preview clears inherited
+environment state, uses bounded ownership-safe slots, and runs only in-memory
+ReferenceGame data.
+
+These controls do not establish authorship or authorization: an artifact digest
+is not a signature. Operator authority requires an auth-v1 token and current
+database grant; database credentials alone are insufficient. Preview is not an OS sandbox
+or network-egress firewall. Production activation requires auth-v1 request,
+separate review, and a current MFA-backed database grant. Backup manifests
+provide HMAC integrity only; confidentiality/encryption at rest is external.
+RPO/RTO targets and 90-day audit retention are unproven/unautomated. Listener
+transport remains loopback without TLS. Security-event storage exists, but
+unauthenticated token failures are bounded metrics rather than durable events.
+Live PostgreSQL and recovery behavior remain unverified.
 
 > **Important:** No released Worldwright software, supported-version roster, deployed service, private reporting endpoint, or staffed response team has been verified. “Must” below describes a release requirement, not an implemented-control claim. This document does not certify Worldwright as secure or production-ready.
 >
@@ -421,3 +442,13 @@ A targeted exception must identify an owner, scope, compensating controls, expir
 Keep this file synchronized with actual source and deployed defaults as implementation develops. Do not convert a proposed requirement into a statement of protection until there is verification evidence.
 
 The proposed `MIT OR Apache-2.0` software licensing remains subject to owner approval. Licensing terms do not establish a warranty, security support commitment, bug bounty, or authorization to test independent deployments.
+
+## M7 Studio controls
+
+Studio applies exact loopback Host and same-Origin mutation gates, exact media
+types, bounded route bodies, CSP/no-store/nosniff/referrer headers, and fixed
+workspace symlink/path confinement. Bearer publication tokens remain
+server-side and are never persisted or sent to the browser. Preview is direct,
+no-shell, environment-cleared, and bounded, but is not an OS sandbox or network
+egress firewall. Production confirmation is a destructive-action safeguard,
+not authorization; M6 grants and PostgreSQL audit remain authoritative.

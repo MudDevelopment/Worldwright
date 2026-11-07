@@ -12,7 +12,12 @@ fn help_version_and_status_are_successful() {
     for flag in ["--help", "-h"] {
         let output = run(&[flag]);
         assert!(output.status.success());
-        assert!(String::from_utf8_lossy(&output.stdout).contains("Protocol v1"));
+        let help = String::from_utf8_lossy(&output.stdout);
+        assert!(help.contains("Protocol v1"));
+        assert!(help.contains("database migrate"));
+        assert!(help.contains("release request"));
+        assert!(help.contains("serve --database-url-env"));
+        assert!(!help.contains("__preview"));
     }
     for flag in ["--version", "-V"] {
         let output = run(&[flag]);
@@ -23,6 +28,7 @@ fn help_version_and_status_are_successful() {
     assert!(output.status.success());
     let status = String::from_utf8_lossy(&output.stdout);
     assert!(status.contains("protocol v1/browser transport is implemented"));
+    assert!(status.contains("active release artifact"));
     assert!(status.contains("not a readiness probe"));
 }
 

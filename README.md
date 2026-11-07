@@ -8,11 +8,27 @@ The effort brings together an authoritative game engine, reusable Rust libraries
 
 Worldwright is **a toolkit for building games, not a single game or setting**. A science-fiction frontier, a fantasy realm, and a roleplay-focused social world should be able to share the same technical foundation while retaining their own rules, content, and identity.
 
-> **Project status:** Milestones 1–2 provide the reported foundation, runtime, strict JSON content loading, and Local Play baseline. **Milestone 3 — Multiplayer Transport v0.1** is the latest implemented increment, with reported Windows-local verification: authenticated, process-local two-player browser/WebSocket play, bounded sessions, exact-origin checks, and takeover-safe attachments. Linux Transport rerun, hosted CI, and deployment verification remain pending. **Milestone 4 — Durable Gameplay v0.1 is next active, but still planned**; no PostgreSQL-backed gameplay, durable sessions, restart recovery, public deployment, or built-in TLS termination is claimed. See [road map](ROAD-MAP.md), [implementation handoff](IMPLEMENTATION.md), [Local Play](docs/LOCAL_PLAY.md), [protocol v1](docs/PROTOCOL_V1.md), [server guide](docs/SERVER.md), and [verification](docs/VERIFICATION.md).
+> **Project status:** Milestones 1–3 are implemented development slices. **Milestone 4 — Durable Gameplay v0.1**, **Milestone 5 — Content Release and Preview v0.1**, **Milestone 6 — Operational Control v0.1**, and **Milestone 7 — Builder Workflow and Studio v0.1** are implemented awaiting their stated live evidence. M6/M7 are not production ready. See [road map](ROAD-MAP.md), [Studio guide](docs/STUDIO_V1.md), [operations contract](docs/OPERATIONS_V1.md), [release contract](docs/RELEASE_V1.md), and [M7 verification](docs/verification/milestone-7-report.md).
 >
-> **Documentation alignment — October 21, 2026:** This README is aligned with the expanded eight-milestone roadmap and revised DESIGN/ARCHITECTURE. Existing commands and implementation claims are carried forward from the supplied documents; this documentation update did not change source code or rerun repository tests.
+> **Documentation alignment — November 6, 2026:** This README reflects the
+> current source and verification evidence. Current evidence is Windows-local;
+> live PostgreSQL, hosted CI, Linux, deployment, and production-host evidence
+> remain pending.
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
+
+## Current implementation
+
+The workspace contains the current Rust workspace packages. M6 provides scoped operator authorization,
+local MFA credentials/tokens, a loopback operator client, audited release
+control, lifecycle drain, and recovery/takeover tooling. M5 provides deterministic `.wwr`
+packaging, strict inspection, isolated in-memory preview, and offline staging
+publication/activation workflows. PostgreSQL tests remain compile-only evidence.
+Studio adds a local append-only draft workspace, deterministic artifact
+packaging, official preview integration, and authenticated publication
+requests. Preview has no OS sandbox or network egress firewall. Production
+activation requires auth-v1 request/review and current MFA-backed
+authorization.
 
 ## Contents
 
@@ -71,7 +87,7 @@ The following components define the intended product family. They are responsibi
 |---|---|---|
 | **Worldwright Engine** | Authoritative world simulation, entities, command execution, scheduling, and game-system integration | Modular server runtime |
 | **Worldwright SDK** | Rust interfaces for commands, systems, content, and controlled extensions | Reusable library crates |
-| **Worldwright Studio** | Authoring and preview of rooms, zones, NPCs, items, quests, and dialogue | Start with validated files; add an editor after the content model stabilizes |
+| **Worldwright Studio** | Structured schema-v1 rooms/exits authoring, shared validation, immutable packaging, preview, and publication requests | Arbitrary entities such as NPCs, items, quests, and dialogue remain deferred |
 | **Worldwright CLI** | Project scaffolding, content checks, development utilities, and build orchestration | One developer-facing command-line entry point |
 | **Worldwright Testkit** | Scenario tests, simulated players, repeatable fixtures, and replay diagnostics where supported | Test support integrated with the core runtime |
 | **Worldwright Console** | Server health, session visibility, moderation, and authorized administration | Restricted operator interface |
@@ -80,7 +96,11 @@ The following components define the intended product family. They are responsibi
 
 ## Planned Capabilities
 
-This is the target product scope, not a list of features all present today. M1–M3 already provide typed core/runtime contracts, strict room/exit content loading, Local Play, and a bounded authenticated loopback browser slice. Inventory/progression, durable state, immutable release/preview workflows, operational administration, and Studio remain later milestone work. See [Delivery Roadmap](#delivery-roadmap) for status and dependencies.
+This is the target product scope, not a list of features all present today.
+M1–M3 provide core/runtime/content/transport slices; M4 durable state and M5
+immutable release/preview workflows are implemented awaiting live PostgreSQL
+verification. M6 operational administration and production authorization are
+implemented awaiting live PostgreSQL/recovery evidence. See [Delivery Roadmap](#delivery-roadmap).
 
 ### World and Gameplay Foundations
 
@@ -140,21 +160,28 @@ The table separates reported local implementation from target architecture. Deta
 | Primary language | Rust | Reported workspace baseline |
 | Asynchronous I/O | Tokio | Integrated for the local Transport slice |
 | HTTP and WebSocket service | Axum | Integrated for loopback development, not a public deployment |
-| Relational persistence | PostgreSQL | Planned for M4 |
-| Database access | SQLx | Planned; not integrated in the reported baseline |
+| Relational persistence | PostgreSQL | Implemented in M4/M5; live verification pending |
+| Database access | SQLx | Integrated for M4/M5 durable paths; live PostgreSQL verification pending |
 | Web surfaces | Static HTML/CSS/JavaScript player client; Askama for future server-rendered surfaces | Local player client implemented; Askama deferred |
-| World content | Strict JSON schema v1; later immutable content-release artifacts | Loader/validation implemented in M2; packaging/activation/preview planned for M5 |
+| World content | Strict JSON schema v1 and immutable content-release artifacts | Packaging/inspect/preview implemented; live PostgreSQL activation evidence pending |
 | Server configuration | Versioned TOML with validated settings and secret references | Proposed; existing CLI settings do not establish this configuration schema |
-| Deployment | Single authoritative process initially; private database for durable operation | M3 is process-local and database-free; supported production topology remains undecided |
+| Deployment | Single authoritative process initially; private database for durable operation | Local mode is process-local; durable mode is implemented; production topology remains undecided |
 | Packaging | Reproducible binaries or containers | Deployment packaging and verification remain planned |
 
-The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as `0.1.0-dev.0`. Content loading uses pinned Serde, serde_json, and serde_path_to_error with a committed lockfile. Tokio, Axum, Argon2, getrandom, and futures are installed for the development server; SQLx/PostgreSQL and Askama remain planned rather than integrated.
+The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as
+`0.1.0-dev.0`. Content loading and release packaging use pinned Serde/JSON;
+the server integrates Tokio, Axum, Argon2, getrandom, futures, and
+SQLx/PostgreSQL. Askama and production authorization remain outside the
+implemented slice.
 
 ### Runtime Model
 
 Use a **modular monolith** and one authoritative owner of mutable simulation state. Keep the system internally modular without introducing distributed services solely to match component names.
 
-The diagram is the **target architecture across multiple milestones**, not the current runnable composition. M3 has no PostgreSQL, reviewed-release activation, operational Console, or integrated durable scheduler. Its loopback gateway does not terminate TLS itself. Database work begins in M4, release/preview in M5, and scoped operational control in M6.
+The diagram is the **target architecture across multiple milestones**, not the
+production composition. M4/M5 PostgreSQL/release paths are implemented but
+await live database verification. The loopback gateway does not terminate TLS
+itself; scoped operational control is implemented but not deployment-verified.
 
 ```text
 Player Browser
@@ -195,7 +222,11 @@ A game may use only part of the suite. Studio and Console should use documented 
 
 ## Proposed Repository Layout
 
-The application and library directories contain the content, runtime, protocol, and local transport increments. `worldwright-server` and `worldwright-protocol` are implemented development slices; Studio, Console, and persistence remain stubs. Cargo.lock is supplied. The local workflows live in `scripts/`, CI in `.github/workflows/ci.yml`, and the implemented boundaries are documented in [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and [SERVER.md](docs/SERVER.md). Other deployment/content directories remain guidance placeholders.
+The application and library directories contain the content, runtime, protocol,
+local transport, persistence, release, and operational-control increments.
+Studio is an implemented loopback workspace; M4-M7 live behavior awaits live
+PostgreSQL evidence. Cargo.lock is supplied. See [RELEASE_V1.md](docs/RELEASE_V1.md),
+[SERVER.md](docs/SERVER.md), and [verification](docs/VERIFICATION.md).
 
 ```text
 worldwright/
@@ -217,11 +248,12 @@ worldwright/
 ├── apps/
 │   ├── worldwright/             # Developer CLI
 │   ├── worldwright-server/      # Authoritative server binary
-│   ├── worldwright-studio/      # Builder application, when introduced
+│   ├── worldwright-studio/      # Implemented loopback builder application
 │   └── worldwright-console/     # Operator application, if separately packaged
 ├── crates/
 │   ├── worldwright-core/        # Domain types and reusable simulation logic
 │   ├── worldwright-content/     # Content schemas and validation
+│   ├── worldwright-release/     # Deterministic artifact packaging and verification
 │   ├── worldwright-protocol/    # Versioned transport message contracts
 │   ├── worldwright-persistence/ # Database mappings and durable operations
 │   ├── worldwright-sdk/         # Supported game-development interfaces
@@ -247,11 +279,17 @@ The intended workflow is:
 4. **Validate content.** Check identifiers, references, constraints, and schema compatibility.
 5. **Implement game rules.** Add focused systems through supported Rust interfaces.
 6. **Run repeatable tests.** Verify actions, authorization, ownership, and recovery behavior.
-7. **Package and preview.** In M5, identify immutable bytes with a manifest/digest and test that exact artifact in an isolated environment; Studio integration follows in M7.
+7. **Package and preview.** M5 identifies immutable bytes with a
+   manifest/digest and tests exact artifacts in an isolated environment; the
+   implemented M7 Studio integrates that workflow.
 8. **Request controlled publication.** Bind review to the tested digest and target environment, check the expected current release and compatibility, then use the authorized staging/activation workflow. A save or successful validation is not publication approval.
 9. **Operate and improve.** Record code, content, configuration and migration versions together; use M6 authorization, audit, monitoring, drain and recovery procedures before operational exposure.
 
-This is a target workflow. Existing content-validation, Local Play and local Transport commands are documented under [Getting Started](#getting-started). Scaffolding, packaging, preview, publication and administration commands must not be inferred from these steps; document their actual syntax only when implemented and verified. Changed artifact bytes require refreshed review, and a supported content rollback must account for durable-state/schema compatibility.
+Current package/inspect/preview syntax and the staging release workflow are in
+[RELEASE_V1.md](docs/RELEASE_V1.md) and
+[RELEASE_ACTIVATION.md](docs/operations/RELEASE_ACTIVATION.md). Changed artifact
+bytes require refreshed review, and rollback must account for durable-state and
+schema compatibility.
 
 ## Organization and Responsibilities
 
@@ -280,17 +318,23 @@ Maintainers should record architectural decisions, review public API changes, an
 | **M1 — Foundation and Core** | Workspace, typed identifiers/contracts, rules/effects, scheduling primitives, deterministic tests | Reported complete baseline; configured CI is not proof of successful hosted runs |
 | **M2 — Runtime, Content, and Local Play** | Single-owner runtime, attachment generations, staged Look/Move/Say, strict JSON v1, named exits, local terminal host | Reported complete with earlier Linux evidence and provenance limits |
 | **M3 — Multiplayer Transport v0.1** | Bounded protocol, local registry/sessions, loopback HTTP/WebSocket gateway, browser client | Implemented with reported Windows-local verification; Linux Transport rerun, hosted CI and deployment remain pending |
-| **M4 — Durable Gameplay v0.1** | PostgreSQL schema/migrations, writer fencing, identity decision, one valuable operation, scoped receipts, atomic audit/outbox, uncertain-outcome recovery | **Next active, planned:** one item/reward operation survives duplicate, concurrency, failure and restart tests without duplicate value, false success or accepted stale writers |
-| **M5 — Content Release and Preview v0.1** | Immutable manifests/artifacts, compatibility, staging/maintenance activation, supported rollback, isolated preview, CLI publication requests | Planned: exact reviewed/tested artifact activates in staging; stale/incompatible artifacts and production access from preview are refused |
-| **M6 — Operational Control v0.1** | Capability-scoped control, privileged assurance, audit, observability, graceful drain, backup/restore and takeover runbooks | Planned: unauthorized actions fail; allowed changes are attributable; documented restore produces a coherent playable world |
-| **M7 — Builder Workflow and Studio v0.1** | Schema-aware editing, shared diagnostics, M5 preview/release integration, M6-controlled publication, accessibility | Planned: builder creates, validates and previews a zone, then submits exact reviewed bytes without production database credentials |
+| **M4 — Durable Gameplay v0.1** | PostgreSQL schema/migrations, writer fencing, identity/session, valuable state, receipts, audit/outbox, uncertain-outcome recovery | **Implemented awaiting live PostgreSQL verification** |
+| **M5 — Content Release and Preview v0.1** | Immutable manifests/artifacts, compatibility, staging/maintenance activation, supported rollback, isolated preview, CLI publication requests | **Implemented awaiting live PostgreSQL verification** |
+| **M6 — Operational Control v0.1** | Capability-scoped control, privileged assurance, audit, observability, graceful drain, backup/restore and takeover runbooks | **Implemented awaiting live PostgreSQL and recovery execution** |
+| **M7 — Builder Workflow and Studio v0.1** | Schema-aware editing, shared diagnostics, M5 preview/release integration, M6-controlled publication, accessibility | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
 | **M8 — Toolkit Maturity** | Independent second game, SDK compatibility/deprecation, justified gameplay expansion, scaffolding/migrations, measured performance | Planned: reuse without game-specific transport/core-invariant branches; upgrade and performance evidence |
 
-### Next implementation priority
+### M6 verification handoff
 
-M4 is a narrow durable vertical slice, not a commitment to implement all inventory, combat, progression or economic systems at once. Select the first item/reward operation, decide local durable identity versus identity-provider integration, and review transaction/schema/fencing and recovery contracts before coding. Preserve the existing local commands and M3 authority, bounds, origin and text-safety guarantees.
+M4/M5 await live PostgreSQL verification. M6 is implemented awaiting live
+PostgreSQL and recovery execution. M8 is the next planned increment. Production
+activation uses auth-v1 request/review and current MFA-backed grants; M6 is not
+production readiness evidence.
 
-Protocol v1 request IDs remain stream-local correlation; `accepted` means admission and `command_result` means in-memory execution. Durable idempotency, receipt lookup and reconnect reconciliation require explicit new contracts, not silent changes to those meanings. Planned database work does not make current sessions or gameplay restart-safe.
+Protocol v1 request IDs remain stream-local correlation; `accepted` means
+admission and `command_result` means in-memory execution. The durable semantic
+contract remains distinct and current M4 gaps include durable-key/reconciliation
+semantics, authentication-outage handling, and live PostgreSQL evidence.
 
 ### Dependency and release boundaries
 
@@ -364,9 +408,21 @@ cargo run -p worldwright-studio --locked --offline -- status
 cargo run -p worldwright-console --locked --offline -- status
 ```
 
-All four applications support `--help`/`-h`, `--version`/`-V`, and `status`; the server additionally supports `hash-password` and `serve`. The developer CLI additionally supports `content validate <path>` and `play <path>`. Invalid command shapes exit with code 2. Server runtime/startup failures exit with code 1, and `status` is not a service-readiness check. Studio, Console, and persistence remain stubs.
+All four applications support their help/version/status surfaces. The developer
+CLI supports `content validate/package/inspect`, `play`, and `preview`. The
+server supports database migrate/seed and release request/review/status/
+activate/recover commands. Invalid command shapes exit with code 2. Console
+and Studio are real loopback clients; neither bypasses server authority. Live
+PostgreSQL, recovery, and operator-publication evidence still await execution.
 
-Generate local account hashes and start the development transport with the exact workflow in [SERVER.md](docs/SERVER.md). The server is loopback-only, process-local, and intentionally not a public deployment or in-process TLS service. See [docs/RUNTIME.md](docs/RUNTIME.md), [docs/PROTOCOL_V1.md](docs/PROTOCOL_V1.md), [docs/SCAFFOLD.md](docs/SCAFFOLD.md), and [docs/VERIFICATION.md](docs/VERIFICATION.md). Persistence is the next major architecture step.
+Generate local account hashes and start the development transport with the
+exact workflow in [SERVER.md](docs/SERVER.md). Local mode is loopback-only and
+process-local; durable mode uses the verified active PostgreSQL artifact. The
+server is intentionally not a public deployment or in-process TLS service.
+See [docs/RUNTIME.md](docs/RUNTIME.md), [docs/PROTOCOL_V1.md](docs/PROTOCOL_V1.md),
+[docs/SCAFFOLD.md](docs/SCAFFOLD.md), [docs/RELEASE_V1.md](docs/RELEASE_V1.md),
+and [docs/VERIFICATION.md](docs/VERIFICATION.md). M6 authorization is
+implemented; live database, recovery, deployment, and owner-adoption evidence remains pending.
 
 ## Contributing
 
@@ -401,8 +457,9 @@ Security and player safety apply to every milestone, not only operational beta.
 
 **Still planned or requiring owner decisions and verification:**
 
-- Durable identity/session or identity-provider integration and documented revocation/restart behavior in M4.
-- Scoped privileged operations, stronger privileged authentication policy, required audit, observability and exercised recovery controls in M6.
+- Durable identity/session and capability authorization are implemented awaiting PostgreSQL evidence;
+  authentication-outage classification remains a gap.
+- Scoped privileged operations, MFA-backed assertions, required audit, observability, and recovery tooling are implemented; live recovery exercise remains pending.
 - Supported production TLS termination, trusted proxy policy, certificate lifecycle and secret delivery before public exposure.
 - Protected backups, restore/takeover drills, restore-safe writer authority, and approved recovery targets.
 - Retention and access rules for accounts, receipts, chat, audit, outbox and backups; retention choices must precede the affected durable storage/cleanup behavior.
@@ -412,7 +469,13 @@ Do not use a public issue to disclose credentials, sensitive player information,
 
 ## Documentation
 
-This package retains the foundational policy documents and now includes the implemented local transport guides: [ROAD-MAP.md](ROAD-MAP.md), [docs/PROTOCOL_V1.md](docs/PROTOCOL_V1.md), [docs/SERVER.md](docs/SERVER.md), and [docs/VERIFICATION.md](docs/VERIFICATION.md). Runtime, content, and authenticated transport are implemented only within their documented local boundaries; persistence and public deployment remain future work. Contribution, conduct, and security policies still require owner adoption and real reporting contacts. Deeper documentation directories contain guidance placeholders, not completed operational procedures.
+This package retains the foundational policy documents and includes current
+[RELEASE_V1.md](docs/RELEASE_V1.md),
+[RELEASE_ACTIVATION.md](docs/operations/RELEASE_ACTIVATION.md), and
+[milestone-5-report.md](docs/verification/milestone-5-report.md), alongside the
+server/persistence guides. Contribution, conduct, M6 authorization, and
+production deployment policies still require owner adoption and real reporting
+contacts.
 
 | Document or area | Intended purpose |
 |---|---|
@@ -485,3 +548,11 @@ Worldwright should let teams spend more effort on the worlds they want to create
 Success means more than an engine that accepts connections. It means developers can extend the rules, builders can publish coherent content, testers can verify behavior, and operators can support a persistent community with confidence.
 
 **One toolkit. Many worlds. Built in Rust.**
+
+## Current M7 status
+
+Milestones 4-7 are implemented awaiting their stated live evidence. M7 adds
+the real loopback Studio draft workspace, immutable artifacts, official
+preview integration, and authenticated publication requests. It is not
+production ready. See [Studio v1](docs/STUDIO_V1.md) and
+[M7 verification](docs/verification/milestone-7-report.md). M8 is next planned.

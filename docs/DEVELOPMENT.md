@@ -5,7 +5,10 @@
 - The repository's `rust-toolchain.toml` pins Rust **1.85.1**, rustfmt, and Clippy.
 - Use an approved Rust installation, preferably rustup. Registry dependencies include Serde/JSON, Tokio, Axum, Argon2, getrandom, futures, rpassword, and their locked transitive dependencies. Bootstrap needs registry access or an approved prepopulated cache.
 - Bash is supported for the Unix workflow; the parallel Windows workflow targets PowerShell 7.
-- No database, container runtime, or running service is required for checks. Server tests create ephemeral loopback listeners and use private synthetic account fixtures; no external service or database is needed.
+- No database or running service is required for non-DB checks. Server tests
+  create ephemeral loopback listeners and private synthetic fixtures. Durable
+  PostgreSQL tests require an approved disposable database and remain ignored
+  in the current evidence.
 
 The package includes a Cargo-generated `Cargo.lock`. Keep it committed. The normal check workflow uses `--locked --offline`; it does not update dependencies silently.
 
@@ -26,6 +29,18 @@ On Windows:
 ./scripts/dev.ps1 doctor
 ./scripts/dev.ps1 check
 ```
+
+For the local Studio slice:
+
+```text
+cargo run -p worldwright-studio -- serve --workspace <path>
+cargo run -p worldwright-studio -- help
+cargo test -p worldwright-studio --locked --offline
+cargo clippy -p worldwright-studio --all-targets --all-features --locked --offline -- -D warnings
+```
+
+Studio checks do not exercise live PostgreSQL, operator publication, Linux,
+deployment, or a manual browser/accessibility matrix.
 
 Both scripts resolve the repository relative to their own location, so calling either script by its path from another directory works. They accept exactly one task and stop on failed native commands.
 
@@ -54,6 +69,7 @@ cargo fmt --all -- --check
 cargo check --workspace --all-targets --locked --offline
 cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings
 cargo test --workspace --locked --offline
+cargo test -p worldwright-persistence --no-run --locked --offline -- --ignored
 cargo build --workspace --locked --offline
 cargo doc --workspace --no-deps --locked --offline
 ```
@@ -76,6 +92,9 @@ cargo test -p worldwright-testkit --test runtime --locked --offline two_room_loo
 cargo test -p worldwright-testkit --test rules --locked --offline
 cargo run -p worldwright-server --locked --offline -- status
 cargo test -p worldwright-server --locked --offline
+cargo run -p worldwright --locked --offline -- content package examples/two-room/world.json --output .\artifacts\reference-v1.wwr --release-id reference-v1 --source-revision working-tree --builder local
+cargo run -p worldwright --locked --offline -- content inspect .\artifacts\reference-v1.wwr --json
+cargo run -p worldwright --locked --offline -- preview .\artifacts\reference-v1.wwr
 ```
 
 The server status command reports protocol/browser implementation and process-local state; it does not start a server or verify service readiness. Use [SERVER.md](SERVER.md) for the explicit local `serve` workflow.

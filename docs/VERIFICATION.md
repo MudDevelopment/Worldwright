@@ -1,6 +1,56 @@
 # Verification
 
-## Current: Multiplayer Transport v0.1
+## Current M7 evidence taxonomy
+
+The Windows pinned/offline M7 close-out gate passed formatting, all-target
+checks, Clippy with warnings denied, workspace tests, build, rustdoc, metadata,
+JavaScript syntax validation, persistence ignored-test compilation, and diff
+hygiene. It recorded **240 test-binary tests passed, 0 failed, 19 ignored**,
+plus **2 doctests passed separately**. Studio contributed 22 library tests and
+2 smoke tests. A Windows local smoke exercised default workspace creation,
+packaging, real sibling preview, `look`, clean stop, and receipt persistence.
+PostgreSQL acceptance remains ignored/no-run; live operator publication,
+browser visual/accessibility behavior, Linux, hosted CI, deployment, and
+production-host checks remain unrun. See
+[milestone-7-report.md](verification/milestone-7-report.md).
+
+## Historical: Milestone 6 operational-control evidence
+
+The numeric results below are historical M6 evidence and are superseded for
+current close-out totals by the M7 workspace gate above.
+
+**Evidence date:** 2026-11-06. Uncommitted working tree based on branch HEAD
+`9558dd5`, Windows x86_64-pc-windows-msvc, Rust/Cargo 1.85.1.
+
+Formatting, locked/offline workspace check, Clippy with warnings denied,
+workspace tests, build, rustdoc, metadata, persistence ignored-test no-run,
+doctests, and `git diff --check` passed. The current workspace gate reports
+**206 test-binary tests passed, 0 failed, 18 ignored**, plus **2 doctests passed
+separately**. The ignored PostgreSQL tests were compiled, not executed. No
+PostgreSQL, manual Console/browser, pg_dump/pg_restore, hosted CI, Linux,
+deployment, or production-host test ran.
+
+Key package results:
+
+| Package | Current result |
+|---|---|
+| `worldwright-release` | 11 passed |
+| `worldwright` | 43 passed across its binaries |
+| `worldwright-server` | 44 passed: 42 library + 2 smoke |
+| `worldwright-operations` | 7 passed |
+| `worldwright-console` | 6 passed: 3 unit + 3 smoke |
+| `worldwright-persistence` | 6 passed, 18 ignored |
+| Workspace | 206 passed, 0 failed, 18 ignored |
+
+M4 Durable Gameplay v0.1 and M5 Content Release and Preview v0.1 are
+implemented awaiting live PostgreSQL verification. They are not complete or
+locally verified. M6 Operational Control is implemented awaiting live
+PostgreSQL and recovery execution; it is not production ready. PostgreSQL
+ignored tests compile but did not run.
+
+---
+
+## Historical: Multiplayer Transport v0.1
 
 **166 workspace tests passed: 164 unit/integration tests and 2 compile-fail doctests, with 0 failures.** This includes 32 `worldwright-server` library tests, 2 server smoke tests, 14 protocol tests, and seven real loopback WebSocket acceptance cases covering two-client interaction, authentication/origin/logout boundaries, takeover, graceful shutdown with an open socket, absolute handshake deadlines under control Ping traffic, unsupported-version refusal, binary-frame refusal, epoch/sequence validation, and standard WebSocket Ping/Pong. No browser process or interactive accessibility test was run.
 
