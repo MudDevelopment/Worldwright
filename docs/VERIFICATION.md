@@ -1,5 +1,15 @@
 # Verification
 
+## Current M8 Toolkit Maturity evidence
+
+Windows Rust/Cargo 1.85.1 full check passed: **263 test-binary tests passed,
+0 failed, 19 PostgreSQL tests ignored/compile-checked, plus 2 doctests passed**.
+Formatting, check, Clippy, build, and rustdoc passed. The separate
+[performance report](verification/milestone-8-performance.md) records the
+reproducible 100-client development objective. Durable expedition state,
+broader network/database capacity, Linux/hosted CI, deployment, and production
+readiness remain open.
+
 ## Current M7 evidence taxonomy
 
 The Windows pinned/offline M7 close-out gate passed formatting, all-target

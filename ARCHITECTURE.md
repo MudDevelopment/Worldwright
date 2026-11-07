@@ -80,7 +80,7 @@ not each become a service.
 | M5 — Content Release and Preview v0.1 | Deterministic artifacts, publication/activation, read guards, isolated preview | Implemented awaiting live PostgreSQL verification |
 | M6 - Operational Control v0.1 | Capability-scoped controls, privileged assurance, audit, drain, observability, restore/takeover tooling | Implemented awaiting live PostgreSQL/recovery execution; production readiness is separate |
 | M7 — Builder Workflow and Studio v0.1 | Editor and workflow clients over M5 preview/release and M6 authority contracts | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
-| M8 — Toolkit Maturity | Independent second game, compatibility policy, tooling and measured scaling | Planned; no speculative distribution or stable-SDK claim |
+| M8 - Toolkit Maturity | Independent second game, compatibility policy, tooling and measured scaling | Implemented with Windows-local evidence; durable expedition state and broader capacity remain open |
 
 The historical M3 record reports 164 unit/integration tests and 2 compile-fail doctests, including 32 server library tests, 2 server smoke tests, and 14 protocol tests, plus seven real loopback acceptance cases. These are not additive totals or tests run for this edition. See [ROAD-MAP M3](ROAD-MAP.md#milestone-3--multiplayer-transport-v01) and the actual [verification record](docs/VERIFICATION.md) for provenance.
 

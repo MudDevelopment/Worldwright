@@ -37,6 +37,13 @@ pub struct ServerConfig {
     pub storage: StorageConfig,
     pub allow_insecure_http: bool,
     pub operator: Option<OperatorConfig>,
+    pub game: GameProfile,
+}
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum GameProfile {
+    #[default]
+    Reference,
+    Expedition,
 }
 
 #[derive(Debug)]

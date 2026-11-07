@@ -13,8 +13,8 @@ awaiting live verification.
 | Core module | Present behavior |
 |---|---|
 | `ids` | Distinct account, character, world, room, item, connection, and operation IDs; validated definition IDs |
-| `command` | Bounded text, nonzero connection generations, actor context, Look/Move/Say intents and envelopes |
-| `effect` | Typed movement, transfer, message, and scheduling intentions; bounded plans; completed-event DTOs |
+| `command` | Bounded text, actor context, Look/Move/Say and namespaced GameAction intents |
+| `effect` | Typed movement, counter, transfer, message, and delayed-counter intentions; bounded plans and events |
 | `world` | Read-only queries with conservative description/traversal defaults; service-start `WorldStub` still refuses |
 | `runtime` | Private world builder/state, local attachments, atomic Look/Move/Say execution, scoped views, and addressed output |
 | `rule` | Object-safe rule trait; duplicate-safe registry; same-world guard and rule dispatch to produce a plan |
@@ -49,7 +49,12 @@ Connection generations must be nonzero. `ActorContext` and `CommandEnvelope` are
 
 An effect plan holds at most 128 intentions and refuses an extra append without changing the existing plan. Movement and item transfer fields are explicit; expected item location is a precondition for a future executor, not an enforced transfer today. Capacity, containment cycles, conservation of value, authorization, current revisions, and durability still require execution-time validation.
 
-There is no public raw-plan `apply` method. `WorldRuntime::execute` validates its supported command/effect subset against staged state and releases events plus addressed messages only after in-memory replacement. It rejects transfers and scheduling effects. The plan-only registry remains an unvalidated lower-level interface. There are no durable receipts, persistent event stream, or actual network deliveries; constructing a DTO elsewhere proves none of these.
+There is no public raw-plan `apply` method. `WorldRuntime::execute` validates
+movement, actor-scoped counters, messages, and delayed counter adjustments
+against staged state and releases results only after replacement. Transfers
+and legacy wake actions remain unsupported. `advance` transactionally applies
+bounded due work; a failed batch stays queued. None of this is a durable
+receipt, persistent event stream, or delivery proof.
 
 ## Time and Scheduling
 
@@ -73,13 +78,16 @@ Tokens belong only to their originating queue; another queue can have the same s
 - `FakeClock` supports checked advances and nonregressing set operations.
 - `SequenceRandom` returns supplied values in order, then an explicit exhaustion error.
 - `WorldFixture` supplies in-memory query data. Character placement requires an added room; item placement has an explicitly unchecked test helper to construct invalid fixtures.
-- `ScenarioStub` continues to refuse execution rather than claiming a game simulation occurred.
+- `RuntimeScenario` runs at most 1,024 typed steps through the real runtime and
+  identifies the failing step. `ScenarioStub` is a deprecated compatibility alias.
 
 Fixtures are unfiltered test data, not production views or durable storage. They are deliberately absent from the production SDK dependency graph.
 
 ## Compatibility and Next Work
 
-This remains an unpublished `0.1.0-dev.0` snapshot, not a stable SDK release. Existing metadata-only `GameModule` implementations and application stub behavior are retained. No deployed schema or wire format is migrated by this increment.
+This remains an unpublished `0.1.0-dev.0` snapshot. SDK API v1 adopts a
+current-plus-previous-minor source policy and one-minor deprecation period;
+only v1 exists today. See [Toolkit](TOOLKIT_V1.md).
 
 The runtime, versioned content loader, Local Play adapter, and authenticated Transport v0.1 now exist; see [RUNTIME.md](RUNTIME.md), [LOCAL_PLAY.md](LOCAL_PLAY.md), and [PROTOCOL_V1.md](PROTOCOL_V1.md). Persistence and durable reconciliation are next. `two_room_world()` in Testkit builds the real local runtime programmatically. Keep execution authority out of network handlers and retain the distinction between in-memory success, durable commitment, and delivery.
 

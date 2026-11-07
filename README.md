@@ -274,7 +274,7 @@ License files should be added after the licensing decision is approved; the reco
 The intended workflow is:
 
 1. **Define the game.** Establish the setting, audience, core loop, and first playable milestone.
-2. **Create a project.** Use the CLI scaffolding once implemented, or a documented reference project.
+2. **Create a project.** Use the implemented CLI project templates, or a documented reference project.
 3. **Author a small world.** Build a few connected rooms, an NPC, an item, and a complete interaction.
 4. **Validate content.** Check identifiers, references, constraints, and schema compatibility.
 5. **Implement game rules.** Add focused systems through supported Rust interfaces.
@@ -322,12 +322,13 @@ Maintainers should record architectural decisions, review public API changes, an
 | **M5 — Content Release and Preview v0.1** | Immutable manifests/artifacts, compatibility, staging/maintenance activation, supported rollback, isolated preview, CLI publication requests | **Implemented awaiting live PostgreSQL verification** |
 | **M6 — Operational Control v0.1** | Capability-scoped control, privileged assurance, audit, observability, graceful drain, backup/restore and takeover runbooks | **Implemented awaiting live PostgreSQL and recovery execution** |
 | **M7 — Builder Workflow and Studio v0.1** | Schema-aware editing, shared diagnostics, M5 preview/release integration, M6-controlled publication, accessibility | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
-| **M8 — Toolkit Maturity** | Independent second game, SDK compatibility/deprecation, justified gameplay expansion, scaffolding/migrations, measured performance | Planned: reuse without game-specific transport/core-invariant branches; upgrade and performance evidence |
+| **M8 - Toolkit Maturity** | Independent second game, SDK compatibility/deprecation, project templates/migrations, measured performance | Implemented with Windows-local evidence; durable expedition state, broader capacity, Linux/CI/deployment remain open |
 
 ### M6 verification handoff
 
 M4/M5 await live PostgreSQL verification. M6 is implemented awaiting live
-PostgreSQL and recovery execution. M8 is the next planned increment. Production
+PostgreSQL and recovery execution. M8 is implemented with Windows-local
+evidence; durable expedition state and broader capacity remain open. Production
 activation uses auth-v1 request/review and current MFA-backed grants; M6 is not
 production readiness evidence.
 
@@ -549,10 +550,25 @@ Success means more than an engine that accepts connections. It means developers 
 
 **One toolkit. Many worlds. Built in Rust.**
 
+## M8 commands and evidence
+
+```text
+cargo run -p worldwright -- content validate examples/expedition/world.json
+cargo run -p worldwright -- project new .\expedition --name expedition --template expedition
+cargo run -p worldwright -- content migrate examples/expedition/world.json --output .\tmp-world.json --dry-run
+cargo run -p worldwright -- benchmark --clients 100 --commands-per-client 100 --json
+```
+
+See [Toolkit v1](docs/TOOLKIT_V1.md), [M8 summary](Milestone-8-summary.md),
+and [M8 evidence](docs/verification/milestone-8-report.md). M8 uses the
+current-plus-previous 0.x compatibility window with one-minor deprecation.
+The 100-client figure is a development objective, not a beta commitment.
+
 ## Current M7 status
 
 Milestones 4-7 are implemented awaiting their stated live evidence. M7 adds
 the real loopback Studio draft workspace, immutable artifacts, official
 preview integration, and authenticated publication requests. It is not
 production ready. See [Studio v1](docs/STUDIO_V1.md) and
-[M7 verification](docs/verification/milestone-7-report.md). M8 is next planned.
+[M7 verification](docs/verification/milestone-7-report.md). M8 is implemented
+with Windows-local evidence and explicit durability/capacity limits.

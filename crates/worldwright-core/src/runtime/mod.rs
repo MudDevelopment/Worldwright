@@ -13,7 +13,7 @@ pub use state::WorldBuilder;
 use crate::{
     command::{ActorContext, PlayerText},
     effect::DomainEvent,
-    ids::{CharacterId, OperationId, RoomId, WorldId},
+    ids::{CharacterId, DefinitionId, OperationId, RoomId, WorldId},
     rule::{RuleError, RuleRegistry},
     time::Tick,
 };
@@ -24,6 +24,9 @@ pub const MAX_ROOMS: usize = 1024;
 pub const MAX_CHARACTERS: usize = 256;
 pub const MAX_EXITS_PER_ROOM: usize = 64;
 pub const MAX_DELIVERIES: usize = 1024;
+pub const MAX_COUNTER_VALUE: u64 = 1_000_000;
+pub const MAX_SCHEDULED_ACTIONS: usize = 128;
+pub const MAX_DUE_ACTIONS: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorldError {
@@ -49,6 +52,10 @@ pub enum WorldError {
     DeliveryLimit,
     ClockRegression,
     CounterExhausted,
+    DuplicateCounter,
+    CounterLimit,
+    ScheduleLimit,
+    ScheduleClock,
     Rule(RuleError),
 }
 impl fmt::Display for WorldError {
@@ -109,6 +116,12 @@ impl WorldSnapshot {
     pub fn last_execution(&self) -> Option<Tick> {
         self.0.last_execution
     }
+    pub fn counter(&self, character: CharacterId, key: DefinitionId) -> Option<u64> {
+        self.0.counters.get(&(character, key)).copied()
+    }
+    pub fn scheduled_actions(&self) -> usize {
+        self.0.scheduler.len()
+    }
 }
 
 /// No public state mutation, rule replacement, or raw plan-application API.
@@ -118,8 +131,72 @@ pub struct WorldRuntime {
     state: State,
     rules: RuleRegistry,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledResult {
+    pub world: WorldId,
+    pub revision: u64,
+    pub events: Vec<DomainEvent>,
+}
 impl WorldRuntime {
     pub fn snapshot(&self) -> WorldSnapshot {
         WorldSnapshot(self.state.clone())
+    }
+    pub fn advance(&mut self, now: Tick) -> Result<ScheduledResult, WorldError> {
+        if self.state.last_observed.is_some_and(|last| now < last) {
+            return Err(WorldError::ClockRegression);
+        }
+        let mut staged = self.state.clone();
+        let mut events = Vec::new();
+        for _ in 0..MAX_DUE_ACTIONS {
+            let Some(item) = staged
+                .scheduler
+                .pop_due(now)
+                .map_err(|_| WorldError::ScheduleClock)?
+            else {
+                break;
+            };
+            match item.payload {
+                crate::effect::ScheduledAction::AdjustCounter {
+                    character,
+                    key,
+                    delta,
+                } => {
+                    let before = staged
+                        .counters
+                        .get(&(character, key.clone()))
+                        .copied()
+                        .unwrap_or(0);
+                    let after = if delta < 0 {
+                        before.checked_sub(delta.unsigned_abs())
+                    } else {
+                        before.checked_add(delta as u64)
+                    }
+                    .ok_or(WorldError::CounterLimit)?;
+                    if after > MAX_COUNTER_VALUE {
+                        return Err(WorldError::CounterLimit);
+                    }
+                    staged.counters.insert((character, key.clone()), after);
+                    events.push(DomainEvent::CounterAdjusted {
+                        character,
+                        key,
+                        before,
+                        after,
+                    });
+                }
+                _ => return Err(WorldError::UnsupportedEffect),
+            }
+        }
+        if !events.is_empty() {
+            staged.revision = staged.next_revision()?;
+            staged.last_execution = Some(now);
+        }
+        staged.last_observed = Some(now);
+        let result = ScheduledResult {
+            world: staged.id,
+            revision: staged.revision,
+            events,
+        };
+        self.state = staged;
+        Ok(result)
     }
 }

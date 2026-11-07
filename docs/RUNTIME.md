@@ -89,7 +89,7 @@ Operation IDs are correlation fields only. Repeating an ID does not suppress a c
 | Direct message effect | May address only the issuing character |
 | Room message effect | Must address the actor's staged current room; Look may not broadcast |
 | Item-transfer effect | Rejected as `UnsupportedEffect`; never silently ignored |
-| Scheduling effect | Rejected as `UnsupportedEffect`; the standalone scheduler is not wired into execution |
+| Scheduling effect | Supported for actor counter adjustments from `GameAction`; legacy wake/item effects remain unsupported |
 
 Rules cannot move a different character, substitute another destination, add movement to Look/Say, or move twice in one command. Room existence is not movement authorization: only the declared directed edge permits movement. Doors, locks, room-capacity gameplay rules, and richer permissions are not implemented.
 
@@ -102,6 +102,10 @@ A successful `ExecutionResult` includes the operation ID, world ID, in-memory re
 Each message includes the executor-selected source character and exact recipient attachment. Recipients are resolved **at that effect's position in the staged plan**, in deterministic character-ID order. Thus a message before a move can reach the original room, and one after it reaches the destination room. Detached characters receive no addressed messages.
 
 A future transport must revalidate recipient connection/generation before sending a delayed result. Returned messages are not delivery acknowledgments. Text is not HTML-escaped or a complete Unicode safety policy; future presentation adapters must render it safely.
+
+M8 delayed counter batches are transactionally staged and use monotonic logical
+time. A failed due adjustment leaves the action queued so a later advance can
+retry it.
 
 | Bound | Value |
 |---|---:|

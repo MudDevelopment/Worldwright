@@ -1,6 +1,8 @@
 //! Typed input only. Constructors do not authenticate a caller.
 
-use crate::ids::{AccountId, CharacterId, ConnectionId, OperationId, RoomId, WorldId};
+use crate::ids::{
+    AccountId, CharacterId, ConnectionId, DefinitionId, OperationId, RoomId, WorldId,
+};
 use std::{error::Error, fmt, num::NonZeroU64};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +80,7 @@ pub enum CommandKind {
     Look,
     Move,
     Say,
+    GameAction,
 }
 
 /// Move uses a resolved room ID. Syntax parsing and visibility resolution are
@@ -85,8 +88,16 @@ pub enum CommandKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandIntent {
     Look,
-    Move { destination: RoomId },
-    Say { text: PlayerText },
+    Move {
+        destination: RoomId,
+    },
+    Say {
+        text: PlayerText,
+    },
+    GameAction {
+        action: DefinitionId,
+        argument: Option<PlayerText>,
+    },
 }
 
 impl CommandIntent {
@@ -95,6 +106,7 @@ impl CommandIntent {
             Self::Look => CommandKind::Look,
             Self::Move { .. } => CommandKind::Move,
             Self::Say { .. } => CommandKind::Say,
+            Self::GameAction { .. } => CommandKind::GameAction,
         }
     }
 }

@@ -35,7 +35,7 @@ impl fmt::Display for ScheduleError {
 }
 impl Error for ScheduleError {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scheduler<T> {
     entries: BTreeMap<(Tick, ScheduleToken), T>,
     capacity: NonZeroUsize,

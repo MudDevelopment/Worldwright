@@ -1,3 +1,11 @@
+## M8 game profile
+
+`serve` accepts `--game reference|expedition` and defaults to `reference`.
+Both profiles use the same authenticated protocol, owner queue, attachment
+authority, and generic `game_action` path. Expedition is selected only at the
+composition root; core and protocol contain no expedition branch. PostgreSQL
+with `--game expedition` fails before connecting because durable expedition
+counters and scheduled state are not implemented.
 # Worldwright Server Transport and Durable Releases v0.1
 
 **Status:** M4/M5 implemented awaiting live PostgreSQL verification. Current

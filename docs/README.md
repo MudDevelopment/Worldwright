@@ -27,6 +27,14 @@ The policy documents at the repository root remain proposed. Transport v0.1 is a
 
 - [Studio v1](STUDIO_V1.md): local draft workspace, artifact, preview, and publication-request workflow.
 - [Milestone 7 verification](verification/milestone-7-report.md): evidence categories and unrun live gates.
+- [Toolkit v1](TOOLKIT_V1.md): M8 contracts and selected policy.
+- [Milestone 8 summary](../Milestone-8-summary.md): delivered M8 scope and limits.
+- [Milestone 8 verification](verification/milestone-8-report.md): M8 evidence boundary.
+- [Milestone 8 performance](verification/milestone-8-performance.md): release-profile development workload.
+- [Toolkit v1](TOOLKIT_V1.md): M8 contracts and selected policy.
+- [Milestone 8 summary](../Milestone-8-summary.md): delivered M8 scope and limits.
+- [Milestone 8 verification](verification/milestone-8-report.md): M8 evidence boundary.
+- [Milestone 8 performance](verification/milestone-8-performance.md): release-profile development workload.
 
 M7 Studio is implemented awaiting live PostgreSQL/operator publication and
 manual browser/accessibility evidence.

@@ -78,6 +78,7 @@ pub(crate) struct ServeOptions {
     pub(crate) operator_issuer: Option<String>,
     pub(crate) operator_audience: Option<String>,
     pub(crate) environment: Option<Environment>,
+    pub(crate) game: crate::GameProfile,
 }
 
 pub(crate) enum ParsedStorage {
@@ -564,6 +565,7 @@ where
     let mut operator_issuer = None;
     let mut operator_audience = None;
     let mut environment = None;
+    let mut game = None;
     while let Some(argument) = arguments.next() {
         let option = argument
             .to_str()
@@ -634,10 +636,18 @@ where
                     .map_err(|_| "--environment must be staging or production".to_owned())?,
                 );
             }
+            "--game" if game.is_none() => {
+                game = Some(match next_unicode(&mut arguments, "--game")?.as_str() {
+                    "reference" => crate::GameProfile::Reference,
+                    "expedition" => crate::GameProfile::Expedition,
+                    _ => return Err("--game must be reference or expedition".to_owned()),
+                });
+            }
             "--operator-key-env"
             | "--operator-issuer"
             | "--operator-audience"
-            | "--environment" => {
+            | "--environment"
+            | "--game" => {
                 return Err("operator options may appear only once".to_owned());
             }
             _ => return Err("unknown serve option".to_owned()),
@@ -683,6 +693,7 @@ where
         operator_issuer,
         operator_audience,
         environment,
+        game: game.unwrap_or_default(),
     }))
 }
 
@@ -1022,6 +1033,9 @@ where
             );
             println!(
                 "worldwright-server: database and release workflows are implemented; status is not readiness"
+            );
+            println!(
+                "worldwright-server: reference and local-only expedition game profiles are implemented"
             );
             println!("worldwright-server: status is not a readiness probe");
             ExitCode::SUCCESS
@@ -1747,6 +1761,7 @@ fn serve_config(options: ServeOptions) -> Result<ServerConfig, String> {
         allowed_origin: options.allowed_origin,
         storage,
         allow_insecure_http: options.allow_insecure_http,
+        game: options.game,
         operator,
     })
 }
@@ -1808,10 +1823,10 @@ fn print_help() {
     println!("Worldwright authenticated multiplayer transport server");
     println!("Usage: worldwright-server <--help|--version|status|hash-password>");
     println!(
-        "       worldwright-server serve --content <path> --accounts <path> --origin <origin> [--bind <socket-address>] [--allow-insecure-http]"
+        "       worldwright-server serve --content <path> --accounts <path> --origin <origin> [--game <reference|expedition>] [--bind <socket-address>] [--allow-insecure-http]"
     );
     println!(
-        "       worldwright-server serve --database-url-env <ENV_NAME> --acquire-writer --origin <origin> [--bind <socket-address>] [--allow-insecure-http] [--operator-key-env <KEY_ENV> --operator-issuer <issuer> --operator-audience <audience> --environment <staging|production>]"
+        "       worldwright-server serve --database-url-env <ENV_NAME> --acquire-writer --origin <origin> [--game reference] [--bind <socket-address>] [--allow-insecure-http] [--operator-key-env <KEY_ENV> --operator-issuer <issuer> --operator-audience <audience> --environment <staging|production>]"
     );
     println!("       worldwright-server database migrate --database-url-env <ENV_NAME>");
     println!(
@@ -1880,6 +1895,47 @@ mod tests {
             Ok(Command::HashPassword)
         ));
         assert!(parse(args(&[])).is_err());
+    }
+
+    #[test]
+    fn serve_game_profile_is_explicit_and_bounded() {
+        let parsed = parse(args(&[
+            "serve",
+            "--content",
+            "world.json",
+            "--accounts",
+            "accounts.json",
+            "--origin",
+            "http://localhost",
+            "--allow-insecure-http",
+            "--game",
+            "expedition",
+        ]))
+        .unwrap();
+        assert!(matches!(
+            parsed,
+            Command::Serve(ServeOptions {
+                game: crate::GameProfile::Expedition,
+                ..
+            })
+        ));
+        for game in ["unknown", "Expedition"] {
+            assert!(
+                parse(args(&[
+                    "serve",
+                    "--content",
+                    "world.json",
+                    "--accounts",
+                    "accounts.json",
+                    "--origin",
+                    "http://localhost",
+                    "--allow-insecure-http",
+                    "--game",
+                    game,
+                ]))
+                .is_err()
+            );
+        }
     }
 
     #[test]

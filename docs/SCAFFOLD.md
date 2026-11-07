@@ -42,7 +42,8 @@ The local runtime supports Look/Move/Say, authoritative attachments, and atomic 
 | `worldwright-persistence` | `crates/worldwright-persistence/src/lib.rs` | PostgreSQL durable gameplay and release/publication adapter; DB tests remain ignored |
 | `worldwright-release` | `crates/worldwright-release/src/lib.rs` | Deterministic bounded `.wwr` packaging, inspection, and verification |
 | `worldwright-sdk` | `crates/worldwright-sdk/src/lib.rs` | Provisional core/content re-exports and status |
-| `worldwright-testkit` | `crates/worldwright-testkit/src/lib.rs` | Deterministic clock/RNG/world fixtures and tests; `ScenarioStub` still refuses execution |
+| `worldwright-expedition` | `crates/worldwright-expedition/src/lib.rs` | Independent expedition GameModule and namespaced actions |
+| `worldwright-testkit` | `crates/worldwright-testkit/src/lib.rs` | Deterministic clock/RNG fixtures and bounded RuntimeScenario execution |
 
 The server's `src/application.rs` is the implemented local network-service composition root; default/no-command startup remains a usage failure, while `serve` binds only loopback. The separate core `runtime` module executes local Look/Move/Say commands with attachment and staged-plan validation; it returns in-memory results, not durable receipts. Testkit supplies the real two-room fixture. See [RUNTIME.md](RUNTIME.md), [SERVER.md](SERVER.md), and [PROTOCOL_V1.md](PROTOCOL_V1.md).
 

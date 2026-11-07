@@ -203,8 +203,11 @@
       send(socket, { type: "command", request_id: requestId, command: { type: "move", exit: value.slice(3).trim() } });
     } else if (value.startsWith("say ")) {
       send(socket, { type: "command", request_id: requestId, command: { type: "say", text: value.slice(4) } });
+    } else if (value.startsWith("action ")) {
+      const action = value.slice(7).trim();
+      send(socket, { type: "command", request_id: requestId, command: { type: "game_action", action, argument: null } });
     } else {
-      print("Commands: look, l, go <exit-label>, say <text>");
+      print("Commands: look, l, go <exit-label>, say <text>, action <namespaced-id>, inventory, claim welcome, give <item-id> <username>");
     }
     commandInput.value = "";
   });

@@ -14,6 +14,7 @@ path = "src/main.rs"
 worldwright-content.workspace = true
 worldwright-release.workspace = true
 worldwright-sdk.workspace = true
+worldwright-testkit.workspace = true
 serde_json.workspace = true
 getrandom.workspace = true
 

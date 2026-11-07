@@ -22,7 +22,7 @@ impl WorldRuntime {
             return Err(WorldError::WrongWorld);
         }
         self.state.validate_actor(&envelope.actor)?;
-        if self.state.last_execution.is_some_and(|last| now < last) {
+        if self.state.last_observed.is_some_and(|last| now < last) {
             return Err(WorldError::ClockRegression);
         }
         if let CommandIntent::Move { destination } = &envelope.intent {
@@ -83,7 +83,76 @@ impl WorldRuntime {
                         });
                     }
                 }
-                Effect::TransferItem { .. } | Effect::Schedule { .. } => {
+                Effect::AdjustCounter {
+                    character,
+                    key,
+                    delta,
+                } => {
+                    if character != envelope.actor.character
+                        || delta == 0
+                        || !matches!(
+                            envelope.intent,
+                            CommandIntent::GameAction { .. } | CommandIntent::Move { .. }
+                        )
+                    {
+                        return Err(WorldError::IntentViolation);
+                    }
+                    let before = staged
+                        .counters
+                        .get(&(character, key.clone()))
+                        .copied()
+                        .unwrap_or(0);
+                    let after = if delta.is_negative() {
+                        before.checked_sub(delta.unsigned_abs())
+                    } else {
+                        before.checked_add(delta as u64)
+                    }
+                    .ok_or(WorldError::CounterLimit)?;
+                    if after > super::MAX_COUNTER_VALUE {
+                        return Err(WorldError::CounterLimit);
+                    }
+                    staged.counters.insert((character, key.clone()), after);
+                    events.push(DomainEvent::CounterAdjusted {
+                        character,
+                        key,
+                        before,
+                        after,
+                    });
+                }
+                Effect::Schedule { at, action } => match action {
+                    crate::effect::ScheduledAction::WakeCharacter(_) => {
+                        return Err(WorldError::UnsupportedEffect);
+                    }
+                    crate::effect::ScheduledAction::AdjustCounter {
+                        character,
+                        key,
+                        delta,
+                    } if character == envelope.actor.character && delta != 0 && at > now => {
+                        if !matches!(envelope.intent, CommandIntent::GameAction { .. }) {
+                            return Err(WorldError::IntentViolation);
+                        }
+                        staged
+                            .scheduler
+                            .schedule(
+                                at,
+                                crate::effect::ScheduledAction::AdjustCounter {
+                                    character,
+                                    key: key.clone(),
+                                    delta,
+                                },
+                            )
+                            .map_err(|e| match e {
+                                crate::scheduler::ScheduleError::Full => WorldError::ScheduleLimit,
+                                crate::scheduler::ScheduleError::SequenceExhausted => {
+                                    WorldError::CounterExhausted
+                                }
+                                _ => WorldError::ScheduleClock,
+                            })?;
+                        events.push(DomainEvent::CounterAdjustmentScheduled { character, key, at });
+                    }
+                    _ => return Err(WorldError::UnsupportedEffect),
+                },
+                Effect::TransferItem { .. } => {
                     return Err(WorldError::UnsupportedEffect);
                 }
             }
@@ -93,6 +162,7 @@ impl WorldRuntime {
         }
         staged.revision = revision;
         staged.last_execution = Some(now);
+        staged.last_observed = Some(now);
         let result = ExecutionResult {
             operation: envelope.operation,
             world: staged.id,

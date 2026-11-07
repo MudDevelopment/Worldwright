@@ -20,6 +20,7 @@ impl BoundServer {
         crate::cli::validate_origin(&config.allowed_origin, config.allow_insecure_http)
             .map_err(|_| ServerError::Configuration("origin is not valid for this mode"))?;
         let operator_config = config.operator;
+        let game = config.game;
         let world_id = worldwright_core::ids::WorldId::from_u128(1)
             .map_err(|_| ServerError::startup("world identity failed"))?;
         let mut operator_store = None;
@@ -43,6 +44,11 @@ impl BoundServer {
                 (content, auth, registrations, None, None)
             }
             StorageConfig::Postgres { database_url } => {
+                if game == crate::GameProfile::Expedition {
+                    return Err(ServerError::Configuration(
+                        "expedition durable counters are not implemented",
+                    ));
+                }
                 let store = worldwright_persistence::PostgresStore::connect(&database_url)
                     .await
                     .map_err(|_| ServerError::startup("durable storage connection failed"))?;
@@ -106,7 +112,8 @@ impl BoundServer {
                 )
             }
         };
-        let world = crate::world::WorldHandle::new_with_durable(content, registrations, durable)?;
+        let world =
+            crate::world::WorldHandle::new_with_profile(content, registrations, durable, game)?;
         let lifecycle = crate::lifecycle::LifecycleController::new();
         let operator = operator_config.map(|config| {
             Arc::new(crate::operator::OperatorService {
@@ -231,6 +238,32 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn expedition_profile_refuses_postgresql_until_game_state_is_durable() {
+        let result = BoundServer::bind(ServerConfig {
+            bind: SocketAddr::from(([127, 0, 0, 1], 0)),
+            allowed_origin: "http://localhost".to_owned(),
+            storage: StorageConfig::Postgres {
+                database_url: "postgresql://unused".to_owned(),
+            },
+            operator: None,
+            allow_insecure_http: true,
+            game: crate::GameProfile::Expedition,
+        })
+        .await;
+        let error = match result {
+            Err(error) => error,
+            Ok(server) => {
+                server.world.shutdown().await;
+                panic!("expedition PostgreSQL unexpectedly started")
+            }
+        };
+        assert!(matches!(
+            error,
+            ServerError::Configuration("expedition durable counters are not implemented")
+        ));
+    }
+
     use axum::{
         Router,
         body::Body,
@@ -317,6 +350,7 @@ mod tests {
             },
             operator: None,
             allow_insecure_http: true,
+            game: crate::GameProfile::Reference,
         })
         .await
         .expect("bind");
@@ -417,6 +451,7 @@ mod tests {
                 },
                 operator: None,
                 allow_insecure_http: true,
+                game: crate::GameProfile::Reference,
             })
             .await
             .expect("bind");

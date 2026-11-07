@@ -68,6 +68,7 @@ impl Rule for ReferenceRule {
                     text: text.clone(),
                 })?;
             }
+            CommandIntent::GameAction { .. } => return Err(RuleError::Rejected),
         }
         Ok(plan)
     }

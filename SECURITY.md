@@ -321,6 +321,16 @@ A valid digest establishes integrity against an expected value; it does not by i
 
 The initial SDK permits **trusted** Rust game modules. It does not offer a security sandbox for arbitrary player or builder code.
 
+## M8 toolkit controls
+
+Generic GameAction IDs, actor counters, and delayed adjustments are bounded and
+validated by the owner. Expedition gameplay randomness is injected gameplay
+randomness, not authentication or security randomness. Native game modules are
+trusted process code and are not sandboxed. Generated path dependencies and
+templates carry no license grant. Expedition durable mode fails closed before
+database connection until counters, schedules, receipts, and reconstruction
+are implemented.
+
 Any future scripting/plugin system requires an approved design for capabilities, host access, memory/instruction/time budgets, recursion, I/O, cancellation, scheduling, upgrades, and persistence. A language interpreter or WebAssembly runtime alone does not establish a complete sandbox.
 
 Do not execute imported MUSHcode, MUF, MPI, LPC, or MOO behavior in production simply because the surrounding content file parsed successfully. See [DEFINITIONS.md](DEFINITIONS.md#compatibility-and-migration).

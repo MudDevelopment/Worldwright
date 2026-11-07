@@ -2,12 +2,14 @@ use super::{MAX_CHARACTERS, MAX_EXITS_PER_ROOM, MAX_ROOMS, WorldError, WorldRunt
 use crate::{
     command::{ActorContext, ConnectionGeneration, PlayerText},
     effect::ItemLocation,
-    ids::{AccountId, CharacterId, ConnectionId, ItemId, RoomId, WorldId},
+    effect::ScheduledAction,
+    ids::{AccountId, CharacterId, ConnectionId, DefinitionId, ItemId, RoomId, WorldId},
     rule::RuleRegistry,
+    scheduler::Scheduler,
     time::Tick,
     world::{RoomDescription, WorldView},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RoomRecord {
@@ -28,6 +30,9 @@ pub(super) struct State {
     pub(super) generation: u64,
     pub(super) revision: u64,
     pub(super) last_execution: Option<Tick>,
+    pub(super) last_observed: Option<Tick>,
+    pub(super) counters: BTreeMap<(CharacterId, DefinitionId), u64>,
+    pub(super) scheduler: Scheduler<ScheduledAction>,
 }
 
 /// Trusted, programmatic setup. No content format or untrusted loader is implied.
@@ -45,6 +50,9 @@ impl WorldBuilder {
                 generation: 0,
                 revision: 0,
                 last_execution: None,
+                last_observed: None,
+                counters: BTreeMap::new(),
+                scheduler: Scheduler::new(super::MAX_SCHEDULED_ACTIONS).expect("constant capacity"),
             },
         }
     }
@@ -119,6 +127,26 @@ impl WorldBuilder {
             state: self.state,
             rules,
         })
+    }
+    pub fn set_character_counter(
+        &mut self,
+        character: CharacterId,
+        key: DefinitionId,
+        value: u64,
+    ) -> Result<(), WorldError> {
+        if !self.state.characters.contains_key(&character) {
+            return Err(WorldError::UnknownCharacter);
+        }
+        if value > super::MAX_COUNTER_VALUE {
+            return Err(WorldError::CounterLimit);
+        }
+        match self.state.counters.entry((character, key)) {
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(WorldError::DuplicateCounter),
+        }
     }
 }
 
@@ -249,5 +277,11 @@ impl WorldView for ScopedView<'_> {
     }
     fn can_traverse(&self, from: RoomId, to: RoomId) -> bool {
         self.character_room(self.actor) == Some(from) && self.state.can_traverse(from, to)
+    }
+    fn character_counter(&self, character: CharacterId, key: DefinitionId) -> Option<u64> {
+        if character != self.actor {
+            return None;
+        }
+        self.state.counters.get(&(character, key)).copied()
     }
 }

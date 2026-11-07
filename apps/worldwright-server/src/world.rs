@@ -296,6 +296,7 @@ struct Owner {
     next_operation: u128,
     started: Instant,
     connected_clients: Arc<AtomicU64>,
+    random: OwnerRandom,
 }
 
 impl WorldHandle {
@@ -327,6 +328,20 @@ impl WorldHandle {
         content: ValidatedWorldContent,
         registrations: Vec<crate::auth::CharacterRegistration>,
         durable: Option<DurableContext>,
+    ) -> Result<Self, crate::ServerError> {
+        Self::new_with_profile(
+            content,
+            registrations,
+            durable,
+            crate::GameProfile::Reference,
+        )
+    }
+
+    pub(crate) fn new_with_profile(
+        content: ValidatedWorldContent,
+        registrations: Vec<crate::auth::CharacterRegistration>,
+        durable: Option<DurableContext>,
+        game: crate::GameProfile,
     ) -> Result<Self, crate::ServerError> {
         let world = WorldId::from_u128(1)
             .map_err(|_| crate::ServerError::startup("world ID initialization failed"))?;
@@ -364,11 +379,30 @@ impl WorldHandle {
                 .map_err(|_| {
                     crate::ServerError::startup("world character initialization failed")
                 })?;
+            if game == crate::GameProfile::Expedition {
+                worldwright_expedition::initialize_character(&mut builder, principal.character)
+                    .map_err(|_| {
+                        crate::ServerError::startup("expedition character initialization failed")
+                    })?;
+            }
             names.insert(principal.character, principal.character_name);
         }
         let mut rules = RuleRegistry::new();
-        worldwright_core::game::GameModule::register_rules(&ReferenceGame, &mut rules)
-            .map_err(|_| crate::ServerError::startup("reference game registration failed"))?;
+        match game {
+            crate::GameProfile::Reference => {
+                worldwright_core::game::GameModule::register_rules(&ReferenceGame, &mut rules)
+                    .map_err(|_| {
+                        crate::ServerError::startup("reference game registration failed")
+                    })?;
+            }
+            crate::GameProfile::Expedition => {
+                worldwright_core::game::GameModule::register_rules(
+                    &worldwright_expedition::ExpeditionGame,
+                    &mut rules,
+                )
+                .map_err(|_| crate::ServerError::startup("expedition game registration failed"))?;
+            }
+        }
         let runtime = builder
             .build(rules)
             .map_err(|_| crate::ServerError::startup("world runtime initialization failed"))?;
@@ -378,6 +412,12 @@ impl WorldHandle {
         let accepting = Arc::new(AtomicBool::new(true));
         let connected_clients = Arc::new(AtomicU64::new(0));
         let admission_rejections = Arc::new(AtomicU64::new(0));
+        let random = match game {
+            crate::GameProfile::Reference => OwnerRandom::Unavailable,
+            crate::GameProfile::Expedition => OwnerRandom::seeded().ok_or_else(|| {
+                crate::ServerError::startup("gameplay random initialization failed")
+            })?,
+        };
         let owner = Owner {
             runtime,
             lookup,
@@ -391,6 +431,7 @@ impl WorldHandle {
             next_operation: 1,
             started: Instant::now(),
             connected_clients: connected_clients.clone(),
+            random,
         };
         tokio::spawn(owner.run());
         Ok(Self {
@@ -1043,6 +1084,26 @@ impl Owner {
                 }
                 Ok(())
             }
+            ClientCommand::GameAction { action, argument } => {
+                let action = action.parse().map_err(|_| WorldError::IntentViolation)?;
+                let argument = argument
+                    .as_deref()
+                    .map(PlayerText::new)
+                    .transpose()
+                    .map_err(|_| WorldError::IntentViolation)?;
+                let result = self.execute(actor, CommandIntent::GameAction { action, argument })?;
+                self.deliver_result(actor, &result, OutputKind::System, Some(request_id));
+                if self.is_current(actor) {
+                    let _ = self.send_to_actor(
+                        actor,
+                        ServerMessage::CommandResult {
+                            request_id: request_id.to_owned(),
+                            revision: result.revision,
+                        },
+                    );
+                }
+                Ok(())
+            }
             ClientCommand::Inventory
             | ClientCommand::ClaimReward { .. }
             | ClientCommand::TransferItem { .. } => Err(WorldError::IntentViolation.into()),
@@ -1098,6 +1159,8 @@ impl Owner {
             .ok_or(WorldError::CounterExhausted)?;
         let elapsed = u64::try_from(self.started.elapsed().as_millis())
             .map_err(|_| WorldError::CounterExhausted)?;
+        let now = Tick::from_millis(elapsed);
+        self.runtime.advance(now)?;
         self.runtime.execute(
             &CommandEnvelope {
                 operation,
@@ -1105,8 +1168,8 @@ impl Owner {
                 actor,
                 intent,
             },
-            Tick::from_millis(elapsed),
-            &mut NoRandom,
+            now,
+            &mut self.random,
         )
     }
 
@@ -1284,10 +1347,33 @@ fn map_world_error(error: WorldError) -> (ErrorCode, &'static str, bool) {
     }
 }
 
-struct NoRandom;
-impl RandomSource for NoRandom {
+enum OwnerRandom {
+    Unavailable,
+    Seeded(u64),
+}
+
+impl OwnerRandom {
+    fn seeded() -> Option<Self> {
+        let mut bytes = [0u8; 8];
+        getrandom::fill(&mut bytes).ok()?;
+        let seed = u64::from_be_bytes(bytes);
+        Some(Self::Seeded(if seed == 0 { 1 } else { seed }))
+    }
+}
+
+impl RandomSource for OwnerRandom {
     fn next_u64(&mut self) -> Result<u64, RandomExhausted> {
-        Err(RandomExhausted)
+        match self {
+            Self::Unavailable => Err(RandomExhausted),
+            Self::Seeded(state) => {
+                let mut value = *state;
+                value ^= value >> 12;
+                value ^= value << 25;
+                value ^= value >> 27;
+                *state = value;
+                Ok(value.wrapping_mul(0x2545_f491_4f6c_dd1d))
+            }
+        }
     }
 }
 
@@ -1316,6 +1402,28 @@ mod tests {
         let bob = principal(2, 2, "Bob");
         let service = WorldHandle::new(content, vec![alice.clone(), bob.clone()]).expect("world");
         (service, alice, bob)
+    }
+
+    fn expedition_service() -> (WorldHandle, crate::auth::Principal) {
+        let content = load_bytes(
+            "expedition-test",
+            include_bytes!("../../../examples/expedition/world.json"),
+            Default::default(),
+        )
+        .expect("content");
+        let alice = principal(1, 1, "Alice");
+        let registrations = vec![crate::auth::CharacterRegistration {
+            principal: alice.clone(),
+            room_definition: None,
+        }];
+        let service = WorldHandle::new_with_profile(
+            content,
+            registrations,
+            None,
+            crate::GameProfile::Expedition,
+        )
+        .expect("expedition world");
+        (service, alice)
     }
 
     async fn initial(
@@ -1416,7 +1524,7 @@ mod tests {
 
     #[test]
     fn random_source_is_exhausted() {
-        assert!(NoRandom.next_u64().is_err());
+        assert!(OwnerRandom::Unavailable.next_u64().is_err());
     }
 
     #[tokio::test]
@@ -1452,6 +1560,43 @@ mod tests {
         assert!(matches!(
             alice_out.recv().await,
             Some(Outbound::Message(ServerMessage::CommandResult { .. }))
+        ));
+        service.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn generic_game_action_runs_through_expedition_owner() {
+        let (service, alice) = expedition_service();
+        let (actor, mut output, _) = initial(&service, alice, 81, "expedition-token").await;
+        while output.try_recv().is_ok() {}
+
+        service
+            .submit(
+                actor,
+                "rest-1".to_owned(),
+                ClientCommand::GameAction {
+                    action: worldwright_expedition::REST_ACTION.to_owned(),
+                    argument: None,
+                },
+            )
+            .expect("submit");
+        assert!(matches!(
+            output.recv().await,
+            Some(Outbound::Message(ServerMessage::Accepted { request_id }))
+                if request_id == "rest-1"
+        ));
+        assert!(matches!(
+            output.recv().await,
+            Some(Outbound::Message(ServerMessage::Output {
+                request_id: Some(request_id),
+                kind: OutputKind::System,
+                ..
+            })) if request_id == "rest-1"
+        ));
+        assert!(matches!(
+            output.recv().await,
+            Some(Outbound::Message(ServerMessage::CommandResult { request_id, .. }))
+                if request_id == "rest-1"
         ));
         service.shutdown().await;
     }

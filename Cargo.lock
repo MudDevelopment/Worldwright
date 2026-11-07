@@ -2163,6 +2163,7 @@ dependencies = [
  "worldwright-content",
  "worldwright-release",
  "worldwright-sdk",
+ "worldwright-testkit",
 ]
 
 [[package]]
@@ -2191,6 +2192,14 @@ dependencies = [
 [[package]]
 name = "worldwright-core"
 version = "0.1.0-dev.0"
+
+[[package]]
+name = "worldwright-expedition"
+version = "0.1.0-dev.0"
+dependencies = [
+ "worldwright-core",
+ "worldwright-sdk",
+]
 
 [[package]]
 name = "worldwright-operations"
@@ -2226,6 +2235,7 @@ version = "0.1.0-dev.0"
 dependencies = [
  "serde",
  "serde_json",
+ "worldwright-core",
 ]
 
 [[package]]
@@ -2266,6 +2276,7 @@ dependencies = [
  "tower",
  "worldwright-content",
  "worldwright-core",
+ "worldwright-expedition",
  "worldwright-operations",
  "worldwright-persistence",
  "worldwright-protocol",
@@ -2297,6 +2308,7 @@ version = "0.1.0-dev.0"
 dependencies = [
  "worldwright-content",
  "worldwright-core",
+ "worldwright-expedition",
  "worldwright-sdk",
 ]
 

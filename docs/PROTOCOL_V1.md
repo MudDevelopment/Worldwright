@@ -40,6 +40,7 @@ Client messages are unwrapped text JSON objects:
 {"type":"command","request_id":"look-1","command":{"type":"look"}}
 {"type":"command","request_id":"move-1","command":{"type":"move","exit":"north"}}
 {"type":"command","request_id":"say-1","command":{"type":"say","text":"hello"}}
+{"type":"command","request_id":"rest-1","command":{"type":"game_action","action":"expedition:actions.rest","argument":null}}
 {"type":"ping","nonce":42}
 ```
 
@@ -88,4 +89,10 @@ The epoch and sequence detect a gap or wrong stream, but the server provides no 
 
 ## Compatibility policy
 
-This is protocol v1 for the current development slice. `STATUS` reports `protocol v1 implemented; transport sessions are process-local`. Stable protocol/SDK compatibility windows, deprecation policy, and a public client promise remain open decisions. Later changes must preserve the explicit bounds and ownership boundaries or update this contract and its negative tests together.
+This is protocol v1 for the current development slice. `game_action` is an
+additive optional client command: its action is a canonical namespaced
+`DefinitionId`; its optional argument follows the 4096-byte `PlayerText`
+contract. Core and protocol do not recognize game names. Existing clients do
+not receive a new server shape, while old servers reject the unknown command.
+SDK source compatibility uses the current-plus-previous-minor M8 policy; this
+does not create a production client-support promise.

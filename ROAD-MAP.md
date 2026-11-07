@@ -1,7 +1,8 @@
 ## Current M7 status
 
 M6 and M7 are implemented awaiting live PostgreSQL/recovery/operator evidence
-and manual browser/accessibility evidence. M8 is the next planned increment.
+and manual browser/accessibility evidence. M8 is implemented with Windows-local
+evidence and explicit durable-expedition and broader-capacity gaps.
 Studio is a real loopback browser client, not a scaffold or direct database
 client. See [docs/STUDIO_V1.md](docs/STUDIO_V1.md) and
 [M7 verification](docs/verification/milestone-7-report.md).
@@ -83,7 +84,7 @@ The server, persistence, release, protocol, local CLI, and Studio slices are
 implemented. M4 and M5 are implemented awaiting live PostgreSQL verification.
 M6 is implemented awaiting live PostgreSQL and recovery execution. M7 is
 implemented awaiting live PostgreSQL, operator publication, and manual browser
-accessibility evidence. M8 is the next dependency-ordered planned increment.
+accessibility evidence. M8 is implemented with Windows-local evidence.
 
 ### What must not be inferred from the baseline
 
@@ -123,7 +124,7 @@ flowchart LR
     classDef awaiting fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:3px
     class M4,M5 awaiting
     class M7 awaiting
-    class M8 planned
+    class M8 awaiting
 ```
 
 | Visual status | Meaning | Required reading |
@@ -1005,7 +1006,7 @@ The demonstration must include artifact tampering, stale publication requests, p
 
 **Status:** Implemented awaiting live PostgreSQL and recovery execution. The
 implementation work packages are checked; the live exit gate remains pending.
-M7 is implemented awaiting live evidence; M8 is the next planned gray increment. Production activation is permitted only
+M7 is implemented awaiting live evidence; M8 is implemented with local evidence. Production activation is permitted only
 through auth-v1 request, separate review, and current MFA-backed authorization.
 
 ### Goal and entry criteria
@@ -1268,7 +1269,17 @@ The end-to-end demonstration includes a validation error, a corrected reference,
 
 ## Milestone 8 — Toolkit Maturity
 
-**Status:** Planned.
+**Status:** Implemented with Windows-local evidence; durable expedition state,
+broader network/database capacity, Linux/hosted CI, and deployment remain open.
+
+The selected expedition game now exercises generic namespaced actions,
+actor-scoped counters, injected randomness, turn encounters, progression, and
+transactional delayed recovery through the existing owner and protocol. SDK v1
+publishes the current-plus-previous-minor/one-minor-deprecation policy;
+Testkit has a bounded real scenario runner; minimal and expedition templates
+are generated and tested; schema-v1 migration has dry-run, backup, and
+create-new output; and a release-profile 100-client runtime baseline is
+recorded. See `docs/TOOLKIT_V1.md` for reuse and gap details.
 
 ### Goal
 
@@ -1425,7 +1436,12 @@ Set retention for receipts, required audit, chat if any is ever retained, accoun
 
 **Completion evidence:** retention schedule, cleanup jobs, access control, deletion/export rules where applicable, and tests proving cleanup does not remove required recovery facts prematurely.
 
-### D06 — Compatibility and deprecation
+### D06 - Compatibility and deprecation
+
+**M8 decision:** support the current and immediately previous `0.x` SDK minor
+once both exist, with one supported minor of deprecation before removal except
+urgent security/correctness changes. Protocol/content/database versions retain
+their independent matrices; currently only version 1 exists.
 
 Identify supported protocol versions, SDK releases, content schema versions, and minimum client behavior. Decide rejection messages, migration tools, notification windows, and security-driven exceptions.
 
@@ -1433,7 +1449,12 @@ Identify supported protocol versions, SDK releases, content schema versions, and
 
 **Completion evidence:** documented version matrix, compatibility fixtures, and a tested deprecation/upgrade path.
 
-### D07 — Service ownership and beta capacity
+### D07 - Service ownership and beta capacity
+
+**Partial M8 decision:** 100 clients is the approved reproducible development
+workload objective. It is not supported-beta capacity. Service ownership,
+support, vulnerability reporting, network/database headroom, and production
+capacity remain owner decisions.
 
 Assign operational ownership, support coverage, escalation, vulnerability reporting, release approval, incident command, and capacity goals. Define what “supported beta” means in availability, user count/workload, recovery, and response expectations.
 
@@ -1617,6 +1638,6 @@ Together, these scenarios define the intended progression: trustworthy in-memory
 M6 and M7 are implemented awaiting live PostgreSQL/recovery/operator
 publication evidence and manual browser/accessibility evidence. Studio is a
 real loopback browser client with an append-only workspace, not a scaffold or
-direct PostgreSQL client. M8 is next planned. See
+direct PostgreSQL client. M8 is implemented with local evidence. See
 [docs/STUDIO_V1.md](docs/STUDIO_V1.md) and
 [docs/verification/milestone-7-report.md](docs/verification/milestone-7-report.md).

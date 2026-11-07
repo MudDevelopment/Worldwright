@@ -2,7 +2,7 @@
 
 use crate::{
     command::PlayerText,
-    ids::{CharacterId, ItemId, RoomId},
+    ids::{CharacterId, DefinitionId, ItemId, RoomId},
     time::Tick,
 };
 use std::{error::Error, fmt};
@@ -23,10 +23,20 @@ pub enum Audience {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduledAction {
     WakeCharacter(CharacterId),
+    AdjustCounter {
+        character: CharacterId,
+        key: DefinitionId,
+        delta: i64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
+    AdjustCounter {
+        character: CharacterId,
+        key: DefinitionId,
+        delta: i64,
+    },
     MoveCharacter {
         character: CharacterId,
         destination: RoomId,
@@ -97,5 +107,16 @@ pub enum DomainEvent {
         item: ItemId,
         from: ItemLocation,
         to: ItemLocation,
+    },
+    CounterAdjusted {
+        character: CharacterId,
+        key: DefinitionId,
+        before: u64,
+        after: u64,
+    },
+    CounterAdjustmentScheduled {
+        character: CharacterId,
+        key: DefinitionId,
+        at: Tick,
     },
 }

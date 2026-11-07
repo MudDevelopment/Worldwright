@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 worldwright-core.workspace = true
 worldwright-content.workspace = true
+worldwright-expedition.workspace = true
 worldwright-protocol.workspace = true
 worldwright-persistence.workspace = true
 worldwright-release.workspace = true

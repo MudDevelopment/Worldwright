@@ -9,6 +9,7 @@ description = "Worldwright transport protocol DTOs and validation"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+worldwright-core.workspace = true
 
 [lints]
 workspace = true

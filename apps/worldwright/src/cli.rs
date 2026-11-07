@@ -9,7 +9,27 @@ pub enum Command {
     Play(PathBuf),
     Version,
     Status,
+    Compatibility {
+        json: bool,
+    },
+    Benchmark {
+        clients: usize,
+        commands_per_client: usize,
+        json: bool,
+    },
+    ProjectNew {
+        path: PathBuf,
+        name: String,
+        template: String,
+        dry_run: bool,
+    },
     Validate(PathBuf),
+    ContentMigrate {
+        input: PathBuf,
+        output: PathBuf,
+        backup: Option<PathBuf>,
+        dry_run: bool,
+    },
     ContentPackage {
         content: PathBuf,
         output: PathBuf,
@@ -71,11 +91,22 @@ fn parse_values(values: &[OsString]) -> Result<Command, String> {
         }
         1 if is_word(values, 0, "status") => Ok(Command::Status),
         _ if is_word(values, 0, "content") => parse_content(values),
+        _ if is_word(values, 0, "compatibility") => {
+            if values.len() == 1 {
+                Ok(Command::Compatibility { json: false })
+            } else if values.len() == 2 && is_word(values, 1, "--json") {
+                Ok(Command::Compatibility { json: true })
+            } else {
+                Err("expected compatibility [--json]".into())
+            }
+        }
+        _ if is_word(values, 0, "benchmark") => parse_benchmark(values),
+        _ if is_word(values, 0, "project") => parse_project(values),
         _ if is_word(values, 0, "play") => parse_play(values),
         _ if is_word(values, 0, "preview") => parse_preview(values),
         _ if is_word(values, 0, "__preview-worker") => parse_preview_worker(values),
         _ => Err(
-            "expected --help, --version, status, content validate/package/inspect, play, or preview"
+            "expected --help, --version, status, compatibility, benchmark, project, content, play, or preview"
                 .into(),
         ),
     }
@@ -108,8 +139,132 @@ fn parse_content(values: &[OsString]) -> Result<Command, String> {
             Ok(Command::ContentHelp)
         }
         "inspect" => parse_inspect(values),
-        _ => Err("expected content validate, package, or inspect".into()),
+        "migrate" => parse_migrate(values),
+        _ => Err("expected content validate, package, inspect, or migrate".into()),
     }
+}
+
+fn parse_migrate(values: &[OsString]) -> Result<Command, String> {
+    if values.len() < 5 || values[2].as_os_str().is_empty() {
+        return Err(
+            "expected content migrate <input> --output <path> [--backup <path>] [--dry-run]".into(),
+        );
+    }
+    let input = values[2].clone().into();
+    let mut output = None;
+    let mut backup = None;
+    let mut dry_run = false;
+    let mut index = 3;
+    while index < values.len() {
+        match word(values, index)? {
+            "--output" if output.is_none() => {
+                output = Some(
+                    values
+                        .get(index + 1)
+                        .ok_or("missing --output value")?
+                        .clone()
+                        .into(),
+                );
+                index += 2;
+            }
+            "--dry-run" if !dry_run => {
+                dry_run = true;
+                index += 1;
+            }
+            "--backup" if backup.is_none() => {
+                backup = Some(
+                    values
+                        .get(index + 1)
+                        .ok_or("missing --backup value")?
+                        .clone()
+                        .into(),
+                );
+                index += 2;
+            }
+            option => return Err(format!("invalid or duplicate migrate option {option}")),
+        }
+    }
+    Ok(Command::ContentMigrate {
+        input,
+        output: output.ok_or("missing --output")?,
+        backup,
+        dry_run,
+    })
+}
+
+fn parse_benchmark(values: &[OsString]) -> Result<Command, String> {
+    let mut clients = 100usize;
+    let mut commands_per_client = 10usize;
+    let mut json = false;
+    let mut index = 1;
+    while index < values.len() {
+        match word(values, index)? {
+            "--clients" => {
+                clients = word(values, index + 1)?
+                    .parse()
+                    .map_err(|_| "invalid --clients".to_owned())?;
+                index += 2;
+            }
+            "--commands-per-client" => {
+                commands_per_client = word(values, index + 1)?
+                    .parse()
+                    .map_err(|_| "invalid --commands-per-client".to_owned())?;
+                index += 2;
+            }
+            "--json" if !json => {
+                json = true;
+                index += 1;
+            }
+            option => return Err(format!("invalid benchmark option {option}")),
+        }
+    }
+    Ok(Command::Benchmark {
+        clients,
+        commands_per_client,
+        json,
+    })
+}
+
+fn parse_project(values: &[OsString]) -> Result<Command, String> {
+    if values.len() < 5 || !is_word(values, 1, "new") {
+        return Err(
+            "expected project new <path> --name <package> [--template minimal|expedition] [--dry-run]"
+                .into(),
+        );
+    }
+    let path = values[2].clone().into();
+    let mut name = None;
+    let mut template = "minimal".to_owned();
+    let mut template_seen = false;
+    let mut dry_run = false;
+    let mut index = 3;
+    while index < values.len() {
+        match word(values, index)? {
+            "--name" if name.is_none() => {
+                name = Some(word(values, index + 1)?.to_owned());
+                index += 2;
+            }
+            "--template" if !template_seen => {
+                template = word(values, index + 1)?.to_owned();
+                template_seen = true;
+                index += 2;
+            }
+            "--dry-run" if !dry_run => {
+                dry_run = true;
+                index += 1;
+            }
+            option => return Err(format!("invalid or duplicate project option {option}")),
+        }
+    }
+    if !matches!(template.as_str(), "minimal" | "expedition") {
+        return Err("template must be minimal or expedition".into());
+    }
+    Ok(Command::ProjectNew {
+        path,
+        name: name.ok_or("missing --name")?,
+        template,
+        dry_run,
+    })
 }
 
 fn parse_play(values: &[OsString]) -> Result<Command, String> {

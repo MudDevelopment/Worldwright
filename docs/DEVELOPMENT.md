@@ -117,6 +117,21 @@ For GitHub Enterprise or restricted organizational hosting, confirm approved run
 
 ## Local Evidence and Limits
 
+Focused M8 commands:
+
+```text
+cargo run -p worldwright -- content validate examples/expedition/world.json
+cargo run -p worldwright -- project new .\expedition --name expedition --template expedition
+cargo run -p worldwright -- content migrate examples/expedition/world.json --output .\tmp-world.json --dry-run
+cargo run -p worldwright -- benchmark --clients 100 --commands-per-client 100 --json
+cargo test -p worldwright-core -p worldwright-expedition -p worldwright-testkit --locked --offline
+```
+
+The compatibility window is current plus previous 0.x minor with one-minor
+deprecation. Generated-template checks and the benchmark are Windows-local
+evidence; durable expedition, Linux, hosted CI, deployment, and beta capacity
+remain open.
+
 The content increment was checked using temporary **Rust 1.85.1 Linux** tools from third-party npm repackages, with install scripts disabled. crates.io DNS was unavailable; verification used matching upstream GitHub source tags in a temporary source replacement, not registry tarballs. The lockfile retains normal registry identities/checksums. No sandbox-specific configuration, source replacements, toolchain, or dependency snapshots ship in the archive; captured logs retain their original paths. Re-run bootstrap/check with approved Rust and registry artifacts before release acceptance; Windows/hosted CI are not claimed.
 
 See [VERIFICATION.md](VERIFICATION.md) for exact results. Use the approved pinned toolchain and both remote CI jobs for the final acceptance gate.

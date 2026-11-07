@@ -4,7 +4,7 @@ use crate::{
     NotImplemented,
     command::PlayerText,
     effect::ItemLocation,
-    ids::{CharacterId, ItemId, RoomId, WorldId},
+    ids::{CharacterId, DefinitionId, ItemId, RoomId, WorldId},
 };
 
 /// A rule receives only queries, never mutable world state or database access.
@@ -21,6 +21,9 @@ pub trait WorldView {
     }
     fn can_traverse(&self, _from: RoomId, _to: RoomId) -> bool {
         false
+    }
+    fn character_counter(&self, _character: CharacterId, _key: DefinitionId) -> Option<u64> {
+        None
     }
 }
 

@@ -38,11 +38,24 @@ pub enum ClientMessage {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientCommand {
     Look,
-    Move { exit: String },
-    Say { text: String },
+    Move {
+        exit: String,
+    },
+    Say {
+        text: String,
+    },
+    GameAction {
+        action: String,
+        argument: Option<String>,
+    },
     Inventory,
-    ClaimReward { reward: String },
-    TransferItem { item_id: String, recipient: String },
+    ClaimReward {
+        reward: String,
+    },
+    TransferItem {
+        item_id: String,
+        recipient: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -269,6 +282,14 @@ fn validate_client(message: &ClientMessage) -> Result<(), ProtocolError> {
                 ClientCommand::Look => {}
                 ClientCommand::Move { exit } => validate_exit_label(exit)?,
                 ClientCommand::Say { text } => validate_text(text, MAX_TEXT_BYTES)?,
+                ClientCommand::GameAction { action, argument } => {
+                    action
+                        .parse::<worldwright_core::ids::DefinitionId>()
+                        .map_err(|_| ProtocolError::invalid_message())?;
+                    if let Some(argument) = argument {
+                        validate_text(argument, MAX_TEXT_BYTES)?;
+                    }
+                }
                 ClientCommand::Inventory => {}
                 ClientCommand::ClaimReward { reward } => validate_reward_key(reward)?,
                 ClientCommand::TransferItem { item_id, recipient } => {
@@ -1137,6 +1158,33 @@ mod tests {
             STATUS,
             "protocol v1 implemented; transport sessions are process-local"
         );
+    }
+
+    #[test]
+    fn generic_game_actions_are_bounded_and_namespaced() {
+        let valid = r#"{"type":"command","request_id":"a-1","command":{"type":"game_action","action":"expedition:actions.rest","argument":null}}"#;
+        assert!(matches!(
+            decode_client(valid),
+            Ok(ClientMessage::Command {
+                command: ClientCommand::GameAction { .. },
+                ..
+            })
+        ));
+
+        for invalid in [
+            r#"{"type":"command","request_id":"a","command":{"type":"game_action","action":"not-namespaced","argument":null}}"#.to_owned(),
+            r#"{"type":"command","request_id":"a","command":{"type":"game_action","action":"Expedition:actions.rest","argument":null}}"#.to_owned(),
+            r#"{"type":"command","request_id":"a","command":{"type":"game_action","action":"expedition:actions.rest","argument":"\n"}}"#.to_owned(),
+            format!(
+                r#"{{"type":"command","request_id":"a","command":{{"type":"game_action","action":"expedition:actions.rest","argument":"{}"}}}}"#,
+                "a".repeat(MAX_TEXT_BYTES + 1)
+            ),
+        ] {
+            assert_eq!(
+                decode_client(&invalid).unwrap_err().kind(),
+                ProtocolErrorKind::InvalidMessage
+            );
+        }
     }
 
     #[test]

@@ -21,7 +21,7 @@ This file records the latest reported implementation, the next implementation pr
 | M5 — Content Release and Preview v0.1 | **Implemented awaiting live PostgreSQL verification**; eight M5 DB tests compile but have not run |
 | M6 - Operational Control v0.1 | Implemented awaiting live PostgreSQL and recovery execution |
 | M7 — Builder Workflow and Studio v0.1 | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
-| M8 — Toolkit Maturity | Planned: independent second-game reuse, SDK compatibility, tooling and measured performance |
+| M8 - Toolkit Maturity | Implemented with Windows-local evidence; expedition durability, broader capacity, Linux/CI/deployment remain open |
 
 Design and fixture work may overlap milestones, but later activation must respect prerequisite gates. No production readiness or legal approval follows from a local increment's completion.
 
@@ -177,4 +177,5 @@ Update this handoff with ROAD-MAP, README, DESIGN, ARCHITECTURE and the relevant
 structured drafts, immutable artifacts, official preview integration, and
 authenticated publication request/status integration. It is implemented
 awaiting live PostgreSQL/operator publication and manual browser/accessibility
-evidence. M8 is next planned work.
+evidence. M8 is implemented with Windows-local evidence; durable expedition
+state, broader capacity, Linux/CI/deployment remain open.

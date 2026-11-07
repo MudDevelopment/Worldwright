@@ -13,6 +13,7 @@ members = [
     "crates/worldwright-persistence",
     "crates/worldwright-sdk",
     "crates/worldwright-testkit",
+    "crates/worldwright-expedition",
 ]
 
 [workspace.package]
@@ -32,6 +33,7 @@ worldwright-protocol = { path = "crates/worldwright-protocol", version = "=0.1.0
 worldwright-persistence = { path = "crates/worldwright-persistence", version = "=0.1.0-dev.0" }
 worldwright-sdk = { path = "crates/worldwright-sdk", version = "=0.1.0-dev.0" }
 worldwright-testkit = { path = "crates/worldwright-testkit", version = "=0.1.0-dev.0" }
+worldwright-expedition = { path = "crates/worldwright-expedition", version = "=0.1.0-dev.0" }
 # Registry dependencies enter alongside their first working integration.
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"
@@ -59,7 +61,7 @@ unsafe_code = "forbid"
 all = "warn"
 
 [workspace.metadata.worldwright]
-stage = "content-release-preview-awaiting-postgresql-verification"
+stage = "toolkit-maturity-implemented-with-local-evidence"
 proposed-license = "MIT OR Apache-2.0"
 license-approved = false
 production-ready = false

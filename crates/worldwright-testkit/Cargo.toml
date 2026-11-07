@@ -7,6 +7,7 @@ publish.workspace = true
 description = "Worldwright testing fixture and scenario scaffold"
 
 [dependencies]
+worldwright-expedition.workspace = true
 worldwright-core.workspace = true
 worldwright-content.workspace = true
 worldwright-sdk.workspace = true

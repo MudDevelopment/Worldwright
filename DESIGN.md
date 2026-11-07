@@ -13,7 +13,7 @@
 | Implementation status | M4 durable gameplay and M5 release/preview are implemented awaiting live PostgreSQL verification; current Windows evidence is recorded in verification |
 | Companion documents | [README.md](README.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ROAD-MAP.md](ROAD-MAP.md) |
 
-> **Scope and authority:** This document describes target and current system design; “must” states a requirement, not blanket completion. M3 transport, M4 durable gameplay, and M5 release/preview are implemented slices awaiting their stated live PostgreSQL evidence. M6–M8 remain planned.
+> **Scope and authority:** This document describes target and current system design; "must" states a requirement, not blanket completion. M3 transport, M4 durable gameplay, and M5 release/preview are implemented slices awaiting their stated live PostgreSQL evidence. M6 awaits live PG/recovery; M7 awaits live operator/browser evidence; M8 is implemented with Windows-local evidence and explicit durability/capacity gaps.
 >
 > **Synchronization basis:** Current source, migrations, release contract, and verification report are authoritative for implemented behavior. Historical planning sections remain labeled as such.
 >
@@ -974,7 +974,7 @@ The expanded [ROAD-MAP.md](ROAD-MAP.md) owns the **eight-milestone** sequence. T
 | M5 — Content Release and Preview v0.1 | Immutable manifests, package/compatibility checks, staging/maintenance activation, known-good recovery, isolated preview, CLI publication requests | **Implemented awaiting live PostgreSQL verification** |
 | M6 — Operational Control v0.1 | Capability-scoped APIs, privileged assurance, transactional audit, observability, drain/shutdown, backup/restore/takeover runbooks | Planned: unauthorized changes fail, allowed changes are attributable, documented restore produces a coherent playable world |
 | M7 — Builder Workflow and Studio v0.1 | Schema-aware editing, shared diagnostics, M5 preview and M6-controlled publication integration, accessibility and destructive-action handling | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
-| M8 — Toolkit Maturity | Independent second game, compatibility/deprecation, justified gameplay systems, scaffolding/migrations, measured performance | Planned: reuse without game-specific transport/core-invariant branches; upgrade/tooling/performance evidence |
+| M8 - Toolkit Maturity | Independent second game, compatibility/deprecation, project templates/migrations, measured performance | Implemented with Windows-local evidence; broader capacity and durable expedition state remain open |
 
 ### Handoffs and non-goals
 

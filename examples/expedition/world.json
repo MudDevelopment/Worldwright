@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "namespace": "expedition",
+  "entry_room": "expedition:rooms.camp",
+  "rooms": [
+    {
+      "id": "expedition:rooms.camp",
+      "title": "Windbreak Camp",
+      "description": "Canvas shelters surround a carefully banked fire.",
+      "exits": {
+        "east": "expedition:rooms.pass"
+      }
+    },
+    {
+      "id": "expedition:rooms.pass",
+      "title": "Shale Pass",
+      "description": "A narrow trail climbs between weathered cliffs.",
+      "exits": {
+        "west": "expedition:rooms.camp",
+        "north": "expedition:rooms.ruin"
+      }
+    },
+    {
+      "id": "expedition:rooms.ruin",
+      "title": "Signal Ruin",
+      "description": "A silent brass instrument points beyond the ridge.",
+      "exits": {
+        "south": "expedition:rooms.pass"
+      }
+    }
+  ]
+}

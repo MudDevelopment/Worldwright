@@ -1,4 +1,5 @@
 mod content;
+mod maturity;
 mod play;
 mod play_input;
 mod release;
@@ -15,6 +16,16 @@ pub fn run(command: Command) -> ExitCode {
                 "       worldwright content package <content-path> --output <artifact-path> --release-id <release-id> --source-revision <revision> --builder <identity>"
             );
             println!("       worldwright content inspect <artifact-path> [--json]");
+            println!(
+                "       worldwright content migrate <input> --output <path> [--backup <path>] [--dry-run]"
+            );
+            println!(
+                "       worldwright project new <path> --name <package> [--template minimal|expedition] [--dry-run]"
+            );
+            println!("       worldwright compatibility [--json]");
+            println!(
+                "       worldwright benchmark [--clients 100] [--commands-per-client 10] [--json]"
+            );
             println!("       worldwright play <path>");
             println!("       worldwright preview <artifact-path> [--max-seconds <1..=3600>]");
             println!(
@@ -30,6 +41,9 @@ pub fn run(command: Command) -> ExitCode {
                 "       worldwright content package <content-path> --output <artifact-path> --release-id <release-id> --source-revision <revision> --builder <identity>"
             );
             println!("       worldwright content inspect <artifact-path> [--json]");
+            println!(
+                "       worldwright content migrate <input> --output <path> [--backup <path>] [--dry-run]"
+            );
             println!("Validate schema v1 content and preflight room/exit construction.");
             println!(
                 "Package creates immutable deterministic artifacts; inspect reports manifest and content metadata."
@@ -69,7 +83,25 @@ pub fn run(command: Command) -> ExitCode {
             println!("no network service is started by these developer commands.");
             println!("SDK: {}", worldwright_sdk::STATUS);
         }
+        Command::Compatibility { json } => return maturity::compatibility(json),
+        Command::Benchmark {
+            clients,
+            commands_per_client,
+            json,
+        } => return maturity::benchmark(clients, commands_per_client, json),
+        Command::ProjectNew {
+            path,
+            name,
+            template,
+            dry_run,
+        } => return maturity::project_new(&path, &name, &template, dry_run),
         Command::Validate(path) => return content::validate(&path),
+        Command::ContentMigrate {
+            input,
+            output,
+            backup,
+            dry_run,
+        } => return maturity::migrate(&input, &output, backup.as_deref(), dry_run),
         Command::Play(path) => return play::play(&path),
         Command::ContentPackage {
             content,
