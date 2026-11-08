@@ -36,6 +36,7 @@ pub enum Command {
         release_id: ReleaseId,
         source_revision: String,
         builder_identity: String,
+        game: worldwright_release::GameContract,
     },
     ContentInspect {
         artifact: PathBuf,
@@ -52,6 +53,12 @@ pub enum Command {
         slot: PathBuf,
         token: String,
         max_seconds: u64,
+    },
+    SdkBundle {
+        output: PathBuf,
+    },
+    SdkVerifyBundle {
+        directory: PathBuf,
     },
 }
 
@@ -105,10 +112,41 @@ fn parse_values(values: &[OsString]) -> Result<Command, String> {
         _ if is_word(values, 0, "play") => parse_play(values),
         _ if is_word(values, 0, "preview") => parse_preview(values),
         _ if is_word(values, 0, "__preview-worker") => parse_preview_worker(values),
+        _ if is_word(values, 0, "sdk") => parse_sdk(values),
         _ => Err(
-            "expected --help, --version, status, compatibility, benchmark, project, content, play, or preview"
+            "expected --help, --version, status, compatibility, benchmark, project, content, play, preview, or sdk"
                 .into(),
         ),
+    }
+}
+
+fn parse_sdk(values: &[OsString]) -> Result<Command, String> {
+    if values.len() < 2 {
+        return Err("expected sdk bundle or verify-bundle".into());
+    }
+    let sub = word(values, 1)?;
+    match sub {
+        "bundle" => {
+            if values.len() != 4 || !is_word(values, 2, "--output") {
+                return Err("expected sdk bundle --output <new-directory>".into());
+            }
+            let output = values[3].to_str().ok_or("output must be Unicode")?;
+            if output.is_empty() {
+                return Err("output must not be empty".into());
+            }
+            Ok(Command::SdkBundle {
+                output: output.into(),
+            })
+        }
+        "verify-bundle" => {
+            if values.len() != 3 {
+                return Err("expected sdk verify-bundle <directory>".into());
+            }
+            Ok(Command::SdkVerifyBundle {
+                directory: values[2].clone().into(),
+            })
+        }
+        _ => Err("expected sdk bundle or verify-bundle".into()),
     }
 }
 
@@ -286,6 +324,8 @@ fn parse_package(values: &[OsString]) -> Result<Command, String> {
     let mut release_id = None;
     let mut source_revision = None;
     let mut builder_identity = None;
+    let mut game = worldwright_release::GameContract::Reference;
+    let mut game_seen = false;
     let mut index = 3;
     while index < values.len() {
         let option = word(values, index)?;
@@ -309,6 +349,19 @@ fn parse_package(values: &[OsString]) -> Result<Command, String> {
             "--builder" if builder_identity.is_none() => {
                 builder_identity = Some(word(values, index + 1)?.to_owned())
             }
+            "--game" => {
+                if game_seen {
+                    return Err("duplicate option --game".into());
+                }
+                if index + 1 >= values.len() {
+                    return Err("missing --game value".into());
+                };
+                game = word(values, index + 1)?
+                    .parse()
+                    .map_err(|_| "invalid game".to_owned())?;
+                game_seen = true;
+                index += 1;
+            }
             "--output" | "--release-id" | "--source-revision" | "--builder" => {
                 return Err(format!("duplicate option {option}"));
             }
@@ -322,6 +375,7 @@ fn parse_package(values: &[OsString]) -> Result<Command, String> {
         release_id: release_id.ok_or("missing --release-id".to_string())?,
         source_revision: source_revision.ok_or("missing --source-revision".to_string())?,
         builder_identity: builder_identity.ok_or("missing --builder".to_string())?,
+        game,
     })
 }
 
@@ -457,6 +511,21 @@ mod tests {
                 && source_revision == "revision"
                 && builder_identity == "builder"
         ));
+    }
+
+    #[test]
+    fn sdk_bundle_parser_is_strict() {
+        assert!(matches!(
+            parse_args(&["sdk", "bundle", "--output", "out"]),
+            Ok(Command::SdkBundle { .. })
+        ));
+        assert!(matches!(
+            parse_args(&["sdk", "verify-bundle", "out"]),
+            Ok(Command::SdkVerifyBundle { .. })
+        ));
+        assert!(parse_args(&["sdk", "bundle", "--output"]).is_err());
+        assert!(parse_args(&["sdk", "bundle", "--output", "a", "--output", "b"]).is_err());
+        assert!(parse_args(&["sdk", "unknown", "x"]).is_err());
     }
 
     #[test]

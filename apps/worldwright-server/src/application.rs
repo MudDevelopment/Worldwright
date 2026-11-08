@@ -1,8 +1,28 @@
+use crate::GameProfile;
 use crate::{ServerConfig, ServerError, StorageConfig};
 use std::sync::Arc;
 use std::{future::Future, net::SocketAddr};
 use tokio::net::TcpListener;
 use tokio::time::{Duration, timeout};
+use worldwright_release::{GameContract, ReleaseManifest};
+
+fn profile_contract(profile: GameProfile) -> GameContract {
+    match profile {
+        GameProfile::Reference => GameContract::Reference,
+        GameProfile::Expedition => GameContract::Expedition,
+    }
+}
+fn validate_active_game(
+    profile: GameProfile,
+    manifest: &ReleaseManifest,
+) -> Result<(), ServerError> {
+    if manifest.game_contract() != profile_contract(profile) {
+        return Err(ServerError::startup(
+            "active release game does not match configured profile",
+        ));
+    }
+    Ok(())
+}
 
 pub struct BoundServer {
     listener: TcpListener,
@@ -14,7 +34,27 @@ pub struct BoundServer {
 
 impl BoundServer {
     pub async fn bind(config: ServerConfig) -> Result<Self, ServerError> {
-        if !config.bind.ip().is_loopback() {
+        if config.behind_tls_ingress && config.allow_insecure_http {
+            return Err(ServerError::Configuration(
+                "behind-tls-ingress cannot use insecure HTTP",
+            ));
+        }
+        if config.behind_tls_ingress && !matches!(config.storage, StorageConfig::Postgres { .. }) {
+            return Err(ServerError::Configuration(
+                "behind-tls-ingress requires PostgreSQL storage",
+            ));
+        }
+        if config.behind_tls_ingress && config.bind.ip().is_loopback() {
+            return Err(ServerError::Configuration(
+                "behind-tls-ingress requires non-loopback bind",
+            ));
+        }
+        if config.behind_tls_ingress && config.operator.is_some() {
+            return Err(ServerError::Configuration(
+                "behind-tls-ingress cannot expose operator control",
+            ));
+        }
+        if !config.behind_tls_ingress && !config.bind.ip().is_loopback() {
             return Err(ServerError::Configuration("bind address must be loopback"));
         }
         crate::cli::validate_origin(&config.allowed_origin, config.allow_insecure_http)
@@ -24,96 +64,140 @@ impl BoundServer {
         let world_id = worldwright_core::ids::WorldId::from_u128(1)
             .map_err(|_| ServerError::startup("world identity failed"))?;
         let mut operator_store = None;
-        let (content, auth, registrations, durable, _startup_release_guard) = match config.storage {
-            StorageConfig::Local {
-                accounts_path,
-                content_path,
-            } => {
-                if operator_config.is_some() {
-                    return Err(ServerError::Configuration(
-                        "operator control requires PostgreSQL storage",
-                    ));
+        let (content, auth, registrations, durable, initial_game, _startup_release_guard) =
+            match config.storage {
+                StorageConfig::Local {
+                    accounts_path,
+                    content_path,
+                } => {
+                    if config.oidc.is_some() {
+                        return Err(ServerError::Configuration(
+                            "OIDC requires PostgreSQL storage",
+                        ));
+                    }
+                    if operator_config.is_some() {
+                        return Err(ServerError::Configuration(
+                            "operator control requires PostgreSQL storage",
+                        ));
+                    }
+                    let content = worldwright_content::load_file(&content_path, Default::default())
+                        .map_err(|_| ServerError::startup("world content failed validation"))?;
+                    let auth = crate::auth::AuthService::load_local(
+                        &accounts_path,
+                        !config.allow_insecure_http,
+                    )?;
+                    let registrations = auth.registrations();
+                    (content, auth, registrations, None, None, None)
                 }
-                let content = worldwright_content::load_file(&content_path, Default::default())
-                    .map_err(|_| ServerError::startup("world content failed validation"))?;
-                let auth = crate::auth::AuthService::load_local(
-                    &accounts_path,
-                    !config.allow_insecure_http,
-                )?;
-                let registrations = auth.registrations();
-                (content, auth, registrations, None, None)
-            }
-            StorageConfig::Postgres { database_url } => {
-                if game == crate::GameProfile::Expedition {
-                    return Err(ServerError::Configuration(
-                        "expedition durable counters are not implemented",
-                    ));
+                StorageConfig::Postgres { database_url } => {
+                    let store = worldwright_persistence::PostgresStore::connect(&database_url)
+                        .await
+                        .map_err(|_| ServerError::startup("durable storage connection failed"))?;
+                    store
+                        .verify_migrations()
+                        .await
+                        .map_err(|_| ServerError::startup("durable migrations are not current"))?;
+                    let active = store
+                        .active_artifact(world_id)
+                        .await
+                        .map_err(|_| ServerError::startup("durable active release is not ready"))?;
+                    let verified = worldwright_release::verify_bytes(
+                        "durable active release",
+                        active.bytes(),
+                        Some(active.digest()),
+                    )
+                    .map_err(|_| ServerError::startup("durable active release is invalid"))?;
+                    if verified.manifest().release_id() != active.release_id() {
+                        return Err(ServerError::startup(
+                            "durable active release identity is invalid",
+                        ));
+                    }
+                    validate_active_game(config.game, verified.manifest())?;
+                    let content = verified.content().clone();
+                    store
+                        .verify_world(world_id, content.namespace(), content.schema_version())
+                        .await
+                        .map_err(|_| {
+                            ServerError::startup("durable world does not match content")
+                        })?;
+                    let writer = random_writer_id()
+                        .ok_or_else(|| ServerError::startup("writer identity generation failed"))?;
+                    let lease = store
+                        .acquire_writer(world_id, writer)
+                        .await
+                        .map_err(|_| ServerError::startup("writer acquisition failed"))?;
+                    let mut game_snapshot = store
+                        .load_game_state(
+                            lease,
+                            active.digest(),
+                            verified.manifest().game_contract(),
+                        )
+                        .await
+                        .map_err(|_| ServerError::startup("durable game state could not load"))?;
+                    let state_store = store.clone();
+                    operator_store = Some(store.clone());
+                    let (auth, registrations) = crate::auth::AuthService::postgres(
+                        store,
+                        world_id,
+                        !config.allow_insecure_http,
+                    )
+                    .await?;
+                    if game_snapshot.state_version == 0 {
+                        let (state, rooms) =
+                            crate::world::initial_durable_state(&content, &registrations, game)?;
+                        state_store
+                            .initialize_game_state(
+                                lease,
+                                active.digest(),
+                                verified.manifest().game_contract(),
+                                worldwright_persistence::GameplayState {
+                                    runtime: &state,
+                                    rooms: &rooms,
+                                    now: worldwright_core::time::Tick::ZERO,
+                                },
+                            )
+                            .await
+                            .map_err(|_| {
+                                ServerError::startup("durable game state initialization failed")
+                            })?;
+                        game_snapshot.state_version = 1;
+                        game_snapshot.runtime = state;
+                        game_snapshot.rooms = rooms;
+                    }
+                    let item_definition = format!("{}:items.welcome_token", content.namespace());
+                    let durable = crate::world::DurableContext {
+                        store: Arc::new(state_store),
+                        lease,
+                        world: world_id,
+                        release_digest: active.digest(),
+                        item_definition,
+                        game: verified.manifest().game_contract(),
+                        game_state_version: game_snapshot.state_version,
+                    };
+                    let startup_release_guard = durable
+                        .store
+                        .begin_release_read(lease, active.digest())
+                        .await
+                        .map_err(|_| {
+                            ServerError::startup("durable active release changed during startup")
+                        })?;
+                    (
+                        content,
+                        auth,
+                        registrations,
+                        Some(durable),
+                        Some(game_snapshot),
+                        Some(startup_release_guard),
+                    )
                 }
-                let store = worldwright_persistence::PostgresStore::connect(&database_url)
-                    .await
-                    .map_err(|_| ServerError::startup("durable storage connection failed"))?;
-                store
-                    .verify_migrations()
-                    .await
-                    .map_err(|_| ServerError::startup("durable migrations are not current"))?;
-                let active = store
-                    .active_artifact(world_id)
-                    .await
-                    .map_err(|_| ServerError::startup("durable active release is not ready"))?;
-                let verified = worldwright_release::verify_bytes(
-                    "durable active release",
-                    active.bytes(),
-                    Some(active.digest()),
-                )
-                .map_err(|_| ServerError::startup("durable active release is invalid"))?;
-                if verified.manifest().release_id() != active.release_id() {
-                    return Err(ServerError::startup(
-                        "durable active release identity is invalid",
-                    ));
-                }
-                let content = verified.content().clone();
-                store
-                    .verify_world(world_id, content.namespace(), content.schema_version())
-                    .await
-                    .map_err(|_| ServerError::startup("durable world does not match content"))?;
-                let writer = random_writer_id()
-                    .ok_or_else(|| ServerError::startup("writer identity generation failed"))?;
-                let lease = store
-                    .acquire_writer(world_id, writer)
-                    .await
-                    .map_err(|_| ServerError::startup("writer acquisition failed"))?;
-                let startup_release_guard = store
-                    .begin_release_read(lease, active.digest())
-                    .await
-                    .map_err(|_| {
-                        ServerError::startup("durable active release changed during startup")
-                    })?;
-                let item_definition = format!("{}:items.welcome_token", content.namespace());
-                let durable = crate::world::DurableContext {
-                    store: Arc::new(store.clone()),
-                    lease,
-                    world: world_id,
-                    release_digest: active.digest(),
-                    item_definition,
-                };
-                operator_store = Some(store.clone());
-                let (auth, registrations) = crate::auth::AuthService::postgres(
-                    store,
-                    world_id,
-                    !config.allow_insecure_http,
-                )
-                .await?;
-                (
-                    content,
-                    auth,
-                    registrations,
-                    Some(durable),
-                    Some(startup_release_guard),
-                )
-            }
-        };
-        let world =
-            crate::world::WorldHandle::new_with_profile(content, registrations, durable, game)?;
+            };
+        let world = crate::world::WorldHandle::new_with_profile(
+            content,
+            registrations,
+            durable,
+            game,
+            initial_game,
+        )?;
         let lifecycle = crate::lifecycle::LifecycleController::new();
         let operator = operator_config.map(|config| {
             Arc::new(crate::operator::OperatorService {
@@ -135,11 +219,16 @@ impl BoundServer {
                 return Err(ServerError::io(error));
             }
         };
+        let oidc = match config.oidc {
+            Some(value) => Some(crate::oidc::OidcService::discover(value, auth.clone()).await?),
+            None => None,
+        };
         let router = crate::web::router(crate::web::AppState {
             allowed_origin: config.allowed_origin.clone(),
             auth,
             world: world.clone(),
             operator,
+            oidc,
         });
         Ok(Self {
             listener,
@@ -238,32 +327,6 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn expedition_profile_refuses_postgresql_until_game_state_is_durable() {
-        let result = BoundServer::bind(ServerConfig {
-            bind: SocketAddr::from(([127, 0, 0, 1], 0)),
-            allowed_origin: "http://localhost".to_owned(),
-            storage: StorageConfig::Postgres {
-                database_url: "postgresql://unused".to_owned(),
-            },
-            operator: None,
-            allow_insecure_http: true,
-            game: crate::GameProfile::Expedition,
-        })
-        .await;
-        let error = match result {
-            Err(error) => error,
-            Ok(server) => {
-                server.world.shutdown().await;
-                panic!("expedition PostgreSQL unexpectedly started")
-            }
-        };
-        assert!(matches!(
-            error,
-            ServerError::Configuration("expedition durable counters are not implemented")
-        ));
-    }
-
     use axum::{
         Router,
         body::Body,
@@ -350,7 +413,9 @@ mod tests {
             },
             operator: None,
             allow_insecure_http: true,
+            behind_tls_ingress: false,
             game: crate::GameProfile::Reference,
+            oidc: None,
         })
         .await
         .expect("bind");
@@ -451,7 +516,9 @@ mod tests {
                 },
                 operator: None,
                 allow_insecure_http: true,
+                behind_tls_ingress: false,
                 game: crate::GameProfile::Reference,
+                oidc: None,
             })
             .await
             .expect("bind");

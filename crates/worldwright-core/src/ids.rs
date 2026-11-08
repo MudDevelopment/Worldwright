@@ -74,7 +74,8 @@ instance_id!(
     CorrelationId,
     GrantId,
     RecoveryJobId,
-    AuthorityIncarnationId
+    AuthorityIncarnationId,
+    InviteId
 );
 
 /// Content identity such as `frontier:rooms.arrival`; no persistence schema yet.

@@ -888,6 +888,7 @@ mod tests {
                 release_id: "studio-test".parse().unwrap(),
                 source_revision: "studio-revision-1".into(),
                 builder_identity: "studio-test".into(),
+                game: worldwright_release::GameContract::Reference,
             },
         )
         .unwrap();
@@ -994,6 +995,7 @@ mod tests {
                 release_id: "studio-other".parse().unwrap(),
                 source_revision: "other".into(),
                 builder_identity: "other".into(),
+                game: worldwright_release::GameContract::Reference,
             },
         )
         .unwrap();

@@ -5,6 +5,7 @@ members = [
     "apps/worldwright-server",
     "apps/worldwright-studio",
     "apps/worldwright-console",
+    "apps/worldwright-load",
     "crates/worldwright-core",
     "crates/worldwright-content",
     "crates/worldwright-release",
@@ -45,7 +46,8 @@ getrandom = "=0.3.4"
 rpassword = "=7.4.0"
 tokio = { version = "=1.48.0", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal"] }
 http-body-util = "=0.1.3"
-tokio-tungstenite = "=0.28.0"
+tokio-tungstenite = { version = "=0.28.0", default-features = false, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
+reqwest = { version = "=0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 tower = { version = "=0.5.2", features = ["util"] }
 sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "uuid", "json", "migrate", "macros"] }
 uuid = "=1.18.1"
@@ -53,6 +55,7 @@ sha2 = "=0.10.9"
 hmac = "=0.12.1"
 base64 = "=0.22.1"
 async-trait = "=0.1.89"
+openidconnect = { version = "=4.0.1", default-features = false, features = ["reqwest", "rustls-tls"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

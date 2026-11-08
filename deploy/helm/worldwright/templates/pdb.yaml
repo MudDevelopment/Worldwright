@@ -1,0 +1,7 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "worldwright.fullname" . }}
+spec:
+  maxUnavailable: 1
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "worldwright.name" . }}, app.kubernetes.io/instance: {{ .Release.Name }} } }

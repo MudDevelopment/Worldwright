@@ -17,6 +17,8 @@ pub struct PostgresStore {
 struct WorldRow {
     content_namespace: String,
     content_schema_version: i64,
+    game_id: String,
+    game_contract_version: i64,
     writer_epoch: i64,
     active_writer_id: Option<uuid::Uuid>,
 }
@@ -123,17 +125,39 @@ impl PostgresStore {
         validate_seed(seed)?;
         let mut tx = self.pool.begin().await?;
         let world_uuid = uuid_of(seed.world);
-        let world: Option<WorldRow> = sqlx::query_as("SELECT content_namespace, content_schema_version, writer_epoch, active_writer_id FROM worldwright_worlds WHERE world_id = $1 FOR UPDATE").bind(world_uuid).fetch_optional(&mut *tx).await?;
+        let world: Option<WorldRow> = sqlx::query_as(
+            "SELECT content_namespace, content_schema_version, game_id, \
+             game_contract_version, writer_epoch, active_writer_id \
+             FROM worldwright_worlds WHERE world_id = $1 FOR UPDATE",
+        )
+        .bind(world_uuid)
+        .fetch_optional(&mut *tx)
+        .await?;
         if let Some(row) = world {
             if row.content_namespace != seed.content_namespace
                 || u64_from_i64(row.content_schema_version, true)? != seed.content_schema_version
+                || row.game_id != seed.game.game_id()
+                || u32::try_from(row.game_contract_version)
+                    .map_err(|_| PersistenceError::InvalidData)?
+                    != seed.game.contract_version()
                 || row.writer_epoch != 0
                 || row.active_writer_id.is_some()
             {
                 return Err(PersistenceError::SeedConflict);
             }
         } else {
-            sqlx::query("INSERT INTO worldwright_worlds ( world_id, content_namespace, content_schema_version ) VALUES ($1, $2, $3)").bind(world_uuid).bind(&seed.content_namespace).bind(i64_from_u64(seed.content_schema_version, true)?).execute(&mut *tx).await?;
+            sqlx::query(
+                "INSERT INTO worldwright_worlds \
+                 (world_id, content_namespace, content_schema_version, game_id, \
+                  game_contract_version) VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(world_uuid)
+            .bind(&seed.content_namespace)
+            .bind(i64_from_u64(seed.content_schema_version, true)?)
+            .bind(seed.game.game_id())
+            .bind(i64::from(seed.game.contract_version()))
+            .execute(&mut *tx)
+            .await?;
         }
         let mut accounts: Vec<&SeedAccount> = seed.accounts.iter().collect();
         accounts.sort_by_key(|a| a.account.get());
@@ -208,7 +232,16 @@ impl PostgresStore {
         &self,
         world: WorldId,
     ) -> Result<Vec<IdentityRecord>, PersistenceError> {
-        let rows: Vec<IdentityRow> = sqlx::query_as("SELECT a.account_id, a.username, a.password_hash, c.character_id, c.character_name, c.room_definition, c.balance, c.version FROM worldwright_accounts AS a JOIN worldwright_characters AS c ON c.account_id = a.account_id WHERE c.world_id = $1 AND a.disabled = FALSE ORDER BY c.character_id LIMIT 257").bind(uuid_of(world)).fetch_all(&self.pool).await?;
+        let rows: Vec<IdentityRow> = sqlx::query_as(
+            "SELECT a.account_id, a.username, a.password_hash, c.character_id, \
+             c.character_name, c.room_definition, c.balance, c.version \
+             FROM worldwright_accounts AS a \
+             JOIN worldwright_characters AS c ON c.account_id = a.account_id \
+             WHERE c.world_id = $1 ORDER BY c.character_id LIMIT 257",
+        )
+        .bind(uuid_of(world))
+        .fetch_all(&self.pool)
+        .await?;
         if rows.is_empty() || rows.len() > 256 {
             return Err(PersistenceError::InvalidData);
         }

@@ -3,14 +3,16 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 use uuid::Uuid;
 use worldwright_core::ids::{
-    AccountId, ActivationId, AuthorityIncarnationId, CharacterId, CorrelationId, GrantId, ItemId,
-    OperationId, OperatorSessionId, PublicationId, RecoveryJobId, WorldId, WriterId,
+    AccountId, ActivationId, AuthorityIncarnationId, CharacterId, CorrelationId, GrantId, InviteId,
+    ItemId, OperationId, OperatorSessionId, PublicationId, RecoveryJobId, WorldId, WriterId,
 };
+use worldwright_core::runtime::DurableWorldState;
+use worldwright_core::time::Tick;
 use worldwright_operations::{
     Capability, Environment, OperatorClaims, OperatorKind, StudioReviewContext,
 };
 use worldwright_release::{
-    DeploymentTarget, PublicationKind, PublicationStatus, ReleaseId, Sha256Digest,
+    DeploymentTarget, GameContract, PublicationKind, PublicationStatus, ReleaseId, Sha256Digest,
 };
 
 pub const MAX_DURABLE_INVENTORY_ITEMS: usize = 256;
@@ -58,8 +60,71 @@ pub struct SeedWorld {
     pub world: WorldId,
     pub content_namespace: String,
     pub content_schema_version: u64,
+    pub game: GameContract,
     pub entry_room_definition: String,
     pub accounts: Vec<SeedAccount>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DurableCharacterRoom {
+    pub character: CharacterId,
+    pub room_definition: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DurableGameSnapshot {
+    pub game: GameContract,
+    pub state_version: u64,
+    pub runtime: DurableWorldState,
+    pub rooms: Vec<DurableCharacterRoom>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayIntentKind {
+    Look,
+    Move,
+    Say,
+    GameAction,
+}
+
+impl GameplayIntentKind {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Look => "look",
+            Self::Move => "move",
+            Self::Say => "say",
+            Self::GameAction => "game_action",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct GameplayState<'a> {
+    pub runtime: &'a DurableWorldState,
+    pub rooms: &'a [DurableCharacterRoom],
+    pub now: Tick,
+}
+
+pub struct GameplayMutation<'a> {
+    pub lease: WriterLease,
+    pub expected_release: Sha256Digest,
+    pub game: GameContract,
+    pub actor: AuthenticatedActor<'a>,
+    pub request_id: &'a str,
+    pub operation: OperationId,
+    pub kind: GameplayIntentKind,
+    pub intent: &'a [u8],
+    pub expected_state_version: u64,
+    pub state: GameplayState<'a>,
+    pub result: serde_json::Value,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameplayCommit {
+    pub operation: OperationId,
+    pub state_version: u64,
+    pub result: serde_json::Value,
+    pub replayed: bool,
 }
 
 pub struct IdentityRecord {
@@ -104,6 +169,31 @@ pub struct SessionPrincipal {
     pub account: AccountId,
     pub character: CharacterId,
     pub character_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OidcSession {
+    pub principal: SessionPrincipal,
+    pub linked: bool,
+}
+
+pub struct OidcInviteSpec<'a> {
+    pub invite: InviteId,
+    pub world: WorldId,
+    pub username: &'a str,
+    pub issuer: &'a str,
+    pub token_hash: &'a [u8; 32],
+    pub ttl_seconds: u64,
+}
+
+pub struct OidcLoginSpec<'a> {
+    pub world: WorldId,
+    pub issuer: &'a str,
+    pub subject: &'a str,
+    pub invite_hash: Option<&'a [u8; 32]>,
+    pub session_hash: &'a [u8; 32],
+    pub session_ttl_seconds: u64,
+    pub max_sessions: usize,
 }
 
 pub struct AuthenticatedActor<'a> {
@@ -469,7 +559,8 @@ id_value!(
     CorrelationId,
     GrantId,
     OperatorSessionId,
-    RecoveryJobId
+    RecoveryJobId,
+    InviteId
 );
 
 pub(crate) fn i64_from_u64(value: u64, positive: bool) -> Result<i64, crate::PersistenceError> {

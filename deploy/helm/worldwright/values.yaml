@@ -1,0 +1,35 @@
+image:
+  repository: ""
+  digest: ""
+  tag: ""
+  allowMutableTag: false
+imagePullSecrets: []
+publicOrigin: ""
+game: reference
+serviceAccount:
+  create: true
+  name: ""
+ingress:
+  enabled: true
+  className: ""
+  host: ""
+  tlsSecretName: ""
+  annotations: {}
+postgres:
+  existingSecret: ""
+  key: WORLDWRIGHT_DATABASE_URL
+oidc:
+  enabled: false
+  issuer: ""
+  clientId: ""
+  redirectUri: ""
+  existingSecret: ""
+  key: WORLDWRIGHT_OIDC_CLIENT_SECRET
+networkPolicy:
+  enabled: false
+  namespaceSelector: {}
+  podSelector: {}
+  postgresCidr: ""
+resources:
+  requests: { cpu: 500m, memory: 512Mi }
+  limits: { cpu: "2", memory: 1Gi }

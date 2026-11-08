@@ -17,6 +17,11 @@
       <button type="submit">Log in</button>
       <button id="logout" type="button">Log out</button>
     </form>
+    <form id="oidc-form" method="post" action="/api/v1/oidc/start">
+      <label for="oidc-invite">OIDC invite (first login only)</label>
+      <input id="oidc-invite" name="invite" autocomplete="one-time-code" maxlength="64" pattern="[0-9a-f]{64}">
+      <button type="submit">Log in with OIDC</button>
+    </form>
     <p id="status" role="status">Disconnected</p>
     <ul id="output" aria-live="polite"></ul>
     <form id="command-form">

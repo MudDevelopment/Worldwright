@@ -9,7 +9,7 @@ use std::{
     io::Write,
 };
 use worldwright_release::{
-    PackageOptions, ReleaseId, Sha256Digest, package_bytes, verify_bytes, write_new,
+    GameContract, PackageOptions, ReleaseId, Sha256Digest, package_bytes, verify_bytes, write_new,
 };
 
 #[derive(Deserialize)]
@@ -59,6 +59,7 @@ impl Workspace {
                     request.revision, request.snapshot_sha256
                 ),
                 builder_identity: request.builder_identity.clone(),
+                game: GameContract::Reference,
             },
         )
         .map_err(|_| WorkspaceError::InvalidWorkspace("draft cannot be packaged"))?;

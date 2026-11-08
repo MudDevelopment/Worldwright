@@ -1,0 +1,7 @@
+Worldwright is a single-writer application. An external PostgreSQL database,
+current migrations, and an active release are required before readiness.
+TLS terminates at the ingress; the pod HTTP hop is trusted cluster traffic.
+The operator CLI/API is not exposed by this chart. Backups remain external.
+OIDC, if enabled, requires an external provider and secret rotation/restart.
+This chart has not been tested against a live cluster, ingress controller, or
+production database.

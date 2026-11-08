@@ -9,8 +9,8 @@ use std::{
     time::{Duration, Instant},
 };
 use worldwright_release::{
-    PackageOptions, ReleaseError, ReleaseId, Sha256Digest, VerifiedArtifact, WriteOutcome,
-    load_file, package_file, write_new,
+    GameContract, PackageOptions, ReleaseError, ReleaseId, Sha256Digest, VerifiedArtifact,
+    WriteOutcome, load_file, package_file, write_new,
 };
 
 pub const MAX_CONCURRENT_PREVIEWS: usize = 4;
@@ -185,6 +185,7 @@ pub fn package(
     release_id: ReleaseId,
     source_revision: String,
     builder_identity: String,
+    game: GameContract,
 ) -> ExitCode {
     let artifact = match package_file(
         content,
@@ -192,6 +193,7 @@ pub fn package(
             release_id,
             source_revision,
             builder_identity,
+            game,
         },
     ) {
         Ok(artifact) => artifact,

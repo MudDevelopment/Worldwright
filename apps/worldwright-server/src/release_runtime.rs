@@ -7,8 +7,9 @@ use worldwright_core::{
     runtime::{ReferenceGame, WorldError},
     time::{RandomExhausted, RandomSource, Tick},
 };
+use worldwright_expedition::ExpeditionGame;
 use worldwright_persistence::{ActivationPlan, PersistenceError, PostgresStore};
-use worldwright_release::verify_bytes;
+use worldwright_release::{GameContract, verify_bytes};
 
 #[derive(Debug)]
 pub(crate) enum ReleaseRuntimeError {
@@ -54,7 +55,7 @@ pub(crate) async fn verify_and_smoke(
         references.room_definitions(),
         references.item_definitions(),
     )?;
-    smoke_content(verified.content())
+    smoke_content(verified.content(), verified.manifest().game_contract())
 }
 
 #[allow(dead_code)]
@@ -92,7 +93,7 @@ pub(crate) async fn verify_restored_world(
         references.room_definitions(),
         references.item_definitions(),
     )?;
-    smoke_content(verified.content())
+    smoke_content(verified.content(), verified.manifest().game_contract())
 }
 
 fn validate_references(
@@ -115,7 +116,10 @@ fn validate_references(
     Ok(())
 }
 
-fn smoke_content(content: &ValidatedWorldContent) -> Result<(), ReleaseRuntimeError> {
+fn smoke_content(
+    content: &ValidatedWorldContent,
+    contract: GameContract,
+) -> Result<(), ReleaseRuntimeError> {
     let world = WorldId::from_u128(1).map_err(|_| ReleaseRuntimeError::Smoke)?;
     let account = AccountId::from_u128(1).map_err(|_| ReleaseRuntimeError::Smoke)?;
     let character = CharacterId::from_u128(1).map_err(|_| ReleaseRuntimeError::Smoke)?;
@@ -128,10 +132,16 @@ fn smoke_content(content: &ValidatedWorldContent) -> Result<(), ReleaseRuntimeEr
     builder
         .add_character(character, account, lookup.entry_room)
         .map_err(|_| ReleaseRuntimeError::Smoke)?;
+    if contract == GameContract::Expedition {
+        worldwright_expedition::initialize_character(&mut builder, character)
+            .map_err(|_| ReleaseRuntimeError::Smoke)?;
+    }
     let mut rules = RuleRegistry::new();
-    ReferenceGame
-        .register_rules(&mut rules)
-        .map_err(|_| ReleaseRuntimeError::Smoke)?;
+    match contract {
+        GameContract::Reference => ReferenceGame.register_rules(&mut rules),
+        GameContract::Expedition => ExpeditionGame.register_rules(&mut rules),
+    }
+    .map_err(|_| ReleaseRuntimeError::Smoke)?;
     let mut runtime = builder
         .build(rules)
         .map_err(|_| ReleaseRuntimeError::Smoke)?;
@@ -207,7 +217,7 @@ mod tests {
             Default::default(),
         )
         .unwrap();
-        assert!(smoke_content(&content).is_ok());
+        assert!(smoke_content(&content, GameContract::Reference).is_ok());
     }
 
     #[test]
@@ -258,7 +268,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(
-            smoke_content(&content),
+            smoke_content(&content, GameContract::Reference),
             Err(ReleaseRuntimeError::Smoke)
         ));
     }

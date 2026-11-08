@@ -3,6 +3,7 @@ mod maturity;
 mod play;
 mod play_input;
 mod release;
+mod sdk;
 use crate::cli::Command;
 use std::process::ExitCode;
 
@@ -28,6 +29,8 @@ pub fn run(command: Command) -> ExitCode {
             );
             println!("       worldwright play <path>");
             println!("       worldwright preview <artifact-path> [--max-seconds <1..=3600>]");
+            println!("       worldwright sdk bundle --output <new-directory>");
+            println!("       worldwright sdk verify-bundle <directory>");
             println!(
                 "Packaging and isolated preview are implemented; publication and activation are server-side."
             );
@@ -109,6 +112,7 @@ pub fn run(command: Command) -> ExitCode {
             release_id,
             source_revision,
             builder_identity,
+            game,
         } => {
             return release::package(
                 &content,
@@ -116,6 +120,7 @@ pub fn run(command: Command) -> ExitCode {
                 release_id,
                 source_revision,
                 builder_identity,
+                game,
             );
         }
         Command::ContentInspect { artifact, json } => return release::inspect(&artifact, json),
@@ -132,6 +137,8 @@ pub fn run(command: Command) -> ExitCode {
         } => {
             return release::preview_worker(&artifact, expected_digest, &slot, &token, max_seconds);
         }
+        Command::SdkBundle { output } => return sdk::bundle(&output),
+        Command::SdkVerifyBundle { directory } => return sdk::verify_bundle(&directory),
     }
     ExitCode::SUCCESS
 }

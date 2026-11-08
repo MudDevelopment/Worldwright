@@ -240,3 +240,158 @@ fn conservative_world_view_default_remains_source_compatible() {
 fn actor_context_generation_contract_is_unchanged() {
     assert!(ConnectionGeneration::new(0).is_err());
 }
+
+#[test]
+fn durable_export_is_canonical_after_scheduling() {
+    let (mut runtime, actor, character, key) = fixture(3);
+    runtime
+        .execute(
+            &envelope(actor, "test:actions.schedule"),
+            Tick::from_millis(1),
+            &mut NoRandom,
+        )
+        .unwrap();
+    let durable = runtime.snapshot().durable_state().unwrap();
+    assert_eq!(
+        durable.counters,
+        vec![worldwright_core::runtime::CounterState {
+            character,
+            key: key.clone(),
+            value: 3
+        }]
+    );
+    assert_eq!(
+        durable.scheduled,
+        vec![worldwright_core::runtime::ScheduledCounterState {
+            at: Tick::from_millis(10),
+            character,
+            key,
+            delta: 1
+        }]
+    );
+}
+
+#[test]
+fn checkpoint_restore_recovers_attachment_and_schedule() {
+    let (mut runtime, actor, _, _) = fixture(3);
+    runtime
+        .execute(
+            &envelope(actor, "test:actions.schedule"),
+            Tick::from_millis(1),
+            &mut NoRandom,
+        )
+        .unwrap();
+    let checkpoint = runtime.snapshot();
+    runtime.detach(actor).unwrap();
+    runtime.restore_checkpoint(checkpoint.clone()).unwrap();
+    assert_eq!(runtime.snapshot(), checkpoint);
+}
+
+#[test]
+fn wrong_world_checkpoint_is_rejected_atomically() {
+    let (mut runtime, _, _, _) = fixture(3);
+    let before = runtime.snapshot();
+    let room = RoomId::from_u128(1).unwrap();
+    let mut builder = WorldBuilder::new(WorldId::from_u128(2).unwrap());
+    builder
+        .add_room(
+            room,
+            PlayerText::new("Room").unwrap(),
+            PlayerText::new("Description").unwrap(),
+        )
+        .unwrap();
+    builder
+        .add_character(
+            CharacterId::from_u128(1).unwrap(),
+            AccountId::from_u128(1).unwrap(),
+            room,
+        )
+        .unwrap();
+    let other = builder.build(RuleRegistry::new()).unwrap();
+    assert_eq!(
+        runtime.restore_checkpoint(other.snapshot()),
+        Err(WorldError::WrongWorld)
+    );
+    assert_eq!(runtime.snapshot(), before);
+}
+
+#[test]
+fn durable_state_restores_into_fresh_builder() {
+    let (mut runtime, actor, character, key) = fixture(3);
+    runtime
+        .execute(
+            &envelope(actor, "test:actions.schedule"),
+            Tick::from_millis(1),
+            &mut NoRandom,
+        )
+        .unwrap();
+    let durable = runtime.snapshot().durable_state().unwrap();
+    let world = WorldId::from_u128(1).unwrap();
+    let room = RoomId::from_u128(1).unwrap();
+    let mut builder = WorldBuilder::new(world);
+    builder
+        .add_room(
+            room,
+            PlayerText::new("Room").unwrap(),
+            PlayerText::new("Description").unwrap(),
+        )
+        .unwrap();
+    builder
+        .add_character(character, AccountId::from_u128(1).unwrap(), room)
+        .unwrap();
+    builder.restore_durable_state(durable.clone()).unwrap();
+    let fresh = builder.build(RuleRegistry::new()).unwrap();
+    assert_eq!(fresh.snapshot().durable_state().unwrap(), durable);
+    assert_eq!(key.to_string(), "test:state.value");
+}
+
+#[test]
+fn malformed_durable_states_are_rejected_atomically() {
+    let (mut runtime, actor, character, key) = fixture(3);
+    runtime
+        .execute(
+            &envelope(actor, "test:actions.schedule"),
+            Tick::from_millis(1),
+            &mut NoRandom,
+        )
+        .unwrap();
+    let base = runtime.snapshot().durable_state().unwrap();
+    let make = || {
+        let room = RoomId::from_u128(1).unwrap();
+        let mut builder = WorldBuilder::new(WorldId::from_u128(1).unwrap());
+        builder
+            .add_room(
+                room,
+                PlayerText::new("Room").unwrap(),
+                PlayerText::new("Description").unwrap(),
+            )
+            .unwrap();
+        builder
+            .add_character(character, AccountId::from_u128(1).unwrap(), room)
+            .unwrap();
+        builder
+    };
+    let mut duplicate = base.clone();
+    duplicate.counters.push(duplicate.counters[0].clone());
+    assert!(make().restore_durable_state(duplicate).is_err());
+    let mut unknown = base.clone();
+    unknown.counters[0].character = CharacterId::from_u128(99).unwrap();
+    assert!(make().restore_durable_state(unknown).is_err());
+    let mut zero = base.clone();
+    zero.scheduled[0].delta = 0;
+    assert!(make().restore_durable_state(zero).is_err());
+    let mut over = base.clone();
+    over.counters[0].value = MAX_COUNTER_VALUE + 1;
+    assert!(make().restore_durable_state(over).is_err());
+    let mut full = base.clone();
+    for i in 0..129 {
+        full.scheduled
+            .push(worldwright_core::runtime::ScheduledCounterState {
+                at: Tick::from_millis(i),
+                character,
+                key: key.clone(),
+                delta: 1,
+            });
+    }
+    assert!(make().restore_durable_state(full).is_err());
+}

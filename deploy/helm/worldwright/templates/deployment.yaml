@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "worldwright.fullname" . }}
+  labels: {{- include "worldwright.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "worldwright.name" . }}, app.kubernetes.io/instance: {{ .Release.Name }} } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: {{ include "worldwright.name" . }}, app.kubernetes.io/instance: {{ .Release.Name }} }
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      serviceAccountName: {{ include "worldwright.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      terminationGracePeriodSeconds: 60
+      imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 8 }}
+      volumes: [{ name: tmp, emptyDir: {} }]
+      initContainers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
+          imagePullPolicy: IfNotPresent
+          args: ["database","migrate","--database-url-env","WORLDWRIGHT_DATABASE_URL"]
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+          env: [{ name: WORLDWRIGHT_DATABASE_URL, valueFrom: { secretKeyRef: { name: {{ .Values.postgres.existingSecret | quote }}, key: {{ .Values.postgres.key | quote }} } } }]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+      containers:
+        - name: worldwright-server
+          image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
+          imagePullPolicy: IfNotPresent
+          args: ["serve","--database-url-env","WORLDWRIGHT_DATABASE_URL","--acquire-writer","--origin",{{ .Values.publicOrigin | quote }},"--game",{{ .Values.game | quote }},"--bind","0.0.0.0:8080","--behind-tls-ingress"{{ if .Values.oidc.enabled }},"--oidc-issuer",{{ .Values.oidc.issuer | quote }},"--oidc-client-id",{{ .Values.oidc.clientId | quote }},"--oidc-client-secret-env","WORLDWRIGHT_OIDC_CLIENT_SECRET","--oidc-redirect-uri",{{ .Values.oidc.redirectUri | quote }}{{ end }}]
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - name: WORLDWRIGHT_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.postgres.existingSecret | quote }}, key: {{ .Values.postgres.key | quote }} } }
+            {{- if .Values.oidc.enabled }}
+            - name: WORLDWRIGHT_OIDC_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.oidc.existingSecret | quote }}, key: {{ .Values.oidc.key | quote }} } }
+            {{- end }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          resources: {{ toYaml .Values.resources | nindent 12 }}
+          startupProbe: { httpGet: { path: /health/live, port: http }, failureThreshold: 60, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 10 }
+          readinessProbe: { httpGet: { path: /health/ready, port: http }, periodSeconds: 10 }

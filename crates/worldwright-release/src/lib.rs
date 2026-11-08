@@ -24,6 +24,48 @@ const HEADER_BYTES: usize = 8 + 1;
 pub const MAX_ARTIFACT_BYTES: usize =
     HEADER_PREFIX.len() + HEADER_BYTES + MAX_MANIFEST_BYTES + MAX_INPUT_BYTES;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum GameContract {
+    Reference,
+    Expedition,
+}
+impl GameContract {
+    pub const fn game_id(self) -> &'static str {
+        match self {
+            Self::Reference => "worldwright-reference",
+            Self::Expedition => "worldwright-expedition",
+        }
+    }
+    pub const fn contract_version(self) -> u32 {
+        1
+    }
+    pub fn parse(game_id: &str, version: u32) -> Result<Self, ReleaseError> {
+        match (game_id, version) {
+            ("worldwright-reference", 1) => Ok(Self::Reference),
+            ("worldwright-expedition", 1) => Ok(Self::Expedition),
+            _ => Err(ReleaseError::InvalidMetadata("unsupported game contract")),
+        }
+    }
+}
+impl fmt::Display for GameContract {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Reference => "reference",
+            Self::Expedition => "expedition",
+        })
+    }
+}
+impl FromStr for GameContract {
+    type Err = ReleaseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "reference" => Ok(Self::Reference),
+            "expedition" => Ok(Self::Expedition),
+            _ => Err(ReleaseError::InvalidMetadata("invalid game contract")),
+        }
+    }
+}
+
 macro_rules! strict_string_enum {
     ($name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -254,6 +296,7 @@ pub struct PackageOptions {
     pub release_id: ReleaseId,
     pub source_revision: String,
     pub builder_identity: String,
+    pub game: GameContract,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -301,6 +344,10 @@ impl ReleaseManifest {
     }
     pub fn game_id(&self) -> &str {
         &self.game_compatibility.game_id
+    }
+    pub fn game_contract(&self) -> GameContract {
+        GameContract::parse(self.game_id(), self.contract_version())
+            .expect("validated manifest contract")
     }
     pub fn contract_version(&self) -> u32 {
         self.game_compatibility.contract_version
@@ -422,8 +469,8 @@ pub fn package_bytes(
         release_id: options.release_id,
         content_schema_version: 1,
         game_compatibility: GameCompatibility {
-            game_id: GAME_ID.to_owned(),
-            contract_version: GAME_CONTRACT_VERSION,
+            game_id: options.game.game_id().to_owned(),
+            contract_version: options.game.contract_version(),
         },
         payload: PayloadMetadata {
             media_type: PAYLOAD_MEDIA_TYPE.to_owned(),
@@ -611,8 +658,11 @@ fn validate_payload(source: &str, payload: &[u8]) -> Result<(), ReleaseError> {
 fn validate_manifest(manifest: &ReleaseManifest) -> Result<(), ReleaseError> {
     if manifest.manifest_version != MANIFEST_VERSION
         || manifest.content_schema_version != 1
-        || manifest.game_compatibility.game_id != GAME_ID
-        || manifest.game_compatibility.contract_version != GAME_CONTRACT_VERSION
+        || GameContract::parse(
+            &manifest.game_compatibility.game_id,
+            manifest.game_compatibility.contract_version,
+        )
+        .is_err()
         || manifest.payload.media_type != PAYLOAD_MEDIA_TYPE
     {
         return Err(ReleaseError::InvalidMetadata(
@@ -680,6 +730,7 @@ mod tests {
             release_id: "release-1".parse().unwrap(),
             source_revision: "abc123".into(),
             builder_identity: "builder".into(),
+            game: GameContract::Reference,
         }
     }
 
@@ -702,6 +753,21 @@ mod tests {
         assert_eq!(manifest.payload_sha256(), Sha256Digest::from_bytes(CONTENT));
         assert_eq!(manifest.source_revision(), "abc123");
         assert_eq!(manifest.builder_identity(), "builder");
+    }
+
+    #[test]
+    fn expedition_contract_round_trips_deterministically() {
+        let mut options = options();
+        options.game = GameContract::Expedition;
+        let first = package_bytes("test", CONTENT, options.clone()).unwrap();
+        let second = package_bytes("test", CONTENT, options).unwrap();
+        assert_eq!(first, second);
+        let verified = verify_bytes("test", &first, None).unwrap();
+        assert_eq!(
+            verified.manifest().game_contract(),
+            GameContract::Expedition
+        );
+        assert_eq!(verified.manifest().game_id(), "worldwright-expedition");
     }
 
     #[test]

@@ -5,7 +5,7 @@ use crate::{
 use axum::{
     Router,
     extract::{
-        State, WebSocketUpgrade,
+        Query, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
     http::{HeaderMap, HeaderValue, StatusCode, header},
@@ -43,6 +43,8 @@ pub(crate) struct AppState {
     pub(crate) auth: auth::AuthService,
     pub(crate) world: WorldHandle,
     pub(crate) operator: Option<std::sync::Arc<crate::operator::OperatorService>>,
+    #[allow(dead_code)]
+    pub(crate) oidc: Option<crate::oidc::OidcService>,
 }
 
 struct ConnectionContext<'a> {
@@ -63,6 +65,8 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/app.js", get(app_js))
         .route("/app.css", get(app_css))
         .route("/api/v1/session", post(login).delete(logout))
+        .route("/api/v1/oidc/start", post(oidc_start))
+        .route("/api/v1/oidc/callback", get(oidc_callback))
         .route("/api/v1/play", get(play))
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
@@ -115,6 +119,68 @@ async fn ready(State(state): State<AppState>) -> Response {
         (StatusCode::OK, "ready\n").into_response()
     } else {
         (StatusCode::SERVICE_UNAVAILABLE, "not ready\n").into_response()
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OidcStartForm {
+    #[serde(default)]
+    invite: String,
+}
+
+async fn oidc_start(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<OidcStartForm>,
+) -> Response {
+    let Some(service) = state.oidc else {
+        return (StatusCode::NOT_FOUND, "not found\n").into_response();
+    };
+    if !origin_matches(&headers, &state.allowed_origin) {
+        return (StatusCode::FORBIDDEN, "forbidden\n").into_response();
+    }
+    match service.start((!form.invite.is_empty()).then_some(form.invite)) {
+        Ok(url) => (StatusCode::SEE_OTHER, [(header::LOCATION, url.location)]).into_response(),
+        Err(auth::AuthError::InvalidInput) => {
+            (StatusCode::BAD_REQUEST, "invalid request\n").into_response()
+        }
+        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, "temporarily unavailable\n").into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OidcCallbackQuery {
+    code: String,
+    state: String,
+}
+async fn oidc_callback(
+    State(state): State<AppState>,
+    Query(query): Query<OidcCallbackQuery>,
+) -> Response {
+    let Some(service) = state.oidc else {
+        return auth::unauthorized_response();
+    };
+    match service.finish(query.code, query.state).await {
+        Ok(token) => {
+            let mut response = (StatusCode::SEE_OTHER, [(header::LOCATION, "/")]).into_response();
+            if let Ok(cookie) =
+                HeaderValue::from_str(&auth::session_cookie(&token, state.auth.cookie_secure()))
+            {
+                response.headers_mut().insert(header::SET_COOKIE, cookie);
+            }
+            response
+        }
+        Err(crate::oidc::OidcFinishError::Invalid | crate::oidc::OidcFinishError::Unauthorized) => {
+            auth::unauthorized_response()
+        }
+        Err(crate::oidc::OidcFinishError::Unavailable) => {
+            (StatusCode::SERVICE_UNAVAILABLE, "temporarily unavailable\n").into_response()
+        }
+        Err(crate::oidc::OidcFinishError::Internal) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, "internal server error\n").into_response()
+        }
     }
 }
 

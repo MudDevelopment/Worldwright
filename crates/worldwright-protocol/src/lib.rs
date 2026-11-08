@@ -303,6 +303,25 @@ fn validate_client(message: &ClientMessage) -> Result<(), ProtocolError> {
     Ok(())
 }
 
+pub fn encode_client(message: &ClientMessage) -> Result<Vec<u8>, ProtocolError> {
+    validate_client(message)?;
+    let bytes = serde_json::to_vec(message).map_err(|_| ProtocolError::invalid_message())?;
+    if bytes.len() > MAX_FRAME_BYTES {
+        return Err(ProtocolError::invalid_message());
+    }
+    Ok(bytes)
+}
+
+pub fn decode_server(bytes: &[u8]) -> Result<ServerEnvelope, ProtocolError> {
+    if bytes.len() > MAX_FRAME_BYTES {
+        return Err(ProtocolError::invalid_message());
+    }
+    let envelope: ServerEnvelope =
+        serde_json::from_slice(bytes).map_err(|_| ProtocolError::invalid_message())?;
+    validate_server(&envelope)?;
+    Ok(envelope)
+}
+
 fn validate_server(envelope: &ServerEnvelope) -> Result<(), ProtocolError> {
     if envelope.protocol_version != PROTOCOL_VERSION
         || !valid_stream_epoch(&envelope.stream_epoch)
@@ -1185,6 +1204,36 @@ mod tests {
                 ProtocolErrorKind::InvalidMessage
             );
         }
+    }
+
+    #[test]
+    fn client_encoding_and_server_decoding_are_strict_and_bounded() {
+        let client = ClientMessage::Command {
+            request_id: "load-1".to_owned(),
+            command: ClientCommand::Look,
+        };
+        let encoded = encode_client(&client).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<ClientMessage>(&encoded).unwrap(),
+            client
+        );
+        assert!(
+            encode_client(&ClientMessage::Attach {
+                request_id: "bad/id".to_owned()
+            })
+            .is_err()
+        );
+
+        let envelope = valid_envelope(ServerMessage::CommandResult {
+            request_id: "load-1".to_owned(),
+            revision: 1,
+        });
+        let bytes = serde_json::to_vec(&envelope).unwrap();
+        assert_eq!(decode_server(&bytes).unwrap(), envelope);
+        assert!(decode_server(&vec![b' '; MAX_FRAME_BYTES + 1]).is_err());
+        let mut invalid = envelope;
+        invalid.sequence = 0;
+        assert!(decode_server(&serde_json::to_vec(&invalid).unwrap()).is_err());
     }
 
     #[test]

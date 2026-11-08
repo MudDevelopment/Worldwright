@@ -371,6 +371,44 @@ impl AuthService {
         Ok(self.lookup_local(token))
     }
 
+    #[allow(dead_code)]
+    pub(crate) async fn oidc_login(
+        &self,
+        issuer: &str,
+        subject: &str,
+        invite_hash: Option<[u8; 32]>,
+    ) -> Result<String, AuthError> {
+        let Backend::Postgres { store, world } = &self.backend else {
+            return Err(AuthError::Unauthorized);
+        };
+        for _ in 0..8 {
+            let token = random_hex(32).map_err(|_| AuthError::Internal)?;
+            match store
+                .login_oidc(worldwright_persistence::OidcLoginSpec {
+                    world: *world,
+                    issuer,
+                    subject,
+                    invite_hash: invite_hash.as_ref(),
+                    session_hash: &session_token_hash(&token),
+                    session_ttl_seconds: SESSION_TTL_SECONDS,
+                    max_sessions: MAX_SESSIONS,
+                })
+                .await
+            {
+                Ok(_) => return Ok(token),
+                Err(PersistenceError::SessionCollision) => continue,
+                Err(PersistenceError::SessionCapacity) => return Err(AuthError::SessionCapacity),
+                Err(
+                    PersistenceError::InviteInvalid
+                    | PersistenceError::IdentityConflict
+                    | PersistenceError::Unauthorized,
+                ) => return Err(AuthError::Unauthorized),
+                Err(_) => return Err(AuthError::Internal),
+            }
+        }
+        Err(AuthError::Internal)
+    }
+
     fn lookup_local(&self, token: &str) -> Option<Principal> {
         let mut sessions = self.sessions.lock().ok()?;
         let now = Instant::now();

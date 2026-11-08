@@ -17,8 +17,8 @@ use worldwright_operations::{
     ReleaseSubmissionMetadata, StudioReviewContext, encode_release_submission,
 };
 use worldwright_release::{
-    DeploymentTarget, PublicationKind, PublicationStatus, ReleaseId, ReviewDecision, Sha256Digest,
-    verify_bytes,
+    DeploymentTarget, PublicationKind, PublicationStatus, ReleaseId, ReleaseManifest,
+    ReviewDecision, Sha256Digest, verify_bytes,
 };
 
 const MAX_RELEASE_TEXT_BYTES: usize = 128;
@@ -186,6 +186,7 @@ impl PostgresStore {
             .await?;
         }
         let current = lock_world(&mut tx, context.world).await?;
+        ensure_world_game(&mut tx, context.world, verified.manifest()).await?;
         if current.pending.is_some() || current.maintenance {
             return Err(PersistenceError::InvalidTransition);
         }
@@ -566,6 +567,7 @@ impl PostgresStore {
             .await?;
         }
         let current = lock_world(&mut tx, world).await?;
+        ensure_world_game(&mut tx, world, verified.manifest()).await?;
         if current.pending.is_some() || current.maintenance {
             return Err(PersistenceError::InvalidTransition);
         }
@@ -888,6 +890,7 @@ impl PostgresStore {
         if release_id != *verified.manifest().release_id() {
             return Err(PersistenceError::InvalidData);
         }
+        ensure_world_game(&mut tx, world, verified.manifest()).await?;
         let stored = StoredArtifact {
             bytes,
             digest: verified.artifact_digest(),
@@ -1382,6 +1385,7 @@ impl PostgresStore {
         if release_id != *verified.manifest().release_id() {
             return Err(PersistenceError::InvalidData);
         }
+        ensure_world_game(&mut tx, world, verified.manifest()).await?;
         let artifact = StoredArtifact {
             bytes,
             digest: verified.artifact_digest(),
@@ -1589,6 +1593,28 @@ async fn lock_world(
         pending: pending.map(activation_id).transpose()?,
         maintenance,
     })
+}
+
+async fn ensure_world_game(
+    tx: &mut Transaction<'_, Postgres>,
+    world: WorldId,
+    manifest: &ReleaseManifest,
+) -> Result<(), PersistenceError> {
+    let row: Option<(String, i64)> = sqlx::query_as(
+        "SELECT game_id, game_contract_version FROM worldwright_worlds \
+         WHERE world_id = $1 FOR UPDATE",
+    )
+    .bind(uuid_of(world))
+    .fetch_optional(&mut **tx)
+    .await?;
+    let (game_id, contract_version) = row.ok_or(PersistenceError::NotFound)?;
+    if game_id != manifest.game_id()
+        || u32::try_from(contract_version).map_err(|_| PersistenceError::InvalidData)?
+            != manifest.contract_version()
+    {
+        return Err(PersistenceError::ReleaseConflict);
+    }
+    Ok(())
 }
 
 async fn fence_release(

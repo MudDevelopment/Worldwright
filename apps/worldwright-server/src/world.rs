@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{
@@ -13,6 +14,7 @@ use tokio::{
 };
 use worldwright_content::{ValidatedWorldContent, WorldLookup, instantiate};
 use worldwright_core::{
+    GameModule,
     command::{ActorContext, CommandEnvelope, CommandIntent, PlayerText},
     ids::{CharacterId, ConnectionId, ItemId, OperationId, RoomId, WorldId},
     rule::RuleRegistry,
@@ -20,11 +22,11 @@ use worldwright_core::{
     time::{RandomExhausted, RandomSource, Tick},
 };
 use worldwright_persistence::{
-    InventorySnapshot, PersistenceError, PostgresStore, ReleaseReadGuard, RewardOutcome,
-    RewardResult, TransferOutcome, TransferResult, WriterLease,
+    DurableCharacterRoom, DurableGameSnapshot, InventorySnapshot, PersistenceError, PostgresStore,
+    ReleaseReadGuard, RewardOutcome, RewardResult, TransferOutcome, TransferResult, WriterLease,
 };
 use worldwright_protocol::{ClientCommand, ErrorCode, OutputKind, ServerMessage};
-use worldwright_release::Sha256Digest;
+use worldwright_release::{GameContract, Sha256Digest};
 
 const GAMEPLAY_CAPACITY: usize = 256;
 const CONTROL_CAPACITY: usize = 64;
@@ -80,8 +82,102 @@ pub(crate) struct DurableActor {
     token_hash: [u8; 32],
 }
 
+pub(crate) fn initial_durable_state(
+    content: &ValidatedWorldContent,
+    registrations: &[crate::auth::CharacterRegistration],
+    game: crate::GameProfile,
+) -> Result<
+    (
+        worldwright_core::runtime::DurableWorldState,
+        Vec<DurableCharacterRoom>,
+    ),
+    crate::ServerError,
+> {
+    let world =
+        WorldId::from_u128(1).map_err(|_| crate::ServerError::startup("world identity failed"))?;
+    let (mut builder, lookup) = instantiate(content, world)
+        .map_err(|_| crate::ServerError::startup("content instantiation failed"))?
+        .into_parts();
+    let mut rooms = Vec::new();
+    let mut registrations = registrations.to_vec();
+    registrations.sort_by_key(|r| r.principal.character);
+    for registration in registrations {
+        let p = registration.principal;
+        let room = match registration.room_definition.as_deref() {
+            None => lookup.entry_room,
+            Some(raw) => {
+                let definition = raw.parse().map_err(|_| {
+                    crate::ServerError::startup(
+                        "durable character room is not present in loaded content",
+                    )
+                })?;
+                lookup.room_ids.get(&definition).copied().ok_or_else(|| {
+                    crate::ServerError::startup(
+                        "durable character room is not present in loaded content",
+                    )
+                })?
+            }
+        };
+        builder
+            .add_character(p.character, p.account, room)
+            .map_err(|_| crate::ServerError::startup("character initialization failed"))?;
+        if game == crate::GameProfile::Expedition {
+            worldwright_expedition::initialize_character(&mut builder, p.character)
+                .map_err(|_| crate::ServerError::startup("expedition initialization failed"))?;
+        }
+        rooms.push(DurableCharacterRoom {
+            character: p.character,
+            room_definition: lookup
+                .room_ids
+                .iter()
+                .find_map(|(id, r)| (*r == room).then(|| id.to_string()))
+                .unwrap_or_else(|| content.entry_room().to_string()),
+        });
+    }
+    let mut rules = RuleRegistry::new();
+    match game {
+        crate::GameProfile::Reference => ReferenceGame.register_rules(&mut rules),
+        crate::GameProfile::Expedition => {
+            worldwright_expedition::ExpeditionGame.register_rules(&mut rules)
+        }
+    }
+    .map_err(|_| crate::ServerError::startup("game registration failed"))?;
+    let runtime = builder
+        .build(rules)
+        .map_err(|_| crate::ServerError::startup("runtime build failed"))?;
+    Ok((
+        runtime
+            .snapshot()
+            .durable_state()
+            .map_err(|_| crate::ServerError::startup("durable state export failed"))?,
+        rooms,
+    ))
+}
+
+#[allow(dead_code)]
+pub(crate) struct DurableGameplayMutation {
+    pub(crate) actor: DurableActor,
+    pub(crate) lease: WriterLease,
+    pub(crate) expected_release: Sha256Digest,
+    pub(crate) game: worldwright_release::GameContract,
+    pub(crate) request_id: String,
+    pub(crate) operation: OperationId,
+    pub(crate) kind: worldwright_persistence::GameplayIntentKind,
+    pub(crate) intent: Vec<u8>,
+    pub(crate) expected_state_version: u64,
+    pub(crate) runtime: worldwright_core::runtime::DurableWorldState,
+    pub(crate) rooms: Vec<worldwright_persistence::DurableCharacterRoom>,
+    pub(crate) now: Tick,
+    pub(crate) result: serde_json::Value,
+}
+
 #[async_trait]
 pub(crate) trait DurableStore: Send + Sync {
+    #[allow(dead_code)]
+    async fn commit_gameplay(
+        &self,
+        input: DurableGameplayMutation,
+    ) -> Result<worldwright_persistence::GameplayCommit, PersistenceError>;
     async fn begin_release_read(
         &self,
         lease: WriterLease,
@@ -113,6 +209,34 @@ pub(crate) trait DurableStore: Send + Sync {
 
 #[async_trait]
 impl DurableStore for PostgresStore {
+    async fn commit_gameplay(
+        &self,
+        input: DurableGameplayMutation,
+    ) -> Result<worldwright_persistence::GameplayCommit, PersistenceError> {
+        self.commit_gameplay(worldwright_persistence::GameplayMutation {
+            lease: input.lease,
+            expected_release: input.expected_release,
+            game: input.game,
+            actor: worldwright_persistence::AuthenticatedActor {
+                world: input.actor.world,
+                account: input.actor.account,
+                character: input.actor.character,
+                token_hash: &input.actor.token_hash,
+            },
+            request_id: &input.request_id,
+            operation: input.operation,
+            kind: input.kind,
+            intent: &input.intent,
+            expected_state_version: input.expected_state_version,
+            state: worldwright_persistence::GameplayState {
+                runtime: &input.runtime,
+                rooms: &input.rooms,
+                now: input.now,
+            },
+            result: input.result,
+        })
+        .await
+    }
     async fn begin_release_read(
         &self,
         lease: WriterLease,
@@ -199,6 +323,10 @@ pub(crate) struct DurableContext {
     pub(crate) world: WorldId,
     pub(crate) release_digest: Sha256Digest,
     pub(crate) item_definition: String,
+    #[allow(dead_code)]
+    pub(crate) game: GameContract,
+    #[allow(dead_code)]
+    pub(crate) game_state_version: u64,
 }
 
 #[derive(Clone)]
@@ -297,6 +425,40 @@ struct Owner {
     started: Instant,
     connected_clients: Arc<AtomicU64>,
     random: OwnerRandom,
+    staged_messages: Option<Vec<(ActorContext, ServerMessage)>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredGameplayResult {
+    messages: Vec<ServerMessage>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DurableCommandStatus {
+    Succeeded,
+    Failed,
+    Stop,
+}
+
+impl StoredGameplayResult {
+    fn validate(&self, request_id: &str) -> bool {
+        self.messages.len() <= 64
+            && self.messages.iter().all(|message| match message {
+                ServerMessage::Output {
+                    request_id: Some(found),
+                    ..
+                }
+                | ServerMessage::Exits {
+                    request_id: Some(found),
+                    ..
+                }
+                | ServerMessage::CommandResult {
+                    request_id: found, ..
+                } => found == request_id,
+                _ => false,
+            })
+    }
 }
 
 impl WorldHandle {
@@ -334,6 +496,7 @@ impl WorldHandle {
             registrations,
             durable,
             crate::GameProfile::Reference,
+            None,
         )
     }
 
@@ -342,6 +505,7 @@ impl WorldHandle {
         registrations: Vec<crate::auth::CharacterRegistration>,
         durable: Option<DurableContext>,
         game: crate::GameProfile,
+        initial_game: Option<DurableGameSnapshot>,
     ) -> Result<Self, crate::ServerError> {
         let world = WorldId::from_u128(1)
             .map_err(|_| crate::ServerError::startup("world ID initialization failed"))?;
@@ -379,7 +543,7 @@ impl WorldHandle {
                 .map_err(|_| {
                     crate::ServerError::startup("world character initialization failed")
                 })?;
-            if game == crate::GameProfile::Expedition {
+            if game == crate::GameProfile::Expedition && initial_game.is_none() {
                 worldwright_expedition::initialize_character(&mut builder, principal.character)
                     .map_err(|_| {
                         crate::ServerError::startup("expedition character initialization failed")
@@ -403,9 +567,15 @@ impl WorldHandle {
                 .map_err(|_| crate::ServerError::startup("expedition game registration failed"))?;
             }
         }
-        let runtime = builder
-            .build(rules)
-            .map_err(|_| crate::ServerError::startup("world runtime initialization failed"))?;
+        let runtime = if let Some(snapshot) = initial_game {
+            builder
+                .restore_durable_state(snapshot.runtime)
+                .map_err(|_| crate::ServerError::startup("durable game state restore failed"))?;
+            builder.build(rules)
+        } else {
+            builder.build(rules)
+        }
+        .map_err(|_| crate::ServerError::startup("world runtime initialization failed"))?;
         let (gameplay, gameplay_receiver) = mpsc::channel(GAMEPLAY_CAPACITY);
         let (control, control_receiver) = mpsc::channel(CONTROL_CAPACITY);
         let ready = Arc::new(AtomicBool::new(true));
@@ -432,6 +602,7 @@ impl WorldHandle {
             started: Instant::now(),
             connected_clients: connected_clients.clone(),
             random,
+            staged_messages: None,
         };
         tokio::spawn(owner.run());
         Ok(Self {
@@ -659,23 +830,31 @@ impl Owner {
                     self.remove_route(actor, DisconnectReason::Normal);
                     return false;
                 }
-                let _release_guard = if let Some(context) = self.durable.clone() {
-                    match context
-                        .store
-                        .begin_release_read(context.lease, context.release_digest)
-                        .await
-                    {
-                        Ok(guard) => Some(guard),
-                        Err(error) => {
-                            let reason = release_disconnect_reason(error);
-                            self.shutdown_routes(reason);
-                            let _ = response.send(Err(AttachError::Internal));
-                            return true;
-                        }
-                    }
-                } else {
-                    None
-                };
+                if self.durable.is_some() {
+                    let attached = self.attached_message(actor, &request_id);
+                    let status = self
+                        .commit_durable_command(
+                            GameplayRequest {
+                                actor,
+                                request_id,
+                                command: ClientCommand::Look,
+                            },
+                            false,
+                            vec![(actor, attached)],
+                        )
+                        .await;
+                    let result =
+                        if status == DurableCommandStatus::Succeeded && self.is_current(actor) {
+                            Ok(())
+                        } else {
+                            if self.is_current(actor) {
+                                self.remove_route(actor, DisconnectReason::Internal);
+                            }
+                            Err(AttachError::Internal)
+                        };
+                    let _ = response.send(result);
+                    return status == DurableCommandStatus::Stop;
+                }
                 let result = self.initial(actor, &request_id);
                 if response.send(result).is_err() && self.is_current(actor) {
                     self.remove_route(actor, DisconnectReason::Normal);
@@ -752,14 +931,7 @@ impl Owner {
     }
 
     fn initial(&mut self, actor: ActorContext, request_id: &str) -> Result<(), AttachError> {
-        let attached = ServerMessage::Attached {
-            request_id: request_id.to_owned(),
-            character_name: self
-                .names
-                .get(&actor.character)
-                .cloned()
-                .unwrap_or_else(|| "Player".to_owned()),
-        };
+        let attached = self.attached_message(actor, request_id);
         if !self.send_to_actor(actor, attached) {
             return Err(AttachError::Internal);
         }
@@ -769,6 +941,17 @@ impl Owner {
             Ok(())
         } else {
             Err(AttachError::Internal)
+        }
+    }
+
+    fn attached_message(&self, actor: ActorContext, request_id: &str) -> ServerMessage {
+        ServerMessage::Attached {
+            request_id: request_id.to_owned(),
+            character_name: self
+                .names
+                .get(&actor.character)
+                .cloned()
+                .unwrap_or_else(|| "Player".to_owned()),
         }
     }
 
@@ -790,6 +973,9 @@ impl Owner {
                 | ClientCommand::ClaimReward { .. }
                 | ClientCommand::TransferItem { .. }
         );
+        if self.durable.is_some() && !durable_command {
+            return self.handle_durable_gameplay(request).await;
+        }
         if !durable_command {
             if !self.is_current(request.actor) {
                 return false;
@@ -953,6 +1139,231 @@ impl Owner {
         }
     }
 
+    async fn handle_durable_gameplay(&mut self, request: GameplayRequest) -> bool {
+        self.commit_durable_command(request, true, Vec::new()).await == DurableCommandStatus::Stop
+    }
+
+    async fn commit_durable_command(
+        &mut self,
+        request: GameplayRequest,
+        send_accepted: bool,
+        prelude: Vec<(ActorContext, ServerMessage)>,
+    ) -> DurableCommandStatus {
+        if !self.is_current(request.actor) {
+            return DurableCommandStatus::Failed;
+        }
+        let Some(context) = self.durable.clone() else {
+            return DurableCommandStatus::Failed;
+        };
+        if send_accepted
+            && !self.send_to_actor(
+                request.actor,
+                ServerMessage::Accepted {
+                    request_id: request.request_id.clone(),
+                },
+            )
+        {
+            return DurableCommandStatus::Failed;
+        }
+        let token = match self.routes.get(&request.actor.character) {
+            Some(route) if route.actor == request.actor => route.session_token.clone(),
+            _ => return DurableCommandStatus::Failed,
+        };
+        let checkpoint = self.runtime.snapshot();
+        let kind = match &request.command {
+            ClientCommand::Look => worldwright_persistence::GameplayIntentKind::Look,
+            ClientCommand::Move { .. } => worldwright_persistence::GameplayIntentKind::Move,
+            ClientCommand::Say { .. } => worldwright_persistence::GameplayIntentKind::Say,
+            ClientCommand::GameAction { .. } => {
+                worldwright_persistence::GameplayIntentKind::GameAction
+            }
+            _ => return DurableCommandStatus::Failed,
+        };
+        let intent = match serde_json::to_vec(&request.command) {
+            Ok(intent) => intent,
+            Err(_) => {
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            }
+        };
+        debug_assert!(self.staged_messages.is_none());
+        self.staged_messages = Some(prelude.clone());
+        let execution =
+            self.execute_command(request.actor, &request.request_id, request.command.clone());
+        let staged = self.staged_messages.take().unwrap_or_default();
+        if let Err(error) = execution {
+            if self.runtime.restore_checkpoint(checkpoint).is_err() {
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            }
+            self.send_command_error(request.actor, request.request_id, error);
+            return DurableCommandStatus::Failed;
+        }
+        let runtime_state = match self.runtime.snapshot().durable_state() {
+            Ok(v) => v,
+            Err(_) => {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            }
+        };
+        let snapshot = self.runtime.snapshot();
+        let mut rooms = Vec::new();
+        for character in snapshot.characters() {
+            let Some(room) = snapshot.room_of(character) else {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            };
+            let Some(definition) = self
+                .lookup
+                .room_ids
+                .iter()
+                .find_map(|(definition, id)| (*id == room).then(|| definition.to_string()))
+            else {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            };
+            rooms.push(worldwright_persistence::DurableCharacterRoom {
+                character,
+                room_definition: definition,
+            });
+        }
+        let operation = match durable_operation_id() {
+            Ok(v) => v,
+            Err(_) => {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            }
+        };
+        let stored = StoredGameplayResult {
+            messages: staged
+                .iter()
+                .filter(|(recipient, message)| {
+                    *recipient == request.actor
+                        && !matches!(message, ServerMessage::Attached { .. })
+                })
+                .map(|(_, message)| message.clone())
+                .collect(),
+        };
+        if !stored.validate(&request.request_id) {
+            let _ = self.runtime.restore_checkpoint(checkpoint);
+            self.durable_failure(DisconnectReason::Internal);
+            return DurableCommandStatus::Stop;
+        }
+        let result = match serde_json::to_value(stored) {
+            Ok(result) => result,
+            Err(_) => {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            }
+        };
+        let elapsed = match u64::try_from(self.started.elapsed().as_millis()) {
+            Ok(elapsed) => elapsed,
+            Err(_) => {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                self.durable_failure(DisconnectReason::Internal);
+                return DurableCommandStatus::Stop;
+            }
+        };
+        let actor = DurableActor {
+            world: context.world,
+            account: request.actor.account,
+            character: request.actor.character,
+            token_hash: worldwright_persistence::session_token_hash(&token),
+        };
+        let commit = context
+            .store
+            .commit_gameplay(DurableGameplayMutation {
+                actor,
+                lease: context.lease,
+                expected_release: context.release_digest,
+                game: context.game,
+                request_id: request.request_id.clone(),
+                operation,
+                kind,
+                intent,
+                expected_state_version: context.game_state_version,
+                runtime: runtime_state,
+                rooms,
+                now: Tick::from_millis(elapsed),
+                result,
+            })
+            .await;
+        match commit {
+            Ok(commit) => {
+                if commit.replayed {
+                    if self.runtime.restore_checkpoint(checkpoint).is_err() {
+                        self.durable_failure(DisconnectReason::Internal);
+                        return DurableCommandStatus::Stop;
+                    }
+                    let stored: StoredGameplayResult =
+                        match serde_json::from_value::<StoredGameplayResult>(commit.result) {
+                            Ok(stored) if stored.validate(&request.request_id) => stored,
+                            _ => {
+                                self.durable_failure(DisconnectReason::Internal);
+                                return DurableCommandStatus::Stop;
+                            }
+                        };
+                    for (recipient, message) in prelude {
+                        let _ = self.send_to_actor(recipient, message);
+                    }
+                    for message in stored.messages {
+                        let _ = self.send_to_actor(request.actor, message);
+                    }
+                } else {
+                    if let Some(current) = self.durable.as_mut() {
+                        current.game_state_version = commit.state_version;
+                    }
+                    for (recipient, message) in staged {
+                        let _ = self.send_to_actor(recipient, message);
+                    }
+                }
+                DurableCommandStatus::Succeeded
+            }
+            Err(error) => {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                if self.map_durable_failure(request.actor, Some(request.request_id), error) {
+                    DurableCommandStatus::Stop
+                } else {
+                    DurableCommandStatus::Failed
+                }
+            }
+        }
+    }
+
+    fn send_command_error(
+        &mut self,
+        actor: ActorContext,
+        request_id: String,
+        error: CommandError,
+    ) -> bool {
+        match error {
+            CommandError::NotFound => {
+                let _ = self.send_error(
+                    actor,
+                    Some(request_id),
+                    ErrorCode::NotFound,
+                    "exit not found",
+                    false,
+                );
+                false
+            }
+            CommandError::Runtime(error) => {
+                let (code, message, fatal) = map_world_error(error);
+                if fatal {
+                    self.remove_route(actor, DisconnectReason::Protocol(code));
+                } else {
+                    let _ = self.send_error(actor, Some(request_id), code, message, false);
+                }
+                false
+            }
+        }
+    }
+
     fn durable_failure(&mut self, reason: DisconnectReason) -> bool {
         self.shutdown_routes(reason);
         true
@@ -982,7 +1393,9 @@ impl Owner {
                 return self
                     .durable_failure(DisconnectReason::Protocol(ErrorCode::OperationPending));
             }
-            PersistenceError::Database(_) => {
+            PersistenceError::Database(_)
+            | PersistenceError::StaleGameState
+            | PersistenceError::ReleaseConflict => {
                 return self.durable_failure(DisconnectReason::Protocol(
                     ErrorCode::TemporarilyUnavailable,
                 ));
@@ -1241,6 +1654,10 @@ impl Owner {
         {
             return false;
         }
+        if let Some(staged) = self.staged_messages.as_mut() {
+            staged.push((actor, message));
+            return true;
+        }
         let sender = route.outbound.clone();
         match sender.try_send(Outbound::Message(message)) {
             Ok(()) => true,
@@ -1421,6 +1838,7 @@ mod tests {
             registrations,
             None,
             crate::GameProfile::Expedition,
+            None,
         )
         .expect("expedition world");
         (service, alice)
@@ -1477,6 +1895,45 @@ mod tests {
         service.revoke_session("ghost-token".to_owned()).await;
         assert_eq!(*cancel_receiver.borrow(), None);
         service.shutdown().await;
+    }
+
+    #[test]
+    fn stored_gameplay_results_require_actor_request_ids_and_allowed_messages() {
+        let valid = StoredGameplayResult {
+            messages: vec![ServerMessage::CommandResult {
+                request_id: "r".into(),
+                revision: 1,
+            }],
+        };
+        assert!(valid.validate("r"));
+        assert!(
+            !StoredGameplayResult {
+                messages: vec![ServerMessage::Pong { nonce: 1 }]
+            }
+            .validate("r")
+        );
+        assert!(
+            !StoredGameplayResult {
+                messages: vec![ServerMessage::Output {
+                    request_id: None,
+                    kind: OutputKind::System,
+                    speaker: None,
+                    text: "x".into()
+                }]
+            }
+            .validate("r")
+        );
+    }
+
+    #[test]
+    fn stored_gameplay_results_bound_message_count() {
+        let messages = (0..65)
+            .map(|_| ServerMessage::CommandResult {
+                request_id: "r".into(),
+                revision: 1,
+            })
+            .collect();
+        assert!(!StoredGameplayResult { messages }.validate("r"));
     }
 
     #[tokio::test]

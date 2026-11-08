@@ -58,6 +58,9 @@ impl<T> Scheduler<T> {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+    pub fn iter(&self) -> impl Iterator<Item = (Tick, &T)> {
+        self.entries.iter().map(|((at, _), value)| (*at, value))
+    }
 
     pub fn schedule(&mut self, at: Tick, payload: T) -> Result<ScheduleToken, ScheduleError> {
         if self.len() >= self.capacity.get() {

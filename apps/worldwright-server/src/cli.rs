@@ -74,11 +74,20 @@ pub(crate) struct ServeOptions {
     pub(crate) allowed_origin: String,
     pub(crate) storage: ParsedStorage,
     pub(crate) allow_insecure_http: bool,
+    pub(crate) behind_tls_ingress: bool,
     pub(crate) operator_key_env: Option<String>,
     pub(crate) operator_issuer: Option<String>,
     pub(crate) operator_audience: Option<String>,
     pub(crate) environment: Option<Environment>,
     pub(crate) game: crate::GameProfile,
+    pub(crate) oidc: Option<ParsedOidcConfig>,
+}
+
+pub(crate) struct ParsedOidcConfig {
+    issuer: String,
+    client_id: String,
+    client_secret_env: String,
+    redirect_uri: String,
 }
 
 pub(crate) enum ParsedStorage {
@@ -99,6 +108,13 @@ pub(crate) enum DatabaseCommand {
         env_name: String,
         content: PathBuf,
         accounts: PathBuf,
+        game: worldwright_release::GameContract,
+    },
+    OidcInvite {
+        env_name: String,
+        username: String,
+        issuer: String,
+        ttl_seconds: u64,
     },
 }
 
@@ -503,6 +519,10 @@ where
     let mut env_name = None;
     let mut content = None;
     let mut accounts = None;
+    let mut game = None;
+    let mut username = None;
+    let mut issuer = None;
+    let mut ttl_seconds = None;
     while let Some(argument) = args.next() {
         match argument.to_str() {
             Some("--database-url-env") if env_name.is_none() => {
@@ -514,19 +534,57 @@ where
             Some("--accounts") if accounts.is_none() => {
                 accounts = Some(next_path(&mut args, "--accounts")?)
             }
+            Some("--game") if game.is_none() => {
+                game = Some(match next_unicode(&mut args, "--game")?.as_str() {
+                    "reference" => worldwright_release::GameContract::Reference,
+                    "expedition" => worldwright_release::GameContract::Expedition,
+                    _ => return Err("--game must be reference or expedition".to_owned()),
+                })
+            }
+            Some("--username") if username.is_none() => {
+                username = Some(next_semantic(&mut args, "--username")?)
+            }
+            Some("--issuer") if issuer.is_none() => {
+                issuer = Some(next_semantic(&mut args, "--issuer")?)
+            }
+            Some("--ttl-seconds") if ttl_seconds.is_none() => {
+                ttl_seconds = Some(
+                    next_unicode(&mut args, "--ttl-seconds")?
+                        .parse::<u64>()
+                        .map_err(|_| "--ttl-seconds must be an integer".to_owned())?,
+                )
+            }
             _ => return Err("invalid database option".to_owned()),
         }
     }
     let env_name = env_name.ok_or_else(|| "--database-url-env is required".to_owned())?;
     match subcommand {
-        "migrate" if content.is_none() && accounts.is_none() => {
+        "migrate"
+            if content.is_none()
+                && accounts.is_none()
+                && game.is_none()
+                && username.is_none()
+                && issuer.is_none()
+                && ttl_seconds.is_none() =>
+        {
             Ok(Command::Database(DatabaseCommand::Migrate { env_name }))
         }
-        "seed" => Ok(Command::Database(DatabaseCommand::Seed {
-            env_name,
-            content: content.ok_or_else(|| "--content is required".to_owned())?,
-            accounts: accounts.ok_or_else(|| "--accounts is required".to_owned())?,
-        })),
+        "seed" if username.is_none() && issuer.is_none() && ttl_seconds.is_none() => {
+            Ok(Command::Database(DatabaseCommand::Seed {
+                env_name,
+                content: content.ok_or_else(|| "--content is required".to_owned())?,
+                accounts: accounts.ok_or_else(|| "--accounts is required".to_owned())?,
+                game: game.unwrap_or(worldwright_release::GameContract::Reference),
+            }))
+        }
+        "oidc-invite" if content.is_none() && accounts.is_none() && game.is_none() => {
+            Ok(Command::Database(DatabaseCommand::OidcInvite {
+                env_name,
+                username: username.ok_or_else(|| "--username is required".to_owned())?,
+                issuer: issuer.ok_or_else(|| "--issuer is required".to_owned())?,
+                ttl_seconds: ttl_seconds.unwrap_or(86_400),
+            }))
+        }
         _ => Err("invalid database subcommand/options".to_owned()),
     }
 }
@@ -561,11 +619,16 @@ where
     let mut origin = None;
     let mut bind = None;
     let mut allow_insecure_http = false;
+    let mut behind_tls_ingress = false;
     let mut operator_key_env = None;
     let mut operator_issuer = None;
     let mut operator_audience = None;
     let mut environment = None;
     let mut game = None;
+    let mut oidc_issuer: Option<String> = None;
+    let mut oidc_client_id: Option<String> = None;
+    let mut oidc_secret_env: Option<String> = None;
+    let mut oidc_redirect: Option<String> = None;
     while let Some(argument) = arguments.next() {
         let option = argument
             .to_str()
@@ -618,6 +681,12 @@ where
                 }
                 allow_insecure_http = true;
             }
+            "--behind-tls-ingress" => {
+                if behind_tls_ingress {
+                    return Err("--behind-tls-ingress may appear only once".into());
+                }
+                behind_tls_ingress = true;
+            }
             "--operator-key-env" if operator_key_env.is_none() => {
                 operator_key_env = Some(next_env_name(&mut arguments)?);
             }
@@ -642,6 +711,18 @@ where
                     "expedition" => crate::GameProfile::Expedition,
                     _ => return Err("--game must be reference or expedition".to_owned()),
                 });
+            }
+            "--oidc-issuer" if oidc_issuer.is_none() => {
+                oidc_issuer = Some(next_semantic(&mut arguments, "--oidc-issuer")?);
+            }
+            "--oidc-client-id" if oidc_client_id.is_none() => {
+                oidc_client_id = Some(next_semantic(&mut arguments, "--oidc-client-id")?);
+            }
+            "--oidc-client-secret-env" if oidc_secret_env.is_none() => {
+                oidc_secret_env = Some(next_env_name(&mut arguments)?);
+            }
+            "--oidc-redirect-uri" if oidc_redirect.is_none() => {
+                oidc_redirect = Some(next_semantic(&mut arguments, "--oidc-redirect-uri")?);
             }
             "--operator-key-env"
             | "--operator-issuer"
@@ -671,6 +752,38 @@ where
         (Some(_), Some(_), _) => return Err("exactly one storage mode is required".to_owned()),
         (None, None, _) => return Err("exactly one storage mode is required".to_owned()),
     };
+    if behind_tls_ingress {
+        if !matches!(storage, ParsedStorage::Postgres { .. }) {
+            return Err("--behind-tls-ingress requires PostgreSQL storage".into());
+        }
+        if allow_insecure_http {
+            return Err("--behind-tls-ingress cannot combine with --allow-insecure-http".into());
+        }
+    } else if bind.as_ref().is_some_and(|v| !v.ip().is_loopback()) {
+        return Err("--bind must be a loopback address unless --behind-tls-ingress is set".into());
+    }
+    let oidc_count = usize::from(oidc_issuer.is_some())
+        + usize::from(oidc_client_id.is_some())
+        + usize::from(oidc_secret_env.is_some())
+        + usize::from(oidc_redirect.is_some());
+    if oidc_count != 0 && oidc_count != 4 {
+        return Err("OIDC options must be supplied all together".into());
+    }
+    if oidc_count != 0 && !matches!(storage, ParsedStorage::Postgres { .. }) {
+        return Err("OIDC requires PostgreSQL storage".into());
+    }
+    let oidc = oidc_issuer
+        .zip(oidc_client_id)
+        .zip(oidc_secret_env)
+        .zip(oidc_redirect)
+        .map(
+            |(((issuer, client_id), secret_env), redirect)| ParsedOidcConfig {
+                issuer,
+                client_id,
+                client_secret_env: secret_env,
+                redirect_uri: redirect,
+            },
+        );
     let operator_count = usize::from(operator_key_env.is_some())
         + usize::from(operator_issuer.is_some())
         + usize::from(operator_audience.is_some())
@@ -678,10 +791,16 @@ where
     if operator_count != 0 && operator_count != 4 {
         return Err("operator options must be supplied all together".to_owned());
     }
+    if behind_tls_ingress && operator_count != 0 {
+        return Err("--behind-tls-ingress cannot expose operator control".to_owned());
+    }
     let origin = origin.ok_or_else(|| "--origin is required".to_owned())?;
     validate_origin(&origin, allow_insecure_http)?;
     let bind = bind.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
-    if !bind.ip().is_loopback() {
+    if behind_tls_ingress && bind.ip().is_loopback() {
+        return Err("--behind-tls-ingress requires a non-loopback bind".to_owned());
+    }
+    if !behind_tls_ingress && !bind.ip().is_loopback() {
         return Err("--bind must be a loopback address".to_owned());
     }
     Ok(Command::Serve(ServeOptions {
@@ -689,11 +808,13 @@ where
         allowed_origin: origin,
         storage,
         allow_insecure_http,
+        behind_tls_ingress,
         operator_key_env,
         operator_issuer,
         operator_audience,
         environment,
         game: game.unwrap_or_default(),
+        oidc,
     }))
 }
 
@@ -1718,7 +1839,8 @@ random_id_impl!(
     worldwright_core::ids::CorrelationId,
     worldwright_core::ids::OperationId,
     worldwright_core::ids::GrantId,
-    worldwright_core::ids::WriterId
+    worldwright_core::ids::WriterId,
+    worldwright_core::ids::InviteId
 );
 
 fn serve_config(options: ServeOptions) -> Result<ServerConfig, String> {
@@ -1756,13 +1878,37 @@ fn serve_config(options: ServeOptions) -> Result<ServerConfig, String> {
     if operator.is_some() && matches!(storage, StorageConfig::Local { .. }) {
         return Err("operator control requires PostgreSQL storage".to_owned());
     }
+    let oidc = options
+        .oidc
+        .map(|value| {
+            if !value.issuer.starts_with("https://")
+                || !value.redirect_uri.starts_with("https://")
+                || value.client_id.is_empty()
+                || value.client_id.len() > 256
+            {
+                return Err("OIDC configuration is invalid".to_owned());
+            }
+            let client_secret = resolve_env(&value.client_secret_env)?;
+            if client_secret.is_empty() || client_secret.len() > 2048 {
+                return Err("OIDC client secret environment value is invalid".to_owned());
+            }
+            Ok(crate::OidcConfig {
+                issuer: value.issuer,
+                client_id: value.client_id,
+                client_secret,
+                redirect_uri: value.redirect_uri,
+            })
+        })
+        .transpose()?;
     Ok(ServerConfig {
         bind: options.bind,
         allowed_origin: options.allowed_origin,
         storage,
         allow_insecure_http: options.allow_insecure_http,
+        behind_tls_ingress: options.behind_tls_ingress,
         game: options.game,
         operator,
+        oidc,
     })
 }
 
@@ -1788,6 +1934,7 @@ async fn run_database(command: DatabaseCommand) -> Result<(), ServerError> {
             env_name,
             content,
             accounts,
+            game,
         } => {
             let url = resolve_env(&env_name).map_err(|_| {
                 ServerError::startup("database URL environment variable is unavailable")
@@ -1807,6 +1954,7 @@ async fn run_database(command: DatabaseCommand) -> Result<(), ServerError> {
                     .map_err(|_| ServerError::startup("world identity failed"))?,
                 content_namespace: validated.namespace().to_owned(),
                 content_schema_version: validated.schema_version(),
+                game,
                 entry_room_definition: validated.entry_room().as_str().to_owned(),
                 accounts,
             };
@@ -1814,6 +1962,48 @@ async fn run_database(command: DatabaseCommand) -> Result<(), ServerError> {
                 .seed(&seed)
                 .await
                 .map_err(|_| ServerError::startup("database seed failed"))?;
+        }
+        DatabaseCommand::OidcInvite {
+            env_name,
+            username,
+            issuer,
+            ttl_seconds,
+        } => {
+            if !(worldwright_persistence::MIN_PLAYER_INVITE_TTL_SECONDS
+                ..=worldwright_persistence::MAX_PLAYER_INVITE_TTL_SECONDS)
+                .contains(&ttl_seconds)
+                || !issuer.starts_with("https://")
+            {
+                return Err(ServerError::startup("OIDC invite options are invalid"));
+            }
+            let url = resolve_env(&env_name).map_err(|_| {
+                ServerError::startup("database URL environment variable is unavailable")
+            })?;
+            let store = worldwright_persistence::PostgresStore::connect(&url)
+                .await
+                .map_err(|_| ServerError::startup("database connection failed"))?;
+            store
+                .verify_migrations()
+                .await
+                .map_err(|_| ServerError::startup("database migration verification failed"))?;
+            let secret = worldwright_operations::encode_hex(&random_bytes::<32>()?);
+            let invite = random_id::<worldwright_core::ids::InviteId>()
+                .map_err(|_| ServerError::startup("invite identity generation failed"))?;
+            let world = worldwright_core::ids::WorldId::from_u128(1)
+                .map_err(|_| ServerError::startup("world identity failed"))?;
+            let token_hash = worldwright_persistence::oidc_token_hash(&secret);
+            store
+                .issue_oidc_invite(worldwright_persistence::OidcInviteSpec {
+                    invite,
+                    world,
+                    username: &username,
+                    issuer: &issuer,
+                    token_hash: &token_hash,
+                    ttl_seconds,
+                })
+                .await
+                .map_err(|_| ServerError::startup("OIDC invite issue failed"))?;
+            println!("invite_token={secret}");
         }
     }
     Ok(())
@@ -1830,7 +2020,10 @@ fn print_help() {
     );
     println!("       worldwright-server database migrate --database-url-env <ENV_NAME>");
     println!(
-        "       worldwright-server database seed --database-url-env <ENV_NAME> --content <path> --accounts <path>"
+        "       worldwright-server database seed --database-url-env <ENV_NAME> --content <path> --accounts <path> [--game <reference|expedition>]"
+    );
+    println!(
+        "       worldwright-server database oidc-invite --database-url-env <ENV_NAME> --username <name> --issuer <https-url> [--ttl-seconds <300-604800>]"
     );
     println!(
         "       worldwright-server release request --database-url-env <DB_ENV> --operator-token-env <TOKEN_ENV> --operator-key-env <KEY_ENV> --operator-issuer <issuer> --operator-audience <audience> --environment <staging|production> --artifact <path> --kind <activate|rollback> --target <staging|production> --expected-current <none|64hex> --reason <text>"

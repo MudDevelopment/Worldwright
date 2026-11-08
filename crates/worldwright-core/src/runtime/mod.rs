@@ -110,6 +110,9 @@ impl WorldSnapshot {
     pub fn room_of(&self, character: CharacterId) -> Option<RoomId> {
         self.0.characters.get(&character).map(|record| record.room)
     }
+    pub fn characters(&self) -> impl Iterator<Item = CharacterId> + '_ {
+        self.0.characters.keys().copied()
+    }
     pub fn attachment(&self, character: CharacterId) -> Option<ActorContext> {
         self.0.attachments.get(&character).copied()
     }
@@ -121,6 +124,40 @@ impl WorldSnapshot {
     }
     pub fn scheduled_actions(&self) -> usize {
         self.0.scheduler.len()
+    }
+    pub fn durable_state(&self) -> Result<DurableWorldState, WorldError> {
+        let counters = self
+            .0
+            .counters
+            .iter()
+            .map(|((character, key), value)| CounterState {
+                character: *character,
+                key: key.clone(),
+                value: *value,
+            })
+            .collect();
+        let mut scheduled = Vec::new();
+        for (at, action) in self.0.scheduler.iter() {
+            match action {
+                crate::effect::ScheduledAction::AdjustCounter {
+                    character,
+                    key,
+                    delta,
+                } => scheduled.push(ScheduledCounterState {
+                    at,
+                    character: *character,
+                    key: key.clone(),
+                    delta: *delta,
+                }),
+                _ => return Err(WorldError::UnsupportedEffect),
+            }
+        }
+        Ok(DurableWorldState {
+            world: self.world_id(),
+            revision: self.revision(),
+            counters,
+            scheduled,
+        })
     }
 }
 
@@ -137,9 +174,37 @@ pub struct ScheduledResult {
     pub revision: u64,
     pub events: Vec<DomainEvent>,
 }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CounterState {
+    pub character: CharacterId,
+    pub key: DefinitionId,
+    pub value: u64,
+}
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScheduledCounterState {
+    pub at: Tick,
+    pub character: CharacterId,
+    pub key: DefinitionId,
+    pub delta: i64,
+}
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DurableWorldState {
+    pub world: WorldId,
+    pub revision: u64,
+    pub counters: Vec<CounterState>,
+    pub scheduled: Vec<ScheduledCounterState>,
+}
 impl WorldRuntime {
     pub fn snapshot(&self) -> WorldSnapshot {
         WorldSnapshot(self.state.clone())
+    }
+    /// Restores trusted host checkpoint state after an unobserved command.
+    pub fn restore_checkpoint(&mut self, checkpoint: WorldSnapshot) -> Result<(), WorldError> {
+        if checkpoint.world_id() != self.state.id {
+            return Err(WorldError::WrongWorld);
+        }
+        self.state = checkpoint.0;
+        Ok(())
     }
     pub fn advance(&mut self, now: Tick) -> Result<ScheduledResult, WorldError> {
         if self.state.last_observed.is_some_and(|last| now < last) {

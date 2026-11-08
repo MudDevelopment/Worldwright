@@ -148,6 +148,76 @@ impl WorldBuilder {
             Entry::Occupied(_) => Err(WorldError::DuplicateCounter),
         }
     }
+    pub fn schedule_counter_adjustment(
+        &mut self,
+        at: Tick,
+        character: CharacterId,
+        key: DefinitionId,
+        delta: i64,
+    ) -> Result<(), WorldError> {
+        if !self.state.characters.contains_key(&character) {
+            return Err(WorldError::UnknownCharacter);
+        }
+        if delta == 0 {
+            return Err(WorldError::CounterLimit);
+        }
+        self.state
+            .scheduler
+            .schedule(
+                at,
+                crate::effect::ScheduledAction::AdjustCounter {
+                    character,
+                    key,
+                    delta,
+                },
+            )
+            .map_err(|e| match e {
+                crate::scheduler::ScheduleError::Full => WorldError::ScheduleLimit,
+                crate::scheduler::ScheduleError::SequenceExhausted => WorldError::CounterExhausted,
+                _ => WorldError::ScheduleClock,
+            })?;
+        Ok(())
+    }
+    pub fn restore_durable_state(
+        &mut self,
+        state: crate::runtime::DurableWorldState,
+    ) -> Result<(), WorldError> {
+        if state.world != self.state.id {
+            return Err(WorldError::WrongWorld);
+        }
+        let mut counters = std::collections::BTreeMap::new();
+        for item in state.counters {
+            if !self.state.characters.contains_key(&item.character)
+                || item.value > super::MAX_COUNTER_VALUE
+                || counters
+                    .insert((item.character, item.key), item.value)
+                    .is_some()
+            {
+                return Err(WorldError::IntentViolation);
+            }
+        }
+        let mut scheduler = crate::scheduler::Scheduler::new(super::MAX_SCHEDULED_ACTIONS)
+            .map_err(|_| WorldError::ScheduleLimit)?;
+        for item in state.scheduled {
+            if item.delta == 0 || !self.state.characters.contains_key(&item.character) {
+                return Err(WorldError::IntentViolation);
+            };
+            scheduler
+                .schedule(
+                    item.at,
+                    crate::effect::ScheduledAction::AdjustCounter {
+                        character: item.character,
+                        key: item.key,
+                        delta: item.delta,
+                    },
+                )
+                .map_err(|_| WorldError::ScheduleLimit)?;
+        }
+        self.state.counters = counters;
+        self.state.scheduler = scheduler;
+        self.state.revision = state.revision;
+        Ok(())
+    }
 }
 
 impl State {

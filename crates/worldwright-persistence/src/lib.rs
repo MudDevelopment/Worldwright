@@ -1,4 +1,6 @@
 mod error;
+mod game_state;
+mod oidc;
 mod operational;
 mod operational_queries;
 mod operations;
@@ -7,14 +9,23 @@ mod store;
 mod types;
 
 pub use error::PersistenceError;
+pub use game_state::{
+    MAX_DURABLE_GAME_COUNTERS, MAX_DURABLE_GAME_INTENT_BYTES, MAX_DURABLE_GAME_RESULT_BYTES,
+};
+pub use oidc::{
+    MAX_ACTIVE_PLAYER_INVITES, MAX_PLAYER_INVITE_TTL_SECONDS, MIN_PLAYER_INVITE_TTL_SECONDS,
+    oidc_token_hash,
+};
 pub use store::PostgresStore;
 pub use types::{
-    ActivationPlan, AuthenticatedActor, BootstrapOperator, DurableContentReferences,
-    IdentityRecord, InventoryItem, InventorySnapshot, MAX_DURABLE_INVENTORY_ITEMS,
-    MAX_DURABLE_SESSIONS, OperationalStatus, OperatorContext, PublicationRecord,
-    RECEIPT_FORMAT_VERSION, RecoveryJob, ReleaseReadGuard, ReleaseState, RewardOutcome,
-    RewardResult, RewardSpec, SESSION_TTL_SECONDS, SeedAccount, SeedWorld, SessionPrincipal,
-    StoredArtifact, TransferOutcome, TransferResult, TransferSpec, WriterLease, session_token_hash,
+    ActivationPlan, AuthenticatedActor, BootstrapOperator, DurableCharacterRoom,
+    DurableContentReferences, DurableGameSnapshot, GameplayCommit, GameplayIntentKind,
+    GameplayMutation, GameplayState, IdentityRecord, InventoryItem, InventorySnapshot,
+    MAX_DURABLE_INVENTORY_ITEMS, MAX_DURABLE_SESSIONS, OidcInviteSpec, OidcLoginSpec, OidcSession,
+    OperationalStatus, OperatorContext, PublicationRecord, RECEIPT_FORMAT_VERSION, RecoveryJob,
+    ReleaseReadGuard, ReleaseState, RewardOutcome, RewardResult, RewardSpec, SESSION_TTL_SECONDS,
+    SeedAccount, SeedWorld, SessionPrincipal, StoredArtifact, TransferOutcome, TransferResult,
+    TransferSpec, WriterLease, session_token_hash,
 };
 
 #[cfg(test)]
@@ -37,8 +48,8 @@ mod database_tests {
         Assurance, Capability, Environment, OperatorClaims, OperatorKind, StudioReviewContext,
     };
     use worldwright_release::{
-        DeploymentTarget, PackageOptions, PublicationKind, PublicationStatus, ReviewDecision,
-        Sha256Digest, package_bytes,
+        DeploymentTarget, GameContract, PackageOptions, PublicationKind, PublicationStatus,
+        ReviewDecision, Sha256Digest, package_bytes,
     };
 
     static SCHEMA_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -152,6 +163,7 @@ mod database_tests {
             world: WorldId::from_u128(1).unwrap(),
             content_namespace: "reference".to_owned(),
             content_schema_version: 1,
+            game: GameContract::Reference,
             entry_room_definition: "reference:rooms.atrium".to_owned(),
             accounts: vec![
                 SeedAccount {
@@ -963,6 +975,7 @@ mod database_tests {
                 release_id: release_id.parse().unwrap(),
                 source_revision: "test-revision".to_owned(),
                 builder_identity: builder_identity.to_owned(),
+                game: GameContract::Reference,
             },
         )
         .unwrap()

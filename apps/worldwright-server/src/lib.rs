@@ -3,6 +3,7 @@ mod auth;
 mod cli;
 mod lifecycle;
 mod metrics;
+mod oidc;
 mod operator;
 mod release_cli;
 mod release_runtime;
@@ -36,8 +37,17 @@ pub struct ServerConfig {
     pub allowed_origin: String,
     pub storage: StorageConfig,
     pub allow_insecure_http: bool,
+    pub behind_tls_ingress: bool,
     pub operator: Option<OperatorConfig>,
     pub game: GameProfile,
+    pub oidc: Option<OidcConfig>,
+}
+#[derive(Clone)]
+pub struct OidcConfig {
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: String,
+    pub redirect_uri: String,
 }
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum GameProfile {
