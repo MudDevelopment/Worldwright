@@ -72,9 +72,7 @@ pub async fn serve(options: ServeOptions, ws: Workspace) -> Result<(), String> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let result = axum::serve(listener, router)
         .with_graceful_shutdown(async move {
-            let result = tokio::signal::ctrl_c()
-                .await
-                .map_err(|_| "Studio shutdown signal failed".to_owned());
+            let result = shutdown_signal().await;
             let _ = shutdown_tx.send(result);
         })
         .await
@@ -92,6 +90,31 @@ pub async fn serve(options: ServeOptions, ws: Workspace) -> Result<(), String> {
             Ok(Err(error)) => Err(error),
             Err(_) => Err("Studio shutdown signal failed".into()),
         },
+    }
+}
+
+// Ubuntu process supervisors and desktop launchers send SIGTERM; interactive
+// terminals send SIGINT. Both must take the existing preview cleanup path.
+async fn shutdown_signal() -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut terminate = signal(SignalKind::terminate())
+            .map_err(|_| "Studio shutdown signal failed".to_owned())?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => {
+                result.map_err(|_| "Studio shutdown signal failed".to_owned())
+            }
+            signal = terminate.recv() => {
+                signal.ok_or_else(|| "Studio shutdown signal failed".to_owned())
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .map_err(|_| "Studio shutdown signal failed".to_owned())
     }
 }
 

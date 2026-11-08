@@ -345,6 +345,27 @@ Design and test-fixture work can overlap milestones, but activation cannot bypas
 
 ## Getting Started
 
+**Primary platform: Ubuntu 24.04 LTS / Linux. Windows support is retained.**
+Cargo uses the native host target; the workspace no longer forces Windows MSVC.
+The main `worldwright` application is a native CLI and Studio is a Rust-hosted
+loopback browser application, not a native GUI window. See
+[Ubuntu desktop setup](docs/LINUX_DESKTOP.md) for dependencies, desktop launch,
+storage paths, shutdown behavior, and the remaining verification gates.
+
+After bootstrap, launch Studio from your Ubuntu desktop user account:
+
+```bash
+bash scripts/desktop.sh
+# Optional: skip browser opening and choose a workspace (absolute path).
+bash scripts/desktop.sh --no-browser "$HOME/Worldwright Drafts"
+```
+
+The launcher builds native Linux CLI/Studio executables, uses an ephemeral
+loopback port, and opens your default browser when a desktop session and
+`xdg-open` are available. Keep the launcher running while using Studio.
+Ubuntu/Windows CI configuration is supplied; these changes do not establish
+successful hosted CI, a real Ubuntu desktop run, or production readiness.
+
 Extract the framework archive and open its `worldwright/` directory. Local content validation and Local Play need no database or external service. Transport development additionally uses an untracked local account registry; see [SERVER.md](docs/SERVER.md).
 
 The workspace selects **Rust 1.85.1**, edition **2024**, and locked local/registry dependencies. Install that toolchain with rustfmt and Clippy through your approved tooling process; `rust-toolchain.toml` declares it for rustup. See the [scaffold guide](docs/SCAFFOLD.md) and [development guide](docs/DEVELOPMENT.md) for installation details.
@@ -554,8 +575,8 @@ Success means more than an engine that accepts connections. It means developers 
 
 ```text
 cargo run -p worldwright -- content validate examples/expedition/world.json
-cargo run -p worldwright -- project new .\expedition --name expedition --template expedition
-cargo run -p worldwright -- content migrate examples/expedition/world.json --output .\tmp-world.json --dry-run
+cargo run -p worldwright -- project new ./expedition --name expedition --template expedition
+cargo run -p worldwright -- content migrate examples/expedition/world.json --output ./tmp-world.json --dry-run
 cargo run -p worldwright -- benchmark --clients 100 --commands-per-client 100 --json
 ```
 

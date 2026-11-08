@@ -2,6 +2,17 @@ use std::process::Command;
 const BIN: &str = env!("CARGO_BIN_EXE_worldwright");
 
 #[test]
+fn workspace_does_not_force_a_cross_compilation_target() {
+    let config = include_str!("../../../.cargo/config.toml");
+    assert!(
+        !config
+            .lines()
+            .any(|line| line.trim_start().starts_with("target =")),
+        "workspace Cargo configuration must not override the native host target"
+    );
+}
+
+#[test]
 fn help_and_status_describe_implemented_local_scope() {
     for flag in ["--help", "-h", "status"] {
         let output = Command::new(BIN).arg(flag).output().unwrap();

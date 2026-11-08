@@ -1044,6 +1044,36 @@ The README's **MIT OR Apache-2.0 recommendation remains pending authorized appro
 
 **Baseline success:** a small persistent world that is understandable, testable, recoverable, and reusable—not a collection of disconnected tools with impressive names.
 
+## Linux-first platform decision — November 8, 2026
+
+Ubuntu 24.04 LTS is the primary development/desktop baseline. Windows support,
+PowerShell tooling, Windows CI, and platform-specific filesystem protections
+are retained. Cargo defaults to the native host; cross-compilation remains
+explicit. Removing the unconditional MSVC target fixes a contradiction between
+source configuration and the earlier development guide.
+
+The existing product boundary remains: `worldwright` is the developer CLI;
+`worldwright-studio` serves the loopback browser editor. The Linux desktop
+launcher builds those two native binaries with an explicit host target/output
+path, passes an absolute preview executable, and uses the child-reported
+random loopback URL rather than guessing a port. Browser rendering delegates
+Wayland/X11 integration to the user's browser; this is not a new native GUI
+framework or packaged desktop application. Default draft storage follows
+`XDG_DATA_HOME`, falling back to `$HOME/.local/share`, outside the source tree.
+
+Studio handles Unix SIGTERM as well as interactive Ctrl+C through its existing
+graceful shutdown and preview-stop path; Windows retains Ctrl+C handling.
+Launcher cleanup is bounded and can force termination after ten seconds;
+that fallback is not a guarantee of graceful preview-tree cleanup. Loopback
+Host/Origin guards, publication authorization, and preview environment
+clearing are unchanged. This work does not introduce a persisted config
+schema or migrate existing Studio workspaces.
+
+See [Linux desktop](docs/LINUX_DESKTOP.md) for setup and
+[Linux audit](docs/verification/linux-desktop-audit.md) for inspected scope and
+observed evidence. Real Rust compilation, desktop accessibility/browser,
+PostgreSQL, container, and hosted CI verification remain separate gates.
+
 ## M7 settled decisions
 
 The implemented Studio slice uses one fixed local workspace and immutable

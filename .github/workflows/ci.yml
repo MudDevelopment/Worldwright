@@ -20,7 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Ubuntu LTS is the primary baseline; Windows is a retained regression gate.
+        os: [ubuntu-24.04, windows-latest]
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -41,7 +42,9 @@ jobs:
       - name: Check on Linux
         if: runner.os != 'Windows'
         shell: bash
-        run: bash scripts/dev.sh check
+        run: |
+          bash -n scripts/dev.sh scripts/desktop.sh
+          bash scripts/dev.sh check
       - name: Check on Windows
         if: runner.os == 'Windows'
         shell: pwsh

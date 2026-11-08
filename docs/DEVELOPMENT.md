@@ -1,5 +1,12 @@
 # Local Development and CI
 
+Ubuntu 24.04 LTS / Linux is the primary development baseline; Windows remains
+an independent native platform and CI target. See [Linux desktop](LINUX_DESKTOP.md)
+for desktop prerequisites and `bash scripts/desktop.sh` usage. Native host
+selection was corrected in `.cargo/config.toml` on November 8, 2026; previous
+text claiming that Windows target override was already removed was inaccurate.
+Actual Linux Rust/desktop verification remains pending.
+
 ## Prerequisites
 
 - The repository's `rust-toolchain.toml` pins Rust **1.85.1**, rustfmt, and Clippy.
@@ -34,7 +41,7 @@ For the local Studio slice:
 
 ```text
 cargo run -p worldwright-studio -- serve --workspace <path>
-cargo run -p worldwright-studio -- help
+cargo run -p worldwright-studio -- --help
 cargo test -p worldwright-studio --locked --offline
 cargo clippy -p worldwright-studio --all-targets --all-features --locked --offline -- -D warnings
 ```
@@ -92,9 +99,10 @@ cargo test -p worldwright-testkit --test runtime --locked --offline two_room_loo
 cargo test -p worldwright-testkit --test rules --locked --offline
 cargo run -p worldwright-server --locked --offline -- status
 cargo test -p worldwright-server --locked --offline
-cargo run -p worldwright --locked --offline -- content package examples/two-room/world.json --output .\artifacts\reference-v1.wwr --release-id reference-v1 --source-revision working-tree --builder local
-cargo run -p worldwright --locked --offline -- content inspect .\artifacts\reference-v1.wwr --json
-cargo run -p worldwright --locked --offline -- preview .\artifacts\reference-v1.wwr
+mkdir -p ./artifacts
+cargo run -p worldwright --locked --offline -- content package examples/two-room/world.json --output ./artifacts/reference-v1.wwr --release-id reference-v1 --source-revision working-tree --builder local
+cargo run -p worldwright --locked --offline -- content inspect ./artifacts/reference-v1.wwr --json
+cargo run -p worldwright --locked --offline -- preview ./artifacts/reference-v1.wwr
 ```
 
 The server status command reports protocol/browser implementation and process-local state; it does not start a server or verify service readiness. Use [SERVER.md](SERVER.md) for the explicit local `serve` workflow.
@@ -103,7 +111,7 @@ The server status command reports protocol/browser implementation and process-lo
 
 [ci.yml](../.github/workflows/ci.yml) runs on pushes, pull requests, and manual dispatch:
 
-- Ubuntu and Windows jobs call the same Bash/PowerShell workflows used locally.
+- Ubuntu 24.04 LTS (`ubuntu-24.04`) and Windows jobs call the same Bash/PowerShell workflows used locally. Linux additionally syntax-checks both shell scripts.
 - Rustup installs the declared toolchain on the hosted runners.
 - Checkout is pinned to the verified upstream v4 commit `11d5960a326750d5838078e36cf38b85af677262`.
 - Workflow token permissions are read-only for repository contents; checkout does not persist credentials.
@@ -121,8 +129,8 @@ Focused M8 commands:
 
 ```text
 cargo run -p worldwright -- content validate examples/expedition/world.json
-cargo run -p worldwright -- project new .\expedition --name expedition --template expedition
-cargo run -p worldwright -- content migrate examples/expedition/world.json --output .\tmp-world.json --dry-run
+cargo run -p worldwright -- project new ./expedition --name expedition --template expedition
+cargo run -p worldwright -- content migrate examples/expedition/world.json --output ./tmp-world.json --dry-run
 cargo run -p worldwright -- benchmark --clients 100 --commands-per-client 100 --json
 cargo test -p worldwright-core -p worldwright-expedition -p worldwright-testkit --locked --offline
 ```

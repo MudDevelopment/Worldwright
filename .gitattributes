@@ -1,0 +1,6 @@
+# Keep Linux executable text valid even when checked out on a Windows host.
+*.sh text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

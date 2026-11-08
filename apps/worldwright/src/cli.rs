@@ -601,6 +601,17 @@ mod tests {
 
     #[test]
     fn preview_and_worker_parse_bounds() {
+        // Drive-letter paths are not absolute on Unix. Exercise the same
+        // strict worker contract with absolute paths native to the test host.
+        let root = std::env::current_dir().unwrap();
+        let artifact = root.join("artifact.wr");
+        let slot = root.join("slot.lock");
+        let artifact = artifact.to_str().unwrap();
+        let slot = slot.to_str().unwrap();
+        let digest = "0".repeat(64);
+        let token = "0".repeat(32);
+        let invalid_digest = format!("ABC{}", "0".repeat(61));
+        let invalid_token = format!("ABC{}", "0".repeat(29));
         assert!(matches!(
             parse_args(&["preview", "artifact"]).unwrap(),
             Command::Preview {
@@ -608,35 +619,13 @@ mod tests {
                 ..
             }
         ));
-        assert!(
-            parse_args(&[
-                "__preview-worker",
-                "relative.wr",
-                "0000000000000000000000000000000000000000000000000000000000000000",
-                "C:\\slot.lock",
-                "00000000000000000000000000000000",
-                "10"
-            ])
-            .is_err()
-        );
-        assert!(
-            parse_args(&[
-                "__preview-worker",
-                "C:\\artifact.wr",
-                "ABC0000000000000000000000000000000000000000000000000000000000000",
-                "C:\\slot.lock",
-                "00000000000000000000000000000000",
-                "10"
-            ])
-            .is_err()
-        );
         assert!(matches!(
             parse_args(&[
                 "__preview-worker",
-                "C:\\artifact.wr",
-                "0000000000000000000000000000000000000000000000000000000000000000",
-                "C:\\slot.lock",
-                "00000000000000000000000000000000",
+                artifact,
+                &digest,
+                slot,
+                &token,
                 "10",
             ]),
             Ok(Command::PreviewWorker {
@@ -644,16 +633,57 @@ mod tests {
                 ..
             })
         ));
-        assert!(
-            parse_args(&[
+        for args in [
+            [
                 "__preview-worker",
-                "C:\\artifact.wr",
-                "0000000000000000000000000000000000000000000000000000000000000000",
-                "C:\\slot.lock",
-                "ABC000000000000000000000000000000",
+                "relative.wr",
+                &digest,
+                slot,
+                &token,
                 "10",
-            ])
-            .is_err()
-        );
+            ],
+            [
+                "__preview-worker",
+                artifact,
+                &digest,
+                "relative.lock",
+                &token,
+                "10",
+            ],
+            [
+                "__preview-worker",
+                artifact,
+                &invalid_digest,
+                slot,
+                &token,
+                "10",
+            ],
+            [
+                "__preview-worker",
+                artifact,
+                &digest,
+                slot,
+                &invalid_token,
+                "10",
+            ],
+            [
+                "__preview-worker",
+                artifact,
+                &digest,
+                slot,
+                &token,
+                "0",
+            ],
+            [
+                "__preview-worker",
+                artifact,
+                &digest,
+                slot,
+                &token,
+                "3601",
+            ],
+        ] {
+            assert!(parse_args(&args).is_err(), "{args:?}");
+        }
     }
 }
