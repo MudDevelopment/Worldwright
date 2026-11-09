@@ -62,3 +62,15 @@ not trust Forwarded/X-Forwarded-* headers. This mode is not permission for
 arbitrary public HTTP. No live Docker build,
 Helm cluster install, ingress controller, PostgreSQL
 deployment, or production capacity test is claimed by these files.
+
+## P0 chart acceptance update — November 9, 2026
+
+OIDC validation is conditional on explicitly enabled=true; disabled/absent unused
+fields no longer invalidate otherwise complete deployment values. Required image,
+origin, ingress and PostgreSQL settings remain mandatory. Both render wrappers
+now call helm/worldwright/tests/verify.py with complete synthetic values, immediate
+native exit checks and actual YAML secretName/secretKeyRef/security assertions.
+Helm/Python/dependency absence is failure. Install tests/requirements.txt in a venv
+and see ../docs/P0_ACCEPTANCE.md. Local schema/checker tests passed; actual Helm
+and cluster execution remain unobserved. New chart CI jobs do not themselves
+configure branch protection or approve a production tool/image/security policy.

@@ -51,3 +51,14 @@ build targets are now explicit. WWV2-003/004 source gaps corrected, verification
 pending; WWV2-015 partially addressed. Idle ticks, live durable game recovery,
 SDK relocation and broader acceptance remain open. No current Cargo results
 were observed through EWW; prior Windows test evidence predates this patch.
+
+## Requested P0 implementation batch — November 9, 2026
+
+WWV2-001/002/003/004/008/009 source follow-through is installed. Separate source
+and acceptance rows are recorded in p0-implementation-ledger.md. Eight synthetic
+launcher/diagnostic tests, five checker tests, 27 JSON Schema cases and Node
+lifecycle fixture passed; two explicit real Studio tests skipped. New Rust tests
+were grammar-checked, not compiled. Native/PowerShell/actual Helm/PG/hosted and
+manual desktop acceptance remain open. ROADMAP_v2.md in the repository root was
+updated directly; no complete P0 acceptance or source security certification
+is inferred from these changes.

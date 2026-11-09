@@ -55,6 +55,69 @@ fn package(temp: &Temp, builder: &str) -> Output {
 }
 
 #[test]
+fn public_preview_supervisor_runs_the_exact_selected_game() {
+    for (game, content) in [
+        ("reference", CONTENT),
+        ("expedition", include_bytes!("../../../examples/expedition/world.json").as_slice()),
+    ] {
+        let temp = Temp::new();
+        let input = temp.0.join("selected-game.json");
+        std::fs::write(&input, content).unwrap();
+        let packaged = Command::new(BIN)
+            .args(["content", "package"]).arg(&input)
+            .args(["--builder", "p0-test", "--source-revision", "p0-test", "--release-id", "p0-preview", "--game", game, "--output"])
+            .arg(temp.artifact()).output().unwrap();
+        assert!(packaged.status.success(), "{}", String::from_utf8_lossy(&packaged.stderr));
+        let original = std::fs::read(temp.artifact()).unwrap();
+        let inspection = Command::new(BIN).args(["content", "inspect"])
+            .arg(temp.artifact()).arg("--json").output().unwrap();
+        assert!(inspection.status.success());
+        assert!(String::from_utf8_lossy(&inspection.stdout).contains(&format!("worldwright-{game}")));
+        // Use files rather than unread pipes: large room output cannot deadlock
+        // the deadline poll on either Unix or Windows anonymous pipe buffers.
+        let stdout = temp.0.join("preview.stdout");
+        let stderr = temp.0.join("preview.stderr");
+        let mut child = Command::new(BIN).arg("preview").arg(temp.artifact())
+            .args(["--max-seconds", "5"])
+            .stdin(Stdio::piped())
+            .stdout(std::fs::File::create(&stdout).unwrap())
+            .stderr(std::fs::File::create(&stderr).unwrap()).spawn().unwrap();
+        std::io::Write::write_all(&mut child.stdin.take().unwrap(), b"status\nforage\nrest\nrank\nquit\n").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() { break status; }
+            if Instant::now() >= deadline {
+                let _ = child.kill(); let _ = child.wait();
+                panic!("public preview did not finish within its deadline");
+            }
+            thread::sleep(Duration::from_millis(20));
+        };
+        assert!(status.success(), "{}", std::fs::read_to_string(&stderr).unwrap());
+        let output = std::fs::read_to_string(stdout).unwrap();
+        assert!(output.contains("Artifact digest: "));
+        assert!(output.contains("Worldwright Isolated Preview v0.1"));
+        if game == "expedition" {
+            assert!(output.contains("Supplies: 3 | Threat: 0 | Victories: 0 | Rank: Scout"));
+            assert!(output.contains("Foraging recovers"));
+            assert!(output.contains("Recovery is scheduled"));
+        } else {
+            assert!(!output.contains("Supplies:"));
+        }
+        assert_eq!(std::fs::read(temp.artifact()).unwrap(), original);
+    }
+}
+
+#[test]
+fn unsupported_package_game_cannot_create_an_artifact() {
+    let temp = Temp::new();
+    let result = Command::new(BIN).args(["content", "package"]).arg(temp.content())
+        .args(["--builder", "p0-test", "--source-revision", "p0-test", "--release-id", "p0-invalid", "--game", "unknown", "--output"])
+        .arg(temp.artifact()).output().unwrap();
+    assert_eq!(result.status.code(), Some(2));
+    assert!(!temp.artifact().exists());
+}
+
+#[test]
 fn package_and_inspect_text_and_json_are_consistent() {
     let temp = Temp::new();
     let output = package(&temp, "builder");

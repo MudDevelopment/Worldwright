@@ -143,3 +143,15 @@ remain open.
 The content increment was checked using temporary **Rust 1.85.1 Linux** tools from third-party npm repackages, with install scripts disabled. crates.io DNS was unavailable; verification used matching upstream GitHub source tags in a temporary source replacement, not registry tarballs. The lockfile retains normal registry identities/checksums. No sandbox-specific configuration, source replacements, toolchain, or dependency snapshots ship in the archive; captured logs retain their original paths. Re-run bootstrap/check with approved Rust and registry artifacts before release acceptance; Windows/hosted CI are not claimed.
 
 See [VERIFICATION.md](VERIFICATION.md) for exact results. Use the approved pinned toolchain and both remote CI jobs for the final acceptance gate.
+
+## P0 native/CI check update — November 9, 2026
+
+New task check-native on dev.sh/dev.ps1 enforces the repository compiler/Cargo
+pin, reports host/executable/sysroot and redacted override/config presence,
+selects a fresh explicit native output directory, and stops at the first failed
+fmt/check/Clippy/test/build/rustdoc phase. Retain failed directories for diagnosis;
+no persistent Cargo settings or existing outputs are rewritten. Run formatting
+before the check. Native Ubuntu/Windows, real Ubuntu Studio, chart and focused
+PostgreSQL receipt jobs are configured, not observed passing. See
+P0_ACCEPTANCE.md and verification/p0-implementation-ledger.md for required tools
+and evidence. Test-only Python requirements do not alter application runtime.

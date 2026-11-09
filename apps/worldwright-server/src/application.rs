@@ -505,8 +505,12 @@ mod tests {
                 .collect::<Vec<_>>();
             let registry = serde_json::json!({"schema_version": 1, "accounts": records});
             let content: &[u8] = match game {
-                crate::GameProfile::Reference => include_bytes!("../../../examples/two-room/world.json"),
-                crate::GameProfile::Expedition => include_bytes!("../../../examples/expedition/world.json"),
+                crate::GameProfile::Reference => {
+                    include_bytes!("../../../examples/two-room/world.json")
+                }
+                crate::GameProfile::Expedition => {
+                    include_bytes!("../../../examples/expedition/world.json")
+                }
             };
             std::fs::write(&content_path, content).expect("world fixture");
             std::fs::write(
@@ -768,43 +772,83 @@ mod tests {
         }
     }
 
-    async fn expedition_completion(socket: &mut Socket, state: &mut StreamState, request: &str) -> Vec<String> {
+    async fn expedition_completion(
+        socket: &mut Socket,
+        state: &mut StreamState,
+        request: &str,
+    ) -> Vec<String> {
         let mut output = Vec::new();
         for _ in 0..32 {
             match receive_envelope(socket, state).await {
                 ServerMessage::Output { text, .. } => output.push(text),
-                ServerMessage::CommandResult { request_id, .. } if request_id == request => return output,
-                ServerMessage::Error { code, message, .. } => panic!("expedition command failed: {code:?}: {message}"),
+                ServerMessage::CommandResult { request_id, .. } if request_id == request => {
+                    return output;
+                }
+                ServerMessage::Error { code, message, .. } => {
+                    panic!("expedition command failed: {code:?}: {message}")
+                }
                 _ => {}
             }
         }
         panic!("expedition completion exceeded message bound");
     }
 
-    async fn expedition_command(socket: &mut Socket, state: &mut StreamState, sequence: &mut u64, command: ClientCommand) -> Vec<String> {
+    async fn expedition_command(
+        socket: &mut Socket,
+        state: &mut StreamState,
+        sequence: &mut u64,
+        command: ClientCommand,
+    ) -> Vec<String> {
         *sequence += 1;
         let request = format!("expedition-test-{sequence}");
-        send_client(socket, ClientMessage::Command { request_id: request.clone(), command }).await;
+        send_client(
+            socket,
+            ClientMessage::Command {
+                request_id: request.clone(),
+                command,
+            },
+        )
+        .await;
         expedition_completion(socket, state, &request).await
     }
 
     fn supplies_from_output(output: &[String]) -> u64 {
-        output.iter().find_map(|line| line.strip_prefix("Supplies: "))
+        output
+            .iter()
+            .find_map(|line| line.strip_prefix("Supplies: "))
             .and_then(|line| line.split(" | ").next())
-            .and_then(|value| value.parse().ok()).expect("supplies status")
+            .and_then(|value| value.parse().ok())
+            .expect("supplies status")
     }
 
     #[tokio::test]
     async fn multiplayer_expedition_is_playable_through_progression_and_recovery() {
         let fixture = NetworkFixture::start_with_game(
-            &[("alice", "password", 1, 1, "Alice")], crate::GameProfile::Expedition,
-        ).await;
+            &[("alice", "password", 1, 1, "Alice")],
+            crate::GameProfile::Expedition,
+        )
+        .await;
         let cookie = login(&fixture.router, "alice", "password").await;
         let mut socket = connect(&fixture, &cookie).await;
         let mut state = StreamState::new();
-        send_client(&mut socket, ClientMessage::Hello { supported_versions: vec![1] }).await;
-        assert!(matches!(receive_envelope(&mut socket, &mut state).await, ServerMessage::Welcome { .. }));
-        send_client(&mut socket, ClientMessage::Attach { request_id: "expedition-attach".into() }).await;
+        send_client(
+            &mut socket,
+            ClientMessage::Hello {
+                supported_versions: vec![1],
+            },
+        )
+        .await;
+        assert!(matches!(
+            receive_envelope(&mut socket, &mut state).await,
+            ServerMessage::Welcome { .. }
+        ));
+        send_client(
+            &mut socket,
+            ClientMessage::Attach {
+                request_id: "expedition-attach".into(),
+            },
+        )
+        .await;
         let initial = expedition_completion(&mut socket, &mut state, "expedition-attach").await;
         assert_eq!(supplies_from_output(&initial), 3);
         let mut sequence = 0;
@@ -812,45 +856,116 @@ mod tests {
             // Replenish before encountering, so every random threat (2..4)
             // can be resolved without changing the game's balance contract.
             for _ in 0..9 {
-                let status = expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look).await;
-                if supplies_from_output(&status) == worldwright_expedition::SUPPLY_CAPACITY { break; }
-                expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::GameAction {
-                    action: worldwright_expedition::action_id("forage").unwrap().into(), argument: None,
-                }).await;
+                let status =
+                    expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look)
+                        .await;
+                if supplies_from_output(&status) == worldwright_expedition::SUPPLY_CAPACITY {
+                    break;
+                }
+                expedition_command(
+                    &mut socket,
+                    &mut state,
+                    &mut sequence,
+                    ClientCommand::GameAction {
+                        action: worldwright_expedition::action_id("forage").unwrap().into(),
+                        argument: None,
+                    },
+                )
+                .await;
             }
-            let supplied = expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look).await;
-            assert_eq!(supplies_from_output(&supplied), worldwright_expedition::SUPPLY_CAPACITY);
-            let encounter = expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::GameAction {
-                action: worldwright_expedition::ENCOUNTER_ACTION.into(), argument: None,
-            }).await;
-            let threat: u64 = encounter.iter().find_map(|line| line.strip_prefix("An encounter begins with threat "))
-                .and_then(|value| value.trim_end_matches('.').parse().ok()).expect("encounter threat");
+            let supplied =
+                expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look)
+                    .await;
+            assert_eq!(
+                supplies_from_output(&supplied),
+                worldwright_expedition::SUPPLY_CAPACITY
+            );
+            let encounter = expedition_command(
+                &mut socket,
+                &mut state,
+                &mut sequence,
+                ClientCommand::GameAction {
+                    action: worldwright_expedition::ENCOUNTER_ACTION.into(),
+                    argument: None,
+                },
+            )
+            .await;
+            let threat: u64 = encounter
+                .iter()
+                .find_map(|line| line.strip_prefix("An encounter begins with threat "))
+                .and_then(|value| value.trim_end_matches('.').parse().ok())
+                .expect("encounter threat");
             assert!((2..=4).contains(&threat));
             for _ in 0..threat {
-                expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::GameAction {
-                    action: worldwright_expedition::STRIKE_ACTION.into(), argument: None,
-                }).await;
+                expedition_command(
+                    &mut socket,
+                    &mut state,
+                    &mut sequence,
+                    ClientCommand::GameAction {
+                        action: worldwright_expedition::STRIKE_ACTION.into(),
+                        argument: None,
+                    },
+                )
+                .await;
             }
             tokio::time::sleep(Duration::from_millis(1_100)).await;
-            let status = expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look).await;
-            assert!(status.iter().any(|line| line.contains(&format!("Victories: {victories} | Rank: {}", worldwright_expedition::rank(victories)))));
+            let status =
+                expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look)
+                    .await;
+            assert!(status.iter().any(|line| line.contains(&format!(
+                "Victories: {victories} | Rank: {}",
+                worldwright_expedition::rank(victories)
+            ))));
             let before_rest = supplies_from_output(&status);
             assert_eq!(before_rest, 9 - threat + 1);
-            expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::GameAction {
-                action: worldwright_expedition::REST_ACTION.into(), argument: None,
-            }).await;
+            expedition_command(
+                &mut socket,
+                &mut state,
+                &mut sequence,
+                ClientCommand::GameAction {
+                    action: worldwright_expedition::REST_ACTION.into(),
+                    argument: None,
+                },
+            )
+            .await;
             tokio::time::sleep(Duration::from_millis(1_100)).await;
-            let rested = expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look).await;
+            let rested =
+                expedition_command(&mut socket, &mut state, &mut sequence, ClientCommand::Look)
+                    .await;
             assert_eq!(supplies_from_output(&rested), before_rest + 1);
         }
         let cookie = login(&fixture.router, "alice", "password").await;
         let mut replacement = connect(&fixture, &cookie).await;
         let mut replacement_state = StreamState::new();
-        send_client(&mut replacement, ClientMessage::Hello { supported_versions: vec![1] }).await;
-        assert!(matches!(receive_envelope(&mut replacement, &mut replacement_state).await, ServerMessage::Welcome { .. }));
-        send_client(&mut replacement, ClientMessage::Attach { request_id: "expedition-reconnect".into() }).await;
-        let resumed = expedition_completion(&mut replacement, &mut replacement_state, "expedition-reconnect").await;
-        assert!(resumed.iter().any(|line| line.contains("Victories: 6 | Rank: Trailblazer")));
+        send_client(
+            &mut replacement,
+            ClientMessage::Hello {
+                supported_versions: vec![1],
+            },
+        )
+        .await;
+        assert!(matches!(
+            receive_envelope(&mut replacement, &mut replacement_state).await,
+            ServerMessage::Welcome { .. }
+        ));
+        send_client(
+            &mut replacement,
+            ClientMessage::Attach {
+                request_id: "expedition-reconnect".into(),
+            },
+        )
+        .await;
+        let resumed = expedition_completion(
+            &mut replacement,
+            &mut replacement_state,
+            "expedition-reconnect",
+        )
+        .await;
+        assert!(
+            resumed
+                .iter()
+                .any(|line| line.contains("Victories: 6 | Rank: Trailblazer"))
+        );
         replacement.close(None).await.expect("close replacement");
         drop(socket);
         fixture.shutdown().await;

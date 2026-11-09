@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/schema#",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
   "required": ["image", "publicOrigin", "ingress", "postgres", "game"],
@@ -19,13 +19,13 @@
     "serviceAccount": {"type":"object","additionalProperties":false,"required":["create","name"],"properties":{"create":{"type":"boolean"},"name":{"type":"string"}}},
     "ingress": {"type":"object","additionalProperties":false,"required":["enabled","className","host","tlsSecretName","annotations"],"properties":{"enabled":{"const":true},"className":{"type":"string"},"host":{"type":"string","minLength":1,"pattern":"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"},"tlsSecretName":{"type":"string","minLength":1},"annotations":{"type":"object"}}},
     "postgres": {"type":"object","additionalProperties":false,"required":["existingSecret","key"],"properties":{"existingSecret":{"type":"string","minLength":1},"key":{"type":"string","minLength":1}}},
-    "oidc": {"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"issuer":{"type":"string","pattern":"^https://[^/?#]+$"},"clientId":{"type":"string","minLength":1},"redirectUri":{"type":"string","pattern":"^https://[^/?#]+/api/v1/oidc/callback$"},"existingSecret":{"type":"string","minLength":1},"key":{"type":"string","minLength":1}}},
+    "oidc": {"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"issuer":{"type":"string"},"clientId":{"type":"string"},"redirectUri":{"type":"string"},"existingSecret":{"type":"string"},"key":{"type":"string"}}},
     "networkPolicy": {"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"namespaceSelector":{"type":"object"},"podSelector":{"type":"object"},"postgresCidr":{"type":"string"}}},
     "resources": {"type":"object","additionalProperties":false,"required":["requests","limits"],"properties":{"requests":{"type":"object","additionalProperties":false,"required":["cpu","memory"],"properties":{"cpu":{"type":"string","minLength":1},"memory":{"type":"string","minLength":1}}},"limits":{"type":"object","additionalProperties":false,"required":["cpu","memory"],"properties":{"cpu":{"type":"string","minLength":1},"memory":{"type":"string","minLength":1}}}}}
   },
   "allOf": [
     {"if":{"properties":{"image":{"properties":{"allowMutableTag":{"const":false}}}}},"then":{"properties":{"image":{"properties":{"digest":{"minLength":71,"pattern":"^sha256:[0-9a-f]{64}$"}}}}}},
     {"if":{"properties":{"image":{"properties":{"allowMutableTag":{"const":true}}}}},"then":{"properties":{"image":{"properties":{"tag":{"minLength":1}}}}}},
-    {"if":{"properties":{"oidc":{"properties":{"enabled":{"const":true}}}}},"then":{"properties":{"oidc":{"required":["issuer","clientId","redirectUri","existingSecret","key"]}}}}
+    {"if":{"required":["oidc"],"properties":{"oidc":{"required":["enabled"],"properties":{"enabled":{"const":true}}}}},"then":{"properties":{"oidc":{"required":["issuer","clientId","redirectUri","existingSecret","key"],"properties":{"issuer":{"minLength":1,"pattern":"^https://[^/?#]+$"},"clientId":{"minLength":1},"redirectUri":{"minLength":1,"pattern":"^https://[^/?#]+/api/v1/oidc/callback$"},"existingSecret":{"minLength":1},"key":{"minLength":1}}}}}}
   ]
 }

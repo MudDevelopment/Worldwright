@@ -15,12 +15,41 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 2
 fi
 if [[ "${EUID}" == 0 ]]; then echo "Run Studio as your desktop user, not root." >&2; exit 2; fi
-for tool in cargo rustc mktemp sed; do
+for tool in cargo rustc mktemp sed stat mkdir; do
     command -v "$tool" >/dev/null 2>&1 || { echo "Missing tool: $tool; see docs/LINUX_DESKTOP.md." >&2; exit 1; }
 done
 DATA_HOME="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
 WORKSPACE="${1:-$DATA_HOME/worldwright/studio}"
 if [[ "$WORKSPACE" != /* ]]; then echo "Workspace must be an absolute Linux path." >&2; exit 2; fi
+umask 077
+# Validate every existing component before/after mkdir. Do not follow a dangling
+# link or chmod/remove someone else's existing data. Shell checks are not an OS
+# sandbox; run only under a trusted, user-controlled HOME/XDG hierarchy.
+real_components() {
+    local part current="" remainder="${1#/}"
+    while [[ -n "$remainder" ]]; do
+        part="${remainder%%/*}"
+        if [[ "$remainder" == */* ]]; then remainder="${remainder#*/}"; else remainder=""; fi
+        [[ -z "$part" ]] && continue
+        [[ "$part" != "." && "$part" != ".." ]] || { echo "Workspace path must not contain . or .. components." >&2; return 1; }
+        current="$current/$part"
+        [[ ! -L "$current" ]] || { echo "Workspace path contains a symlink: $current" >&2; return 1; }
+        if [[ -e "$current" && ! -d "$current" ]]; then echo "Workspace path is not a directory: $current" >&2; return 1; fi
+    done
+}
+PARENT="$(dirname -- "$WORKSPACE")"
+real_components "$WORKSPACE"
+if (( $# == 0 )); then
+    mkdir -p -- "$PARENT"
+    real_components "$WORKSPACE"
+    [[ "$(stat -c '%u' -- "$PARENT")" == "$EUID" ]] || { echo "Managed workspace parent must belong to this user." >&2; exit 1; }
+    MODE="$(stat -c '%a' -- "$PARENT")"
+    (( (8#$MODE & 077) == 0 )) || { echo "Managed workspace parent must be private (chmod 700 it deliberately): $PARENT" >&2; exit 1; }
+fi
+[[ -d "$PARENT" && -w "$PARENT" && -x "$PARENT" ]] || { echo "Workspace parent must exist and be writable/searchable: $PARENT" >&2; exit 1; }
+if [[ -d "$WORKSPACE" ]]; then
+    [[ "$(stat -c '%u' -- "$WORKSPACE")" == "$EUID" ]] || { echo "Workspace must belong to this user." >&2; exit 1; }
+fi
 # Native target and explicit output directory avoid stale Windows assets and
 # CARGO_BUILD_TARGET/CARGO_TARGET_DIR overrides changing the executable path.
 HOST="$(rustc -vV | sed -n 's/^host: //p')"

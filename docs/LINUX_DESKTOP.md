@@ -120,3 +120,14 @@ container behavior. Live PostgreSQL/production deployment are separate gates.
 See [audit and verification limits](verification/linux-desktop-audit.md). No
 successful real Rust build, Ubuntu browser session, hosted CI, or release
 packaging result is claimed by this source/configuration change.
+
+## P0 update — November 9, 2026
+
+The default missing-parent defect is corrected in source. The launcher now
+prepares the private owned XDG parent with umask077, rejects symlink/dot-dot/
+non-directory paths and checks custom-parent access. Existing folders are not
+silently chmodded. A non-private managed parent fails with explicit remediation.
+Eight synthetic contracts passed; real fresh-HOME/XDG tests are CI-wired but
+unexecuted here. See P0_ACCEPTANCE.md for current commands and policy; historical
+statements above about the defect being unresolved are superseded by this note,
+not by a claim of complete desktop verification.

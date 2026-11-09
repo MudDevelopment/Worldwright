@@ -37,7 +37,11 @@ pub struct ArtifactRecord {
 
 impl Workspace {
     pub fn package(&self, request: PackageRequest) -> Result<ArtifactRecord, WorkspaceError> {
-        let game: GameContract = request.game.as_deref().unwrap_or("reference").parse()
+        let game: GameContract = request
+            .game
+            .as_deref()
+            .unwrap_or("reference")
+            .parse()
             .map_err(|_| WorkspaceError::InvalidWorkspace("unsupported game contract"))?;
         let snapshot = self.revision(request.revision)?;
         let requested_digest = Sha256Digest::parse(&request.snapshot_sha256)
@@ -344,28 +348,42 @@ mod tests {
 
     #[test]
     fn selected_game_is_pinned_and_old_requests_remain_reference() {
-        let root = std::env::temp_dir().join(format!("worldwright-studio-game-{}-{}", std::process::id(), now()));
+        let root = std::env::temp_dir().join(format!(
+            "worldwright-studio-game-{}-{}",
+            std::process::id(),
+            now()
+        ));
         let workspace = Workspace::open_or_create(&root, None).unwrap();
         let snapshot = workspace.latest().unwrap();
-        for (game, expected) in [(None, GameContract::Reference), (Some("expedition".to_owned()), GameContract::Expedition)] {
-            let record = workspace.package(PackageRequest {
-                revision: snapshot.revision,
-                snapshot_sha256: snapshot.snapshot_sha256.clone(),
-                release_id: format!("game-{}", expected),
-                builder_identity: "game-test".into(),
-                game,
-            }).unwrap();
+        for (game, expected) in [
+            (None, GameContract::Reference),
+            (Some("expedition".to_owned()), GameContract::Expedition),
+        ] {
+            let record = workspace
+                .package(PackageRequest {
+                    revision: snapshot.revision,
+                    snapshot_sha256: snapshot.snapshot_sha256.clone(),
+                    release_id: format!("game-{}", expected),
+                    builder_identity: "game-test".into(),
+                    game,
+                })
+                .unwrap();
             let bytes = workspace.artifact_bytes(&record.artifact_digest).unwrap();
             let verified = verify_bytes("test", &bytes, None).unwrap();
             assert_eq!(verified.manifest().game_contract(), expected);
             assert_eq!(workspace.artifact(&record.artifact_digest).unwrap(), record);
         }
-        assert!(workspace.package(PackageRequest {
-            revision: snapshot.revision,
-            snapshot_sha256: snapshot.snapshot_sha256,
-            release_id: "unsupported".into(), builder_identity: "game-test".into(),
-            game: Some("unknown".into()),
-        }).is_err());
+        assert!(
+            workspace
+                .package(PackageRequest {
+                    revision: snapshot.revision,
+                    snapshot_sha256: snapshot.snapshot_sha256,
+                    release_id: "unsupported".into(),
+                    builder_identity: "game-test".into(),
+                    game: Some("unknown".into()),
+                })
+                .is_err()
+        );
         let old: PackageRequest = serde_json::from_str(r#"{"revision":1,"snapshot_sha256":"digest","release_id":"old","builder_identity":"test"}"#).unwrap();
         assert!(old.game.is_none());
         fs::remove_dir_all(root).unwrap();

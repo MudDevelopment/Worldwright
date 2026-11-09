@@ -28,6 +28,23 @@ isolation), but SDK relocation remains open. See `docs/EXPEDITION_PLAYABLE.md`.
 No current Cargo pass, real browser run or live PostgreSQL proof is claimed.
 Delayed recovery remains command-driven; WWV2-007 is not closed.
 
+## Selected P0 implementation follow-through — November 9, 2026
+
+WWV2-001/002/003/004/008/009 source fixes and regression gates are installed.
+Default XDG parent preparation is private/path checked; doctor/check-native now
+report/enforce a reproducible native tuple; public preview/HTTP and browser/PG
+receipt lifecycle regressions exist; OIDC schema activation is conditional;
+required chart scripts parse actual YAML and fail on missing tools/native exits.
+Ubuntu/Windows native/chart jobs, real Ubuntu Studio smoke and a disposable-PG
+receipt job are configured. Branch protection/hosted runs are not adopted here.
+
+Observed locally: eight synthetic launcher/diagnostic cases, five checker unit
+tests, 27 schema cases, Node lifecycle fixture and syntax/grammar/job-wiring
+checks passed. Two real Studio cases skipped; Cargo/rustfmt/PowerShell/Helm/PG/
+hosted execution is unobserved. **Six source tracks implemented does not mean
+six P0 acceptance tracks closed.** See `docs/P0_ACCEPTANCE.md` and
+`docs/verification/p0-implementation-ledger.md` for current required commands.
+
 ## Contents
 
 1. [Review scope and evidence](#1-review-scope-and-evidence)
@@ -177,15 +194,15 @@ A 250-client profile fits below the 256-character ceiling numerically; that is n
 
 | ID | Priority | Source-confirmed issue / evidence gap | Work and acceptance criterion |
 |---|---|---|---|
-| WWV2-001 | P0 | `scripts/desktop.sh` selects an XDG workspace whose parent may not exist; `Workspace::open_or_create` explicitly requires an existing real parent. | Safely create/validate the required user-owned default parent before launch, or supply an existing path. Test a fresh HOME/XDG tree, path spaces, symlinks, permission denial and reopen with the real Studio binary. |
-| WWV2-002 | P0 | Current Ubuntu full-workspace/desktop evidence is absent; post-edit formatting proof is missing. `doctor` only prints basic versions. | Run pinned formatting/check/Clippy/tests/build/rustdoc on Ubuntu and retained Windows at one recorded revision. Extend diagnostics with native host, executable paths, sysroot and sanitized override presence. |
-| WWV2-003 | P0 | Original source gap corrected November 9: preview consumes the artifact game contract; Studio accepts supported game selection; generated expedition runs the shared playable host. | Added terminal/generation/packaging/multiplayer tests need real Cargo/browser execution. Exact-artifact deployment/live PostgreSQL parity remains pending; do not mark operational acceptance complete. |
-| WWV2-004 | P0 | Browser now uses a new UUID request namespace per page instead of restarting bare browser-N IDs. | Real reload/new-tab/reconnect and persistent-receipt tests remain pending; deliberate same-intent reconciliation retains its separate identity contract. |
+| WWV2-001 | P0 | Source corrected: private owned default-parent preparation, path/permission checks and no silent chmod. Eight synthetic launcher/diagnostic contracts passed. | Real fresh-HOME/XDG Studio/package/reopen/SIGTERM tests are authored and CI-wired but unexecuted here; manual desktop acceptance remains open. |
+| WWV2-002 | P0 | Source corrected: fuller redacted doctor, pinned compiler/Cargo enforcement and fresh explicit native check workflow on both hosts; first-failure and target isolation contracts passed synthetically. | Current fmt/compiler/Clippy/tests/build/rustdoc and PowerShell/Ubuntu/hosted runs must execute before acceptance. Historical Windows passes do not verify this patch. |
+| WWV2-003 | P0 | Game-aware executable/preview/Studio source retained; added public-supervisor selected-game/immutability, unsupported-game and HTTP packaging regression cases. Rust grammar checked. | Execute current Rust tests and real Studio/browser smoke; exact-artifact deployment/live PG parity remains open. |
+| WWV2-004 | P0 | UUID producer plus matching-sequence reload/new-tab/reconnect/stale stream/timer/logout Node fixture passed; focused real-PG receipt replay/conflict/disjoint-actor regression and nonzero-test CI guard added. | Execute the ignored PostgreSQL case and real browser/server lifecycle before full acceptance; no synthetic DB proof claimed. |
 | WWV2-005 | P1 | OIDC callback sets a session cookie and redirects to `/`; browser JavaScript connects only after password-form login. | Add authenticated session-resume/connect behavior after page load, handling anonymous/expired/revoked/OIDC-disabled cases without exposing HttpOnly cookies. Successful OIDC must reach an attached playable character without a second password login. |
 | WWV2-006 | P1 | Existing 19 ignored DB tests do not establish the newly added general-gameplay/OIDC paths; live DB execution is absent. | Run existing tests and add direct integration/process tests for gameplay snapshots, schedule recovery, replay, stale state, issuer/subject/invite linking, revocation, concurrent callbacks and rollback/unknown outcomes. |
 | WWV2-007 | P1 | Owner invokes `runtime.advance` during commands, not an independent idle gameplay-timer branch; RNG is not part of checkpoint rollback. | Define command-driven versus real-time scheduling explicitly. If independent recovery is required, add bounded owner-driven ticks with durable commit semantics. Specify/retest randomness consumption on rejection/replay/restart; do not claim deterministic replay from checkpointing alone. |
-| WWV2-008 | P0 | Helm schema validates OIDC issuer/client/redirect/secret strings unconditionally, but disabled defaults are empty. | Make disabled configuration valid while requiring complete canonical values when enabled. Four violations were reproduced with JSON Schema rules/defaults in the sandbox; prove the fix with actual Helm lint/template positive and negative cases. |
-| WWV2-009 | P0 | Render scripts call `helm lint` without mandatory deployment values, search for `tlsSecretName` rather than rendered `secretName`, and skip successfully when Helm is absent. PowerShell does not immediately gate every positive native command exit. | Use complete synthetic values, inspect rendered resources/secret references, check exit codes immediately, require Helm in its CI job, and distinguish SKIP from PASS. No cluster success follows from rendering. |
+| WWV2-008 | P0 | Source corrected with explicit Draft-07 enabled-only OIDC validation. All 27 schema cases passed; disabled/absent and strict enabled inputs covered; mandatory deployment gates unchanged. | Actual Helm lint/render matrix remains unobserved and must pass; schema-only does not close Helm/deployment acceptance. |
+| WWV2-009 | P0 | Source corrected: complete-values/shared Python harness, immediate native exits, actual YAML secretName/secretKeyRef/security checks, missing-tool failure and Ubuntu/Windows chart jobs. Five synthetic checker tests passed. | Run four positive/16 negative actual Helm cases and observe both jobs. Missing Helm failure-policy proof is not render success; cluster acceptance remains separate. |
 | WWV2-010 | P1 | Studio UI has 1,000-room/256-exit limits versus backend 1,024/64; text character limits differ from authoritative byte limits. | Expose or synchronize capabilities/bounds; use UTF-8 byte-aware hints. Do not hide the last valid rooms or permit misleading exit counts. Add maximum-size and multibyte browser tests. |
 | WWV2-011 | P1 | Preview output reader threads write shared status across runs, decode individual chunks, and are not explicitly joined as part of run replacement; process-tree cleanup is not certified. | Tag output with run identity, handle split UTF-8 sequences, await/reap readers, bound input/stop operations, and prove no stale output or supervisor/worker leak after stop/crash/SIGTERM. |
 | WWV2-012 | P1 | General gameplay commit rewrites the world counter/schedule set even for Look, and owner checks can clone full snapshots; network/DB costs have not been measured. | Instrument queue wait, clone/plan/SQL/commit/output costs. Prove the fixed beta profile before increasing concurrency. Optimize deltas/read-only behavior only under an explicit revised completion contract and unchanged invariants. |
@@ -384,7 +401,7 @@ Where an explicit native target/output directory is used, record it and use the 
 
 ### 6.2 Desktop smoke
 
-Until WWV2-001 is closed, choose an existing real parent rather than assuming the default works:
+The default parent defect is corrected in source. Run the fresh-HOME/XDG real-binary tests in `docs/P0_ACCEPTANCE.md` before certifying it; an explicit trusted path is still supported:
 
 ```bash
 # An explicit workspace with an existing HOME parent avoids the missing
@@ -424,7 +441,7 @@ docker build --tag worldwright-server:acceptance .
 bash deploy/helm/worldwright/tests/render.sh
 ```
 
-**Current caveat:** the render script/schema have known issues. Require Helm, complete valid synthetic values and corrected assertions before accepting the script as a gate. Record container execution, chart render and live cluster operation separately. Image tags alone are not immutable release identity.
+**Current caveat:** the render script/schema defects are corrected in source, with test-only Python requirements and required Helm 3. Execute the actual matrix and observe its CI jobs before claiming a passing gate. Container execution, chart rendering and cluster operation remain separate results.
 
 ### 6.6 Fixed network-load runner
 

@@ -1,0 +1,13 @@
+# Synthetic deployment inputs; only secret REFERENCES, never credentials.
+image:
+  repository: registry.example.invalid/worldwright
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+publicOrigin: https://world.example.invalid
+game: reference
+ingress:
+  enabled: true
+  host: world.example.invalid
+  tlsSecretName: world-tls
+postgres:
+  existingSecret: world-postgres
+  key: WORLDWRIGHT_DATABASE_URL

@@ -32,6 +32,24 @@ Earlier Windows passes do not verify these edits. Recovery remains applied on
 the next gameplay command after its deadline; independent idle ticks and live
 PostgreSQL recovery acceptance remain open.
 
+## P0 source follow-through — November 9, 2026
+
+The selected P0 source fixes and regression gates are installed: private XDG
+workspace-parent preparation, fuller doctor diagnostics, pinned fresh-native
+checks, selected-game preview/HTTP tests, browser/receipt lifecycle tests, and
+conditional OIDC Helm validation with required parsed-YAML render gates.
+Use `scripts/dev.sh check-native` or `scripts/dev.ps1 check-native`; run Cargo
+formatting first. Chart tests now require Python 3.10+, test-only requirements
+and Helm 3; missing tools fail rather than skip successfully. Node fixture/CI
+uses Node 20+. Existing non-private managed parents fail with an actionable
+permission message instead of being silently chmodded.
+
+See [P0 acceptance](docs/P0_ACCEPTANCE.md) and the
+[implementation ledger](docs/verification/p0-implementation-ledger.md).
+**All six source tracks are implemented; their full acceptance tracks remain
+open.** Synthetic/schema checks passed; current Cargo/PowerShell/real Studio,
+Helm/PostgreSQL and hosted-CI passes have not been observed here.
+
 ## Current implementation
 
 The workspace contains the current Rust workspace packages. M6 provides scoped operator authorization,

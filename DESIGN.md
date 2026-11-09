@@ -43,6 +43,29 @@ PostgreSQL completion/replay contract is not changed by browser aliases.
 Regression code exists but current compile, Clippy, runtime/browser and live DB
 verification are pending; see `docs/EXPEDITION_PLAYABLE.md`.
 
+## P0 source and acceptance separation — November 9, 2026
+
+WWV2-001/002/003/004/008/009 source follow-through is installed. Native checks
+use a fresh explicit host-target directory, require the pinned compiler/Cargo,
+report sanitized override/config context, and stop at the first failed phase.
+Existing outputs/user configuration are not deleted or silently rewritten.
+
+| Change | Format classification | Compatibility / failure behavior |
+|---|---|---|
+| Default workspace parent preparation/private path policy | Filesystem security tightening, not JSON migration | New managed parents use umask077; existing non-private/unowned/symlink paths fail explicitly with remediation; no automatic chmod. |
+| Optional check-native task and fuller doctor output | Additive tooling interface | Ordinary check retained; override values redacted. |
+| Explicit enabled OIDC conditional schema | Validation bug fix; keys/defaults unchanged | Disabled/absent OIDC is usable; enabled still requires complete canonical inputs. Unconfigured deployments remain invalid. |
+| Required Helm/Python test harness/CI jobs | Test gate tightening | Missing tools/native failures are failures, not successful skips. Install test-only requirements explicitly. |
+| Game/receipt regression cases | Existing contract verification | No artifact/draft/DB/wire schema change in this pass. |
+
+One shared chart harness parses actual resource YAML and checks exit codes,
+secret references and single-writer/security settings. Synthetic checker tests,
+schema validation, actual Helm rendering and live deployment are distinct
+results. Browser UUID lifecycle fixtures are distinct from the new real-PG
+receipt test and actual browser acceptance. Configured jobs are not passing
+jobs or branch-protection adoption. See `docs/P0_ACCEPTANCE.md` and
+`docs/verification/p0-implementation-ledger.md`; full acceptance remains open.
+
 ## Contents
 
 - [Purpose and Scope](#purpose-and-scope)

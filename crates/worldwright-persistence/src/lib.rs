@@ -963,6 +963,106 @@ mod database_tests {
         db.finish().await;
     }
 
+    fn gameplay_mutation<'a>(
+        lease: WriterLease,
+        digest: Sha256Digest,
+        actor: &AuthenticatedActor<'a>,
+        state: GameplayState<'a>,
+    ) -> GameplayMutation<'a> {
+        GameplayMutation {
+            lease,
+            expected_release: digest,
+            game: GameContract::Reference,
+            actor: AuthenticatedActor { world: actor.world, account: actor.account,
+                character: actor.character, token_hash: actor.token_hash },
+            request_id: "browser-page-a-1",
+            operation: OperationId::from_u128(1).unwrap(),
+            kind: GameplayIntentKind::Look,
+            intent: b"look",
+            expected_state_version: 1,
+            state,
+            result: serde_json::json!({"proof": "first page look"}),
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn gameplay_browser_request_id_lifecycle() {
+        use worldwright_core::{runtime::DurableWorldState, time::Tick};
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.unwrap();
+        let world = WorldId::from_u128(1).unwrap();
+        let artifact = release_artifact("p0-gameplay-receipts");
+        let digest = Sha256Digest::from_bytes(&artifact);
+        let request = PublicationId::from_u128(901).unwrap();
+        db.store.submit_publication(request, world, &artifact, PublicationKind::Activate,
+            DeploymentTarget::Staging, None, "requester").await.unwrap();
+        db.store.review_publication(request, "reviewer", ReviewDecision::Approve, "p0 test").await.unwrap();
+        let activation = db.store.begin_activation(request, ActivationId::from_u128(902).unwrap(),
+            WriterId::from_u128(1).unwrap(), "operator").await.unwrap();
+        db.store.complete_activation(activation).await.unwrap();
+        let lease = db.store.acquire_writer(world, WriterId::from_u128(2).unwrap()).await.unwrap();
+        let identities = db.store.identities(world).await.unwrap();
+        let mut rooms: Vec<_> = identities.iter().map(|identity| DurableCharacterRoom {
+            character: identity.character(), room_definition: identity.room_definition().into(),
+        }).collect();
+        rooms.sort_by_key(|room| room.character);
+        let mut runtime = DurableWorldState { world, revision: 0, counters: vec![], scheduled: vec![] };
+        db.store.initialize_game_state(lease, digest, GameContract::Reference,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO }).await.unwrap();
+        let alice = actor(&db.store, 1, 1, "Alice", "p0-alice").await;
+        runtime.revision = 1;
+        let first = db.store.commit_gameplay(gameplay_mutation(lease, digest, &alice,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO })).await.unwrap();
+        assert!(!first.replayed);
+        assert_eq!(first.state_version, 2);
+        let reconstructed = db.reconnect_store().await;
+        let reattached = actor(&reconstructed, 1, 1, "Alice", "p0-alice-new-session").await;
+        let mut retry = gameplay_mutation(lease, digest, &reattached,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+        retry.operation = OperationId::from_u128(99).unwrap();
+        retry.expected_state_version = 0; // Receipt lookup precedes stale candidate state.
+        retry.result = serde_json::json!({"proof": "must not replace original"});
+        let replay = reconstructed.commit_gameplay(retry).await.unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.operation, first.operation);
+        assert_eq!(replay.result, first.result);
+        let mut conflict = gameplay_mutation(lease, digest, &reattached,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+        conflict.kind = GameplayIntentKind::Move;
+        conflict.intent = b"move east";
+        assert!(matches!(reconstructed.commit_gameplay(conflict).await, Err(PersistenceError::ReceiptConflict)));
+        assert_eq!(reconstructed.load_game_state(lease, digest, GameContract::Reference).await.unwrap().runtime.revision, 1);
+        // Fresh page/tab namespaces never accidentally replay the old Look.
+        for (revision, id) in [(2, "browser-page-b-1"), (3, "browser-page-c-1")] {
+            runtime.revision = revision;
+            let mut next = gameplay_mutation(lease, digest, &reattached,
+                GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+            next.request_id = id;
+            next.operation = OperationId::from_u128(u128::from(revision)).unwrap();
+            next.expected_state_version = revision;
+            next.result = serde_json::json!({"proof": id});
+            let committed = reconstructed.commit_gameplay(next).await.unwrap();
+            assert!(!committed.replayed);
+            assert_eq!(committed.result["proof"], id);
+        }
+        let bob = actor(&reconstructed, 2, 2, "Bob", "p0-bob").await;
+        runtime.revision = 4;
+        let mut same_id_other_actor = gameplay_mutation(lease, digest, &bob,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+        same_id_other_actor.request_id = "browser-page-b-1";
+        same_id_other_actor.operation = OperationId::from_u128(4).unwrap();
+        same_id_other_actor.expected_state_version = 4;
+        assert!(!reconstructed.commit_gameplay(same_id_other_actor).await.unwrap().replayed);
+        let (receipts, audit): (i64, i64) = sqlx::query_as(
+            "SELECT (SELECT COUNT(*) FROM worldwright_gameplay_receipts WHERE world_id=$1), \
+                    (SELECT COUNT(*) FROM worldwright_gameplay_audit WHERE world_id=$1)")
+            .bind(types::uuid_of(world)).fetch_one(reconstructed.pool_for_test()).await.unwrap();
+        assert_eq!((receipts, audit), (4, 4));
+        reconstructed.close_for_test().await;
+        db.finish().await;
+    }
+
     fn release_artifact(release_id: &str) -> Vec<u8> {
         release_artifact_with_builder(release_id, "test-builder")
     }

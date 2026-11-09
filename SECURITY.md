@@ -462,3 +462,25 @@ server-side and are never persisted or sent to the browser. Preview is direct,
 no-shell, environment-cleared, and bounded, but is not an OS sandbox or network
 egress firewall. Production confirmation is a destructive-action safeguard,
 not authorization; M6 grants and PostgreSQL audit remain authoritative.
+
+## P0 filesystem and acceptance-gate update — November 9, 2026
+
+The Linux launcher now prepares a private owned default workspace parent with
+umask077, rejects symlink/dangling/non-directory/dot-dot path components and
+fails explicitly for an existing non-private/unowned managed path. It does not
+silently chmod existing data or run as root. These shell checks require trusted
+HOME/XDG ancestry; they are not an OS sandbox or a concurrent-race guarantee.
+Shared preview-slot multi-user hardening remains a separate open task.
+
+Diagnostics report override/config presence while redacting values. The fresh
+native check task does not clear arbitrary flags, erase outputs or rewrite user
+settings. OIDC disabled/absent validation is now conditional, while enabled
+canonical inputs, HTTPS origin/ingress and external secret references remain
+required. The chart test harness fails for missing tools/native errors and
+rejects plaintext rendered credentials/public operator flags. Its CI database
+password is a disposable synthetic test value, not a deployment credential.
+
+Schema/checker/mock tests are not live authentication, database or cluster
+security evidence. New jobs must be required by maintainers' branch protection;
+workflow configuration does not itself adopt that policy. See docs/P0_ACCEPTANCE.md
+and docs/verification/p0-implementation-ledger.md for unclosed execution gates.

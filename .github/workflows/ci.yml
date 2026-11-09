@@ -1,4 +1,4 @@
-name: Rust checks
+name: Rust and P0 acceptance checks
 
 'on':
   push:
@@ -14,23 +14,20 @@ concurrency:
 
 jobs:
   checks:
-    name: checks (${{ matrix.os }})
+    name: native checks (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # Ubuntu LTS is the primary baseline; Windows is a retained regression gate.
         os: [ubuntu-24.04, windows-latest]
     env:
       CARGO_TERM_COLOR: always
     steps:
       - name: Check out source
-        # actions/checkout v4 commit verified from its upstream tag.
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      # Bootstrap fetches committed registry dependencies before offline checks.
       - name: Bootstrap Linux toolchain and dependencies
         if: runner.os != 'Windows'
         shell: bash
@@ -39,16 +36,111 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/dev.ps1 bootstrap
-      - name: Check on Linux
+      - name: Fresh native checks on Ubuntu
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          bash -n scripts/dev.sh scripts/desktop.sh
-          bash scripts/dev.sh check
-      - name: Check on Windows
+          bash -n scripts/dev.sh scripts/desktop.sh deploy/helm/worldwright/tests/render.sh
+          bash scripts/dev.sh check-native | tee "$RUNNER_TEMP/worldwright-native-check.log"
+          target=$(sed -n 's/^Fresh native build directory (retained for diagnosis): //p' "$RUNNER_TEMP/worldwright-native-check.log")
+          host=$(rustc -vV | sed -n 's/^host: //p')
+          test -n "$target" && test -n "$host"
+          printf 'WORLDWRIGHT_STUDIO_BIN=%s/%s/debug/worldwright-studio\n' "$target" "$host" >> "$GITHUB_ENV"
+          printf 'WORLDWRIGHT_PREVIEW_BIN=%s/%s/debug/worldwright\n' "$target" "$host" >> "$GITHUB_ENV"
+      - name: Fresh native checks on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/dev.ps1 check
+        run: ./scripts/dev.ps1 check-native
+      - name: Required browser adapter lifecycle tests
+        shell: bash
+        run: |
+          node --version
+          node -e "if (Number(process.versions.node.split('.')[0]) < 20) process.exit(1)"
+          node --check apps/worldwright-server/assets/app.js
+          node --check apps/worldwright-studio/assets/app.js
+          node scripts/test-expedition-browser.cjs
+      - name: Real Ubuntu Studio first-run and game contract smoke
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python3 scripts/test-desktop.py --real-studio "$WORLDWRIGHT_STUDIO_BIN" --real-preview "$WORLDWRIGHT_PREVIEW_BIN" -q
       - name: Ensure lockfile did not change
         shell: bash
         run: git diff --exit-code -- Cargo.lock
+
+  helm-render:
+    name: required Helm lint/render (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install pinned Helm 3 acceptance tool
+        # Dereferenced official Azure/setup-helm v4 tag and read action.yml.
+        # Tooling pin is not a production-deployment security approval.
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Required chart acceptance on Linux
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/worldwright-chart-venv"
+          source "$RUNNER_TEMP/worldwright-chart-venv/bin/activate"
+          python -m pip install -r deploy/helm/worldwright/tests/requirements.txt
+          python -m unittest discover -s deploy/helm/worldwright/tests -p test_verify.py -v
+          bash deploy/helm/worldwright/tests/render.sh
+      - name: Required chart acceptance on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $venv = Join-Path $env:RUNNER_TEMP 'worldwright-chart-venv'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { throw 'venv failed' }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          & $python -m pip install -r deploy/helm/worldwright/tests/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'test dependency install failed' }
+          & $python -m unittest discover -s deploy/helm/worldwright/tests -p test_verify.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'checker unit tests failed' }
+          $env:PATH = (Join-Path $venv 'Scripts') + [IO.Path]::PathSeparator + $env:PATH
+          ./deploy/helm/worldwright/tests/render.ps1
+
+  gameplay-receipts:
+    name: required PostgreSQL browser receipt lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Disposable test service only; not the runtime deployment image policy.
+        image: postgres:16
+        env:
+          POSTGRES_DB: worldwright_test_p0
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d worldwright_test_p0"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      WORLDWRIGHT_TEST_DATABASE_URL: postgresql://postgres:disposable-ci-only@127.0.0.1:5432/worldwright_test_p0
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Bootstrap pinned Rust dependencies
+        shell: bash
+        run: bash scripts/dev.sh bootstrap
+      - name: Verify required test exists then execute it (no silent zero tests)
+        shell: bash
+        run: |
+          cargo test -p worldwright-persistence --locked --offline gameplay_browser_request_id_lifecycle -- --ignored --list | grep -q '^database_tests::gameplay_browser_request_id_lifecycle: test$'
+          cargo test -p worldwright-persistence --locked --offline gameplay_browser_request_id_lifecycle -- --ignored --test-threads=1

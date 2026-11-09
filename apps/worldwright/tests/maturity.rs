@@ -143,25 +143,44 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
         let status = Command::new(env!("CARGO"))
             .current_dir(&project)
             .args(["test", "--offline", "--target", &host])
-            .arg("--target-dir").arg(&target)
+            .arg("--target-dir")
+            .arg(&target)
             .status()
             .unwrap();
         assert!(status.success(), "{template}");
         if template == "expedition" {
-            let binary = target.join(&host).join("debug")
+            let binary = target
+                .join(&host)
+                .join("debug")
                 .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
             let status = Command::new(env!("CARGO"))
                 .current_dir(&project)
                 .args(["build", "--locked", "--offline", "--target", &host])
-                .arg("--target-dir").arg(&target).status().unwrap();
+                .arg("--target-dir")
+                .arg(&target)
+                .status()
+                .unwrap();
             assert!(status.success());
             // Execute outside the generated project: content is embedded.
-            let mut child = Command::new(binary).current_dir(&parent)
-                .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
-                .spawn().unwrap();
-            child.stdin.take().unwrap().write_all(b"status\nforage\nrest\nrank\nquit\n").unwrap();
+            let mut child = Command::new(binary)
+                .current_dir(&parent)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(b"status\nforage\nrest\nrank\nquit\n")
+                .unwrap();
             let output = child.wait_with_output().unwrap();
-            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             let text = String::from_utf8(output.stdout).unwrap();
             assert!(text.contains("Supplies: 3 | Threat: 0 | Victories: 0 | Rank: Scout"));
             assert!(text.contains("Foraging recovers"));

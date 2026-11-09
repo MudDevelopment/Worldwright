@@ -316,9 +316,17 @@ async fn package(State(state): State<AppState>, body: Bytes) -> Response {
     let Ok(request) = serde_json::from_slice::<PackageRequest>(&body) else {
         return error(StatusCode::BAD_REQUEST, "invalid package request");
     };
-    if request.game.as_deref().unwrap_or("reference")
-        .parse::<worldwright_release::GameContract>().is_err() {
-        return error(StatusCode::UNPROCESSABLE_ENTITY, "unsupported game contract");
+    if request
+        .game
+        .as_deref()
+        .unwrap_or("reference")
+        .parse::<worldwright_release::GameContract>()
+        .is_err()
+    {
+        return error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "unsupported game contract",
+        );
     }
     match tokio::task::spawn_blocking(move || state.workspace.package(request)).await {
         Ok(Ok(record)) => json_response(StatusCode::OK, &record),
@@ -693,6 +701,42 @@ mod tests {
             },
             root,
         )
+    }
+
+    #[tokio::test]
+    async fn http_package_game_selection_and_invalid_game_are_explicit() {
+        let (state, root) = state();
+        let app = router(state.clone());
+        let snapshot = state.workspace.latest().unwrap();
+        for (game, expected) in [
+            (None, worldwright_release::GameContract::Reference),
+            (Some("reference"), worldwright_release::GameContract::Reference),
+            (Some("expedition"), worldwright_release::GameContract::Expedition),
+        ] {
+            let mut body = json!({"revision": snapshot.revision,
+                "snapshot_sha256": snapshot.snapshot_sha256,
+                "release_id": format!("http-{expected}"), "builder_identity": "p0-test"});
+            if let Some(game) = game { body["game"] = json!(game); }
+            let response = app.clone().oneshot(axum::http::Request::builder()
+                .method("POST").uri("/api/v1/package")
+                .header("host", "127.0.0.1:3010").header("origin", "http://127.0.0.1:3010")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string())).unwrap()).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let record: crate::artifact::ArtifactRecord = serde_json::from_slice(
+                &response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+            let bytes = state.workspace.artifact_bytes(&record.artifact_digest).unwrap();
+            assert_eq!(worldwright_release::verify_bytes("HTTP", &bytes, None).unwrap().manifest().game_contract(), expected);
+        }
+        let before = state.workspace.artifacts().unwrap().len();
+        let body = json!({"revision": snapshot.revision, "snapshot_sha256": snapshot.snapshot_sha256,
+            "release_id": "invalid-game", "builder_identity": "p0-test", "game": "unknown"});
+        let response = app.oneshot(axum::http::Request::builder().method("POST").uri("/api/v1/package")
+            .header("host", "127.0.0.1:3010").header("origin", "http://127.0.0.1:3010")
+            .header("content-type", "application/json").body(Body::from(body.to_string())).unwrap()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(state.workspace.artifacts().unwrap().len(), before);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test]
