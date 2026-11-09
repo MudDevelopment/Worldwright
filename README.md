@@ -86,6 +86,27 @@ Release evidence is collected with `scripts/release-evidence.py`; named owner
 approvals and exact-digest live evidence remain required. `publish = false`,
 licensing/support/reporting decisions and production-readiness restrictions remain.
 
+## P2 toolkit consistency — WWV2-016
+
+See [P2 acceptance](docs/P2_ACCEPTANCE.md) and the
+[P2 ledger](docs/verification/p2-implementation-ledger.md).
+
+- `worldwright compatibility --json` derives inventories from the SDK matrix
+  and reports `sdk_package_version` separately from SDK API version.
+- `worldwright benchmark --json` now identifies schema 2 and recipe
+  `runtime-look-nearest-rank-v2`. Latencies remain integer nanoseconds.
+  Historical reports without recipe metadata retain their original v1 formula;
+  they are not automatically comparable optimization evidence.
+- Runtime and beta-load statistics share an overflow-safe integer nearest-rank
+  selector. Beta-250 was already nearest rank: no dimensions or thresholds changed.
+- Bundle metadata follows SDK package/toolchain authority; a retained API-v1
+  consumer tests relocated private-bundle source compatibility, not a fictional
+  previous release or Rust ABI guarantee.
+- Run `python scripts/test-p2-contracts.py` and `python scripts/test-p2-negatives.py`
+  with Python 3.11+. Eight source/TOML/fixture checks and six mutation-rejection
+  cases passed against current readback files. Native P2 Rust, actual
+  bundle/consumer execution and hosted acceptance are still pending.
+
 ## Current implementation
 
 The workspace contains the current Rust workspace packages. M6 provides scoped operator authorization,
@@ -392,13 +413,13 @@ Maintainers should record architectural decisions, review public API changes, an
 | **M5 — Content Release and Preview v0.1** | Immutable manifests/artifacts, compatibility, staging/maintenance activation, supported rollback, isolated preview, CLI publication requests | **Implemented awaiting live PostgreSQL verification** |
 | **M6 — Operational Control v0.1** | Capability-scoped control, privileged assurance, audit, observability, graceful drain, backup/restore and takeover runbooks | **Implemented awaiting live PostgreSQL and recovery execution** |
 | **M7 — Builder Workflow and Studio v0.1** | Schema-aware editing, shared diagnostics, M5 preview/release integration, M6-controlled publication, accessibility | Implemented awaiting live PostgreSQL/operator publication and manual browser evidence |
-| **M8 - Toolkit Maturity** | Independent second game, SDK compatibility/deprecation, project templates/migrations, measured performance | Implemented with Windows-local evidence; durable expedition state, broader capacity, Linux/CI/deployment remain open |
+| **M8 - Toolkit Maturity** | Independent second game, SDK compatibility/deprecation, project templates/migrations, measured performance | Historical Windows-local evidence; current expedition durability and P2 consistency source work need live/native acceptance; broader capacity and deployment remain open |
 
 ### M6 verification handoff
 
 M4/M5 await live PostgreSQL verification. M6 is implemented awaiting live
 PostgreSQL and recovery execution. M8 is implemented with Windows-local
-evidence; durable expedition state and broader capacity remain open. Production
+evidence; current expedition durability needs live acceptance and broader capacity remains open. Production
 activation uses auth-v1 request/review and current MFA-backed grants; M6 is not
 production readiness evidence.
 

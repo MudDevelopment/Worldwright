@@ -60,6 +60,10 @@ fn compatibility_and_hundred_client_workload_are_machine_readable() {
         .unwrap();
     assert!(output.status.success());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["schema_version"], 2);
+    assert_eq!(value["recipe"], worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE);
+    assert_eq!(value["recipe_version"], worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE_VERSION);
+    assert_eq!(value["percentile_recipe"], worldwright_testkit::benchmark::NEAREST_RANK_RECIPE);
     assert_eq!(value["clients"], 100);
     assert_eq!(value["commands"], 200);
     assert!(value["p95_ns"].as_u64().is_some());

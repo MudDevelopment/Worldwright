@@ -74,6 +74,24 @@ fn retained_sdk_api_v1_fixture_builds_from_relocated_private_bundle() {
         assert!(String::from_utf8_lossy(&output.stdout).contains("retained_api_v1_builds_and_executes_real_reference_rules"));
         if let Some(before) = before { assert_eq!(fs::read(consumer.join("Cargo.lock")).unwrap(), before); }
     }
+    let metadata = Command::new(env!("CARGO")).current_dir(&consumer)
+        .args(["metadata", "--format-version", "1", "--offline", "--locked", "--filter-platform", host])
+        .output().unwrap();
+    assert!(metadata.status.success(), "{}", String::from_utf8_lossy(&metadata.stderr));
+    let metadata: serde_json::Value = serde_json::from_slice(&metadata.stdout).unwrap();
+    let packages = metadata["packages"].as_array().unwrap();
+    let consumer_root = consumer.canonicalize().unwrap();
+    let mut local_names = Vec::new();
+    for package in packages {
+        if package["source"].is_null() {
+            let manifest = PathBuf::from(package["manifest_path"].as_str().unwrap()).canonicalize().unwrap();
+            assert!(manifest.starts_with(&consumer_root), "dependency escaped relocated consumer: {}", manifest.display());
+            local_names.push(package["name"].as_str().unwrap());
+        }
+    }
+    local_names.sort_unstable();
+    assert_eq!(local_names, ["sdk-api-v1-consumer", "worldwright-content", "worldwright-core", "worldwright-sdk"]);
+    assert!(!packages.iter().any(|package| package["name"] == "worldwright-protocol"));
     assert_eq!(fs::read(sdk.join("Cargo.lock")).unwrap(), sdk_lock);
     assert!(cli().args(["sdk", "verify-bundle"]).arg(&sdk).status().unwrap().success());
 }

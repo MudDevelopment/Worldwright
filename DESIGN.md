@@ -5,7 +5,7 @@
 | Attribute | Value |
 |---|---|
 | Document version | 0.3 — current M4/M5 implementation alignment |
-| Updated | November 9, 2026 — P1 continuation; live acceptance pending |
+| Updated | November 9, 2026 — P1/P2 continuation; native/live acceptance pending |
 | Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): M4/M5 awaiting PostgreSQL verification; M6 implemented awaiting PostgreSQL/recovery execution |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
@@ -106,6 +106,36 @@ jobs or branch-protection adoption. See `docs/P0_ACCEPTANCE.md` and
 migration. Older migrations are immutable; apply explicitly before new startup.
 The older binary/migration ledger and rollback compatibility still require
 review. Detailed run commands and remaining gates are in `docs/P1_ACCEPTANCE.md`.
+
+## P2 measurement and metadata contract — WWV2-016
+
+| Surface | Classification | Current behavior |
+|---|---|---|
+| Runtime benchmark percentiles | Behavioral correction, explicitly versioned | Schema 2 / `runtime-look-nearest-rank-v2`; `ceil(N*percent/100)-1` selects a sorted sample. V1 used `ceil((N-1)*percent/100)` and old reports remain historical. |
+| Beta-load percentile helper | Internal deduplication | Same nearest-rank results, same report schema/profile/dimensions/thresholds; zero-sample stats remain zero. |
+| CLI compatibility JSON | Additive metadata fields | Adds schema 1/package identity; actual matrix arrays are serialized instead of handwritten `[1]` lists. Existing fields are retained. |
+| Content version authority | Internal consolidation plus public constants | Dispatch, validation, validated inventory and SDK matrix derive from the implemented content schema constant; no new wire format or migration. |
+| Private bundle metadata | Current-source generation correction | Package version and minimum Rust derive from SDK exports; existing immutable bundles are not silently rewritten. |
+| Retained downstream fixture | Added source compatibility evidence path | Captured actual API-v1 consumer/inventory, LF-normalized integrity guard, move-before-bootstrap and locked rerun; no invented previous minor or ABI claim. |
+
+`worldwright_core::measurement::nearest_rank_index` is a pure checked-dimension
+index utility, not a timer, game rule or capacity promise. Quotient/remainder
+arithmetic prevents overflow even for maximum usize sample counts; invalid
+sample/percentile dimensions return None. Testkit and network-load measurements
+retain different workloads/units despite sharing selection arithmetic.
+
+SDK API, package, protocol and content versions are separate. SDK transport
+independence is retained: only the CLI's **dev dependency** imports protocol for
+a real-export drift assertion. One local lockfile edge changed; registry pins
+and checksums remain fixed. Python 3.11+ source/TOML checks guard remaining
+bundle registry literals and frozen consumer inventory; they do not replace
+Rust compilation. New supported versions require dispatch/fixture/migration
+review, not incrementing constants to imply support.
+
+P2 changes do not alter database migrations, game contracts, auth/listeners,
+licensing or production policy. Documentation and source tests are installed;
+full native/relocated/hosted acceptance remains open. See `docs/P2_ACCEPTANCE.md`
+and `docs/verification/p2-implementation-ledger.md`.
 
 ## Contents
 

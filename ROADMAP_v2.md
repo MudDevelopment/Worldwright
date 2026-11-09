@@ -85,11 +85,21 @@ A — shared/versioned percentile recipes; B — SDK/CLI/bundle version drift;
 C — retained downstream API-v1 fixture; D — documentation and native acceptance.
 P0/P1 gates remain open and are not promoted by starting this track.
 
-**Planned measurement change:** the sequential runtime benchmark adopts nearest
-rank as recipe v2; historical v1 measurements retain their original selection
-formula. Beta-250 already uses nearest rank and its workload/thresholds stay fixed.
-SDK lists continue to advertise only real API version 1; no previous minor or ABI
-compatibility claim is invented.
+**Source implemented:** the sequential runtime benchmark now identifies schema
+2 / `runtime-look-nearest-rank-v2`; both runtime and beta helpers use a shared
+overflow-safe integer selector. Historical v1 measurements retain their original
+formula. Beta-250 already used nearest rank: its schema/workload/thresholds remain
+fixed. CLI/bundle/content metadata derive from SDK/content authority; the SDK's
+transport-independent list is guarded against actual protocol exports by a
+CLI dev-only test. A retained actual API-v1 fixture has an integrity inventory,
+relocated bootstrap/locked rerun and local-dependency escape inspection.
+
+Eight Python source/TOML/fixture checks and six negative mutation cases passed
+on selected current readback files; twelve Rust files passed grammar parsing
+only. Documentation and `docs/P2_ACCEPTANCE.md` are installed; CI captures both
+source-contract logs, with missing-log refusal. Full native/relocated/hosted acceptance is NOT closed.
+SDK lists still advertise only API version 1: no fictional prior package minor,
+ABI support, optimization gain, or production-readiness claim is invented.
 
 ## Contents
 

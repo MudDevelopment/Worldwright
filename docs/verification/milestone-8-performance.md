@@ -1,5 +1,12 @@
 # Milestone 8 performance evidence
 
+> Historical runtime recipe v1, preserved verbatim below. Its percentile index
+> was `ceil((N-1)*percent/100)`. The later P2 implementation labels new reports
+> schema 2 / `runtime-look-nearest-rank-v2` and selects
+> `ceil(N*percent/100)-1` with the shared integer recipe. This historical report
+> is not relabeled as v2 and cannot establish a P2 build, network capacity or
+> before/after optimization. See `../P2_ACCEPTANCE.md`.
+
 Observed 2026-11-07 on the uncommitted working tree based on `66dc092`, Windows
 x86_64, Windows build 26200, Intel Core i7-13850HX, 68,388,900,864 bytes
 physical memory, Rust/Cargo 1.85.1, release profile.

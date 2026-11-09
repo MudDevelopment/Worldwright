@@ -35,7 +35,12 @@ The `beta-250-v1` profile has no tunable acceptance parameters:
 
 Latency percentiles use nearest rank over all successful command durations in
 integer microseconds: sort ascending and select
-`max(ceil(p * N), 1) - 1` for `p = 0.50, 0.95, 0.99`. Throughput is successful
+`max(ceil(p * N), 1) - 1` for `p = 0.50, 0.95, 0.99`.
+P2 consolidates that existing arithmetic into
+`worldwright_core::measurement::nearest_rank_index`, named
+`nearest-rank-integer-v1`. Its quotient/remainder form avoids integer overflow.
+This is NOT a beta-profile/report-schema/threshold change; unlike the sequential
+runtime v1-to-v2 correction, beta statistics already used nearest rank. Throughput is successful
 commands divided by wall-clock seconds from the barrier to the final matching
 result. Failed runs still retain all observed counts and latencies.
 

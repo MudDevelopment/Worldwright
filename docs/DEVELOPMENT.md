@@ -142,6 +142,29 @@ migration, native build, telemetry, generated-project, provider/process and owne
 gates. Configured CI has not been observed running here. Historical Linux/npm
 or Windows logs below remain evidence for their original increments only.
 
+## P2 source and downstream compatibility checks
+
+WWV2-016 source/documentation are implemented; full native acceptance remains
+open. Run both standard-library scripts with Python 3.11+:
+
+```bash
+python scripts/test-p2-contracts.py
+python scripts/test-p2-negatives.py
+```
+
+The required Ubuntu/Windows CI step uses pipefail, captures both logs and retains
+non-secret evidence for 14 days with GitHub.com/Enterprise-specific action pins.
+Missing evidence is a failure, not a successful skip. The full native gate also
+runs actual recipe/metadata/SDK consumer tests. The retained API-v1 consumer is
+frozen test data, not a published prior release: its digest is LF-normalized.
+Nested tests create/verify/move an SDK bundle, bootstrap a consumer lock offline,
+rerun locked, then inspect Cargo metadata for any escape to the old checkout.
+
+See `P2_ACCEPTANCE.md` and `verification/p2-implementation-ledger.md` for recipe
+v1/v2 handling, retained historical reports and concrete native commands. Passing
+source/TOML/fixture/grammar checks is not compilation, running-game/SDK evidence,
+load acceptance or a hosted-CI pass. P0/P1 gates remain unchanged.
+
 ## Local Evidence and Limits
 
 Focused M8 commands:

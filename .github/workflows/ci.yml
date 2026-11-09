@@ -53,7 +53,10 @@ jobs:
         run: ./scripts/dev.ps1 check-native
       - name: Required P2 source, bundle and fixture drift checks
         shell: bash
-        run: python scripts/test-p2-contracts.py
+        run: |
+          set -euo pipefail
+          python scripts/test-p2-contracts.py 2>&1 | tee "$RUNNER_TEMP/worldwright-p2-contracts.log"
+          python scripts/test-p2-negatives.py 2>&1 | tee -a "$RUNNER_TEMP/worldwright-p2-contracts.log"
       - name: Required browser adapter lifecycle tests
         shell: bash
         run: |
@@ -71,6 +74,22 @@ jobs:
       - name: Ensure lockfile did not change
         shell: bash
         run: git diff --exit-code -- Cargo.lock
+      - name: Retain P2 source-contract evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p2-source-contracts-${{ matrix.os }}
+          path: ${{ runner.temp }}/worldwright-p2-contracts.log
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain P2 source-contract evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: p2-source-contracts-${{ matrix.os }}
+          path: ${{ runner.temp }}/worldwright-p2-contracts.log
+          retention-days: 14
+          if-no-files-found: error
 
   helm-render:
     name: required Helm lint/render (${{ matrix.os }})

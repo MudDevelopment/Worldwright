@@ -106,7 +106,9 @@ class P2Contracts(unittest.TestCase):
         self.assertIn("worldwright_protocol::SUPPORTED_PROTOCOL_VERSIONS", consumer)
         self.assertIn("worldwright_content::SUPPORTED_CONTENT_SCHEMA_VERSIONS", consumer)
         self.assertIn('fs::rename(&bundle, &sdk)', consumer)
-        self.assertIn('if locked { cargo.arg("--locked"); }', consumer)
+        self.assertIn('"--filter-platform"', consumer)
+        self.assertIn('manifest.starts_with(&consumer_root)', consumer)
+        self.assertRegex(consumer, r'if locked\s*\{\s*cargo\.arg\("--locked"\);\s*\}')
 
     def test_fixed_beta_thresholds_and_runtime_recipe_version_remain_explicit(self) -> None:
         report = read("apps/worldwright-load/src/report.rs")
