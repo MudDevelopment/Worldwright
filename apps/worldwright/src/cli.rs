@@ -620,14 +620,7 @@ mod tests {
             }
         ));
         assert!(matches!(
-            parse_args(&[
-                "__preview-worker",
-                artifact,
-                &digest,
-                slot,
-                &token,
-                "10",
-            ]),
+            parse_args(&["__preview-worker", artifact, &digest, slot, &token, "10",]),
             Ok(Command::PreviewWorker {
                 max_seconds: 10,
                 ..
@@ -666,22 +659,8 @@ mod tests {
                 &invalid_token,
                 "10",
             ],
-            [
-                "__preview-worker",
-                artifact,
-                &digest,
-                slot,
-                &token,
-                "0",
-            ],
-            [
-                "__preview-worker",
-                artifact,
-                &digest,
-                slot,
-                &token,
-                "3601",
-            ],
+            ["__preview-worker", artifact, &digest, slot, &token, "0"],
+            ["__preview-worker", artifact, &digest, slot, &token, "3601"],
         ] {
             assert!(parse_args(&args).is_err(), "{args:?}");
         }

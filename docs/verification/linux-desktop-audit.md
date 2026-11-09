@@ -86,8 +86,9 @@ cargo build --workspace --locked --offline
 bash scripts/desktop.sh
 ```
 
-No fmt/check/clippy/test/build success is claimed here. Apply/review any rustfmt
-changes required by the real pinned formatter before merging. Confirm the
+The initial source pass did not execute these commands. Subsequent user-provided
+Windows evidence is recorded below; it does not close the Ubuntu acceptance
+gates. Re-run the pinned formatter after applying the formatting correction. Confirm the
 actual editor's import/save/package/preview flow; stop it using Ctrl+C and
 SIGTERM; verify the preview supervisor/worker exit; test source/workspace paths
 with spaces, X11/Wayland as available, and manual URL opening. Exercise local
@@ -96,3 +97,31 @@ recovery, accessibility, hosted CI and production evidence remain open.
 
 No commit, branch, PR, lockfile regeneration, dependency upgrade, persisted
 configuration migration, database change or license decision was performed.
+
+## Subsequent user-provided Windows verification
+
+The user supplied command output for Rust 1.85.1, target
+`x86_64-pc-windows-msvc`, and the fresh temporary native-check build directory.
+This evidence was observed in the chat, not produced by executing Cargo via EWW.
+
+| Gate | Observed result |
+|---|---|
+| Workspace check, including test targets | Passed; earlier supplied log reported Cargo exit code 0. The missing-prelude cascade did not recur. The original cause is not isolated because toolchain/target selection and build directory were changed together. |
+| Pinned formatting check | Failed only with the supplied `apps/worldwright/src/cli.rs` layout diffs. Applied those exact formatter-requested changes through EWW. Post-edit formatting recheck remains pending. |
+| Workspace Clippy, all targets/features, warnings denied | Passed; supplied output finished the dev profile in 13.84 seconds. |
+| Workspace test execution | All executed suites shown passed, including CLI preview/parser, network/server, Studio, and doctests. Nineteen persistence database tests were explicitly ignored because WORLDWRIGHT_TEST_DATABASE_URL was not configured. |
+| Workspace executable build | Passed; supplied output finished the dev profile in 1 minute 8 seconds. Manual application launch was not shown. |
+| Ubuntu build, Unix SIGTERM and real desktop browser | Not verified by Windows execution. |
+
+The generated-project maturity test's nested Cargo commands used a separate
+`D:\projects\TRF_rust\Rust\_acceptance_runs\20261104-115253\target` output
+path, despite the outer run using the temporary native-check directory. This
+is consistent with inherited Cargo configuration/environment affecting nested
+Cargo calls; the exact source of that override was not established. Generated
+project tests passed, but their dependency builds should not be described as
+fully isolated to the outer fresh directory. Review nested build-directory
+isolation separately if required.
+
+The correction in this follow-up is formatting only; parser assertions,
+production behavior, dependencies, schema and Windows/Linux target policy are
+unchanged. No registry-source edits or blanket warning suppression were made.
