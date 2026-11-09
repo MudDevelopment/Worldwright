@@ -1,5 +1,33 @@
-const MAX_ROOMS = 1000;
-const MAX_EXITS = 256;
+let MAX_ROOMS = 0;
+let MAX_EXITS = 0;
+let capabilities = null;
+const utf8Bytes = (value) => new TextEncoder().encode(value).length;
+
+function checkByteLimit(input, limit) {
+  input.setCustomValidity(utf8Bytes(input.value) > limit ? `Maximum ${limit} UTF-8 bytes.` : "");
+}
+
+async function loadCapabilities() {
+  const value = await api("/api/v1/capabilities");
+  if (value?.schema_version !== 1 ||
+      !["max_rooms", "max_exits_per_room", "max_text_bytes", "max_definition_bytes", "max_exit_label_bytes", "max_input_bytes"]
+        .every((key) => Number.isSafeInteger(value[key]) && value[key] > 0)) {
+    throw new Error("Unsupported Studio capabilities; editor disabled.");
+  }
+  capabilities = value;
+  MAX_ROOMS = value.max_rooms;
+  MAX_EXITS = value.max_exits_per_room;
+  for (const [id, limit] of [
+    ["namespace", value.max_definition_bytes], ["new-room-id", value.max_definition_bytes],
+    ["room-title", value.max_text_bytes], ["new-room-title", value.max_text_bytes],
+    ["room-description", value.max_text_bytes],
+  ]) {
+    const input = element(id);
+    input.maxLength = limit;
+    input.addEventListener("input", () => checkByteLimit(input, limit));
+  }
+  element("exit-help").textContent = `At most ${MAX_EXITS} exits per room; labels at most ${value.max_exit_label_bytes} UTF-8 bytes. Destinations must be distinct, existing, non-self rooms.`;
+}
 const MAX_DIAGNOSTICS = 100;
 const MAX_RECORDS = 100;
 const MAX_PREVIEW_OUTPUT = 65536;
@@ -203,12 +231,13 @@ function renderExits() {
     const labelInput = document.createElement("input");
     labelInput.id = `exit-label-${index}`;
     labelInput.value = label;
-    labelInput.maxLength = 64;
+    labelInput.maxLength = capabilities.max_exit_label_bytes;
     labelInput.addEventListener("input", () => {
       const replacement = labelInput.value;
       const duplicate = replacement !== label && Object.hasOwn(room.exits, replacement);
       labelInput.setCustomValidity(
-        !replacement ? "Exit label is required." : duplicate ? "Exit labels must be unique." : "",
+        !replacement ? "Exit label is required." : duplicate ? "Exit labels must be unique." :
+          utf8Bytes(replacement) > capabilities.max_exit_label_bytes ? "Exit label exceeds the UTF-8 byte limit." : "",
       );
       if (!replacement || duplicate) {
         markDirty();
@@ -299,6 +328,10 @@ function renderEditor() {
     element("room-description").value = "";
     element("allow-unreachable").checked = false;
   }
+  for (const id of ["room-title", "room-description"]) {
+    checkByteLimit(element(id), capabilities.max_text_bytes);
+  }
+  checkByteLimit(element("namespace"), capabilities.max_definition_bytes);
   renderExits();
   renderStatus();
   renderWorkflowAvailability();
@@ -729,7 +762,7 @@ element("add-room-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const id = element("new-room-id").value.trim();
   const title = element("new-room-title").value.trim();
-  if (!id || !title || id.length > 256) {
+  if (!capabilities || !id || !title || utf8Bytes(id) > capabilities.max_definition_bytes || utf8Bytes(title) > capabilities.max_text_bytes) {
     element("add-room-error").textContent = "A bounded stable ID and title are required.";
     return;
   }
@@ -840,6 +873,7 @@ element("import-file").addEventListener("change", async () => {
   const file = element("import-file").files?.[0];
   if (!file) return;
   try {
+    if (!capabilities || file.size > capabilities.max_input_bytes) throw new Error("Import exceeds the input byte limit.");
     const text = await file.text();
     const result = await api("/api/v1/import", {
       method: "POST",
@@ -1018,6 +1052,7 @@ window.addEventListener("beforeunload", (event) => {
 
 async function initialize() {
   try {
+    await loadCapabilities();
     await loadWorkspace();
     await Promise.all([loadArtifacts(), loadPreview(), loadPublications()]);
     renderStatus();

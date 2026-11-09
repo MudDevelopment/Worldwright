@@ -258,6 +258,19 @@ pub(crate) async fn serve<F>(server: BoundServer, shutdown: F) -> Result<(), Ser
 where
     F: Future<Output = ()> + Send + 'static,
 {
+    let telemetry = match telemetry_listener().await {
+        Ok(listener) => listener,
+        Err(error) => { server.world.shutdown().await; return Err(error); }
+    };
+    let (telemetry_stop, telemetry_stopped) = tokio::sync::oneshot::channel::<()>();
+    let mut telemetry_task = telemetry.map(|listener| {
+        let router = telemetry_router(server.world.clone());
+        tokio::spawn(async move {
+            axum::serve(listener, router).with_graceful_shutdown(async {
+                let _ = telemetry_stopped.await;
+            }).await
+        })
+    });
     let world_for_shutdown = server.world.clone();
     let lifecycle = server.lifecycle.clone();
     let mut lifecycle_rx = lifecycle.subscribe();
@@ -275,6 +288,13 @@ where
         .with_graceful_shutdown(graceful)
         .await
         .map_err(ServerError::io);
+    let _ = telemetry_stop.send(());
+    if let Some(task) = telemetry_task.as_mut() {
+        if timeout(Duration::from_secs(5), &mut *task).await.is_err() {
+            task.abort();
+            let _ = task.await;
+        }
+    }
     server
         .lifecycle
         .transition(crate::lifecycle::LifecycleState::Stopping);
@@ -283,6 +303,28 @@ where
         .lifecycle
         .transition(crate::lifecycle::LifecycleState::Stopped);
     result
+}
+
+fn parse_telemetry_address(value: &str) -> Result<SocketAddr, ServerError> {
+    let address: SocketAddr = value.parse().map_err(|_| ServerError::Configuration("telemetry bind must be an IP socket address"))?;
+    if !address.ip().is_loopback() || address.port() == 0 {
+        return Err(ServerError::Configuration("telemetry bind must be loopback with an explicit nonzero port"));
+    }
+    Ok(address)
+}
+async fn telemetry_listener() -> Result<Option<TcpListener>, ServerError> {
+    let Some(value) = std::env::var_os("WORLDWRIGHT_TELEMETRY_BIND") else { return Ok(None); };
+    let value = value.to_str().ok_or(ServerError::Configuration("invalid telemetry bind"))?;
+    let address = parse_telemetry_address(value)?;
+    TcpListener::bind(address).await.map(Some).map_err(ServerError::io)
+}
+fn telemetry_router(world: crate::world::WorldHandle) -> axum::Router {
+    axum::Router::new().route("/metrics", axum::routing::get(
+        |axum::extract::State(world): axum::extract::State<crate::world::WorldHandle>| async move {
+            ([ ("content-type", "text/plain; version=0.0.4; charset=utf-8"),
+               ("cache-control", "no-store"), ("x-content-type-options", "nosniff") ], world.telemetry())
+        }
+    )).with_state(world)
 }
 
 fn complete_graceful_lifecycle(
@@ -308,6 +350,14 @@ fn random_writer_id() -> Option<worldwright_core::ids::WriterId> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn telemetry_cannot_bind_public_or_dynamic_ports() {
+        for value in ["0.0.0.0:9090", "[::]:9090", "192.0.2.1:9090", "127.0.0.1:0", "localhost:9090"] {
+            assert!(parse_telemetry_address(value).is_err(), "{value}");
+        }
+        assert!(parse_telemetry_address("127.0.0.1:9090").is_ok());
+        assert!(parse_telemetry_address("[::1]:9090").is_ok());
+    }
     #[test]
     fn operator_drain_does_not_claim_quiescence_before_completion_audit() {
         let operator_lifecycle = crate::lifecycle::LifecycleController::new();

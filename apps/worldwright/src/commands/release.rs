@@ -25,7 +25,14 @@ pub(crate) struct PreviewSlot {
 
 impl PreviewSlot {
     fn root() -> PathBuf {
-        std::env::temp_dir().join("worldwright-preview-v1")
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let uid = fs::metadata("/proc/self").map(|metadata| metadata.uid()).unwrap_or(u32::MAX);
+            std::env::temp_dir().join(format!("worldwright-preview-v1-user-{uid}"))
+        }
+        #[cfg(not(unix))]
+        { std::env::temp_dir().join("worldwright-preview-v1") }
     }
 
     fn acquire() -> Result<Self, &'static str> {
@@ -83,7 +90,11 @@ impl Drop for PreviewSlot {
 
 fn create_slot(path: &Path) -> Result<Option<PreviewSlot>, &'static str> {
     let token = random_token()?;
-    match OpenOptions::new().write(true).create_new(true).open(path) {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+    match options.open(path) {
         Ok(mut file) => {
             if file.write_all(token.as_bytes()).is_err() || file.sync_all().is_err() {
                 drop(file);
@@ -154,13 +165,24 @@ fn valid_token(token: &str) -> bool {
 }
 
 fn ensure_real_directory(root: &Path) -> Result<(), &'static str> {
-    if !root.exists() {
-        fs::create_dir_all(root).map_err(|_| "preview: preview capacity is unavailable")?;
+    if fs::symlink_metadata(root).is_err() {
+        let mut builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        { use std::os::unix::fs::DirBuilderExt; builder.mode(0o700); }
+        builder.create(root).map_err(|_| "preview: unable to create private preview directory")?;
     }
     let metadata =
         fs::symlink_metadata(root).map_err(|_| "preview: preview capacity is unavailable")?;
     if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
         return Err("preview: preview capacity is unavailable");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let uid = fs::metadata("/proc/self").map_err(|_| "preview: unable to establish process owner")?.uid();
+        if metadata.uid() != uid || metadata.mode() & 0o777 != 0o700 {
+            return Err("preview: directory must be owned by the current user with mode 0700; use a new trusted TMPDIR or repair ownership/permissions explicitly");
+        }
     }
     Ok(())
 }
@@ -364,7 +386,7 @@ pub fn preview_worker(
     if let Err(message) = PreviewSlot::validate(slot_path) {
         return report_message(message);
     }
-    if !valid_token(token) || !slot_owned(slot_path, token) {
+    if ensure_real_directory(&PreviewSlot::root()).is_err() || !valid_token(token) || !slot_owned(slot_path, token) {
         return report_message("preview worker: invalid preview slot");
     }
     if std::env::var("WORLDWRIGHT_PREVIEW").ok().as_deref() != Some("1") {
@@ -460,7 +482,7 @@ mod tests {
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).unwrap();
+        ensure_real_directory(&root).unwrap();
         let stale = root.join("slot-0.lock");
         fs::write(&stale, "stale").unwrap();
         let slot = PreviewSlot::acquire_in_with(&root, |_| true).unwrap();

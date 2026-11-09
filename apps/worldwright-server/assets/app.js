@@ -9,6 +9,7 @@
   const status = document.querySelector("#status");
   const logout = document.querySelector("#logout");
   let socket = null;
+  let sessionGeneration = 0;
   const heartbeatTimers = new WeakMap();
   let requestNumber = 0;
   // Fresh pages must not reuse durable receipt IDs from a previous game session.
@@ -170,6 +171,7 @@
 
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const generation = ++sessionGeneration;
     const payload = { username: username.value, password: password.value };
     password.value = "";
     try {
@@ -179,6 +181,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      if (generation !== sessionGeneration) return;
       if (response.ok) {
         print("Logged in.");
         connect();
@@ -223,6 +226,7 @@
   });
 
   logout.addEventListener("click", async () => {
+    const generation = ++sessionGeneration;
     const current = socket;
     setCommandEnabled(false);
     if (current) {
@@ -239,10 +243,30 @@
     } catch (_) {
       print("Network request failed.");
     }
+    if (generation !== sessionGeneration) return;
     password.value = "";
     output.replaceChildren();
     setStatus("Logged out");
   });
 
+  async function resumeSession() {
+    const generation = sessionGeneration;
+    setStatus("Checking session");
+    try {
+      const response = await fetch("/api/v1/session", {
+        method: "GET", credentials: "same-origin", cache: "no-store",
+      });
+      if (generation !== sessionGeneration) return;
+      if (response.status === 204) {
+        connect();
+      } else {
+        setStatus(response.status === 401 ? "Sign in to play" : "Session check unavailable");
+      }
+    } catch (_) {
+      if (generation === sessionGeneration) setStatus("Session check unavailable");
+    }
+  }
+
   setCommandEnabled(false);
+  void resumeSession();
 })();

@@ -64,7 +64,7 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/", get(index))
         .route("/app.js", get(app_js))
         .route("/app.css", get(app_css))
-        .route("/api/v1/session", post(login).delete(logout))
+        .route("/api/v1/session", post(login).get(session_status).delete(logout))
         .route("/api/v1/oidc/start", post(oidc_start))
         .route("/api/v1/oidc/callback", get(oidc_callback))
         .route("/api/v1/play", get(play))
@@ -211,6 +211,22 @@ async fn login(
         Err(auth::AuthError::InvalidInput | auth::AuthError::Unauthorized) => {
             auth::unauthorized_response()
         }
+    }
+}
+
+// A cookie-only probe returns no token or principal data. The WebSocket still
+// revalidates the session at handshake and before gameplay.
+async fn session_status(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if headers.contains_key(header::ORIGIN) && !origin_matches(&headers, &state.allowed_origin) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(token) = auth::token_from_cookie(&headers) else {
+        return auth::unauthorized_response();
+    };
+    match state.auth.lookup(&token).await {
+        Ok(Some(_)) => StatusCode::NO_CONTENT.into_response(),
+        Ok(None) => auth::unauthorized_response(),
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
 

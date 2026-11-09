@@ -1,0 +1,110 @@
+name: P1 container and protected beta load
+
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_beta_load:
+        description: Run the fixed beta-250 profile against the approved disposable HTTPS/PostgreSQL acceptance deployment
+        type: boolean
+        default: false
+      base_url:
+        description: Exact canonical HTTPS origin, no trailing slash
+        type: string
+      server_revision:
+        description: Revision independently verified on the acceptance deployment
+        type: string
+      artifact_digest:
+        description: Active artifact SHA-256 independently verified on the acceptance deployment
+        type: string
+      environment_label:
+        description: Approved acceptance environment label
+        type: string
+        default: p1-acceptance
+
+permissions:
+  contents: read
+
+jobs:
+  container-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build development image and verify non-root CLI linkage
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --tag worldwright-p1-smoke . 2>&1 | tee "$RUNNER_TEMP/worldwright-container-build.log"
+          test "$(docker image inspect --format '{{.Config.User}}' worldwright-p1-smoke)" = '65532:65532'
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges worldwright-p1-smoke --help > "$RUNNER_TEMP/worldwright-container-help.txt"
+          docker image inspect --format '{{.Id}}' worldwright-p1-smoke > "$RUNNER_TEMP/worldwright-container-config-id.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/worldwright-container-revision.txt"
+      - name: Retain image smoke evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: development-container-smoke
+          path: ${{ runner.temp }}/worldwright-container-*
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain image smoke evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: development-container-smoke
+          path: ${{ runner.temp }}/worldwright-container-*
+          retention-days: 14
+          if-no-files-found: error
+
+  protected-beta-load:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_beta_load && github.ref_name == github.event.repository.default_branch
+    # Configure this environment with required reviewers and acceptance-only secrets.
+    # No production credentials, privileged self-hosted runners or PR execution.
+    environment: worldwright-acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build pinned load runner
+        shell: bash
+        run: |
+          bash scripts/dev.sh bootstrap
+          cargo build --locked --offline --release -p worldwright-load --bin worldwright-load
+      - name: Run unchanged fixed beta profile
+        shell: bash
+        env:
+          LOAD_CREDENTIALS_JSON: ${{ secrets.WORLDWRIGHT_ACCEPTANCE_CREDENTIALS_JSON }}
+          BASE_URL: ${{ inputs.base_url }}
+          SERVER_REVISION: ${{ inputs.server_revision }}
+          ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+          ENVIRONMENT_LABEL: ${{ inputs.environment_label }}
+        run: |
+          set -euo pipefail
+          umask 077
+          credentials="$RUNNER_TEMP/worldwright-load-credentials.json"
+          trap 'rm -f "$credentials"' EXIT
+          python3 -c 'import os,pathlib; value=os.environ["LOAD_CREDENTIALS_JSON"]; assert value, "missing acceptance credentials"; pathlib.Path(os.environ["RUNNER_TEMP"], "worldwright-load-credentials.json").write_text(value)'
+          unset LOAD_CREDENTIALS_JSON
+          ./target/release/worldwright-load run --base-url "$BASE_URL" --origin "$BASE_URL" --credentials "$credentials" --output "$RUNNER_TEMP/worldwright-beta250.json" --server-revision "$SERVER_REVISION" --artifact-digest "$ARTIFACT_DIGEST" --environment-label "$ENVIRONMENT_LABEL"
+      - name: Retain credential-free load report on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fixed-beta250-load
+          path: ${{ runner.temp }}/worldwright-beta250.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain credential-free load report on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: fixed-beta250-load
+          path: ${{ runner.temp }}/worldwright-beta250.json
+          retention-days: 14
+          if-no-files-found: error

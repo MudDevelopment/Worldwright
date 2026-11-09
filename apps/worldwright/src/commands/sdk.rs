@@ -73,13 +73,19 @@ pub fn verify_bundle(p: &Path) -> ExitCode {
         }
     }
 }
-fn bundle_result(out: &Path) -> Result<(), String> {
+pub(crate) fn bundle_result(out: &Path) -> Result<(), String> {
     validate_parent(out)?;
     if out.exists() {
         return Err("bundle output exists".into());
     }
     fs::create_dir(out).map_err(|_| "bundle output create failed")?;
     let result = (|| {
+        if let Some(source) = std::env::var_os("WORLDWRIGHT_SDK_BUNDLE") {
+            let source = std::path::PathBuf::from(source);
+            verify_result(&source)?;
+            copy_tree(&source, out, &mut BundleBounds::default())?;
+            return verify_result(out);
+        }
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(Path::parent)
@@ -137,6 +143,7 @@ worldwright-testkit = { path = "crates/worldwright-testkit", version = "=0.1.0-d
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"
 serde_path_to_error = "=0.1.20"
+getrandom = "=0.3.4"
 [workspace.lints.rust]
 unsafe_code = "forbid"
 [workspace.lints.clippy]
@@ -306,7 +313,7 @@ fn validate_path(p: &str) -> Result<(), String> {
     }
     Ok(())
 }
-fn verify_result(root: &Path) -> Result<(), String> {
+pub(crate) fn verify_result(root: &Path) -> Result<(), String> {
     let root_metadata = root
         .symlink_metadata()
         .map_err(|_| "bundle directory invalid")?;

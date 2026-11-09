@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document version | 0.1 |
-| Updated | November 6, 2026 |
+| Updated | November 9, 2026 — current P1 controls; not a certification |
 | Status | M4/M5 controls await live PostgreSQL verification; M6 is implemented awaiting live PostgreSQL/recovery execution and is not production ready |
 | Accountable roles | Security owner and service owner, with authorized project-owner oversight |
 | Related documents | [README](README.md), [Design](DESIGN.md), [Architecture](ARCHITECTURE.md), [Contributing](CONTRIBUTING.md), [Conduct](CODE_OF_CONDUCT.md) |
@@ -17,8 +17,8 @@ read guards, maintenance/pending activation state, and stale-writer refusal.
 Release artifacts use immutable create-new filesystem output and insert-only
 application APIs; they are bounded, canonical, digest-verified, and validated
 through the strict content loader. Preview clears inherited
-environment state, uses bounded ownership-safe slots, and runs only in-memory
-ReferenceGame data.
+environment state, uses bounded ownership-safe slots, and runs artifact-selected
+reference or expedition gameplay with in-memory state only.
 
 These controls do not establish authorship or authorization: an artifact digest
 is not a signature. Operator authority requires an auth-v1 token and current
@@ -34,6 +34,41 @@ Live PostgreSQL and recovery behavior remain unverified.
 > **Important:** No released Worldwright software, supported-version roster, deployed service, private reporting endpoint, or staffed response team has been verified. “Must” below describes a release requirement, not an implemented-control claim. This document does not certify Worldwright as secure or production-ready.
 >
 > **Reporting channel pending:** Do not post an unmitigated exploit, credential, private player record, or vulnerability report with sensitive details in a public issue. Do not use a guessed security email address. See the reporting process below.
+
+## P1 security boundaries and unresolved approval gates
+
+- The session-resume probe uses the existing cookie; no token/principal data is
+  returned. Authentication still occurs at WebSocket handshake and gameplay.
+  Browser generation guards reject stale UI responses; this is not a claim
+  that every concurrent login/logout Set-Cookie race has been certified.
+- `WORLDWRIGHT_TELEMETRY_BIND` is optional, separate and loopback-only with an
+  explicit nonzero port. It does not enable operator authority or trust public
+  proxy headers. Metrics have six fixed stage dimensions and no raw player
+  text, token, account, subject or request labels. Same-host users can access
+  loopback telemetry; isolate the host or use an approved local proxy if required.
+- Linux preview slots now use a per-process-owner directory and require current
+  ownership/mode 0700; new lock files request 0600. Existing non-private paths
+  fail instead of being silently chmodded. `/proc/self` supplies Linux owner
+  identity; no portability claim is made for non-Linux Unix without that source.
+- Preview Unix process groups and Windows taskkill are cleanup mechanisms, not
+  containment. Real crash/SIGTERM/descendant/race tests and Windows ACL/key-file
+  protection remain open. Console signing authority/key rotation remains an
+  explicit security review; it was not removed or certified in this change.
+- External outbox dispatch is unsupported. Expired-session hash pruning is
+  bounded and preserves durable receipts, business uniqueness, OIDC links and
+  audit rows. No 90-day deletion promise or adopted broader retention policy
+  is supplied. Keep test reports/logs free of credentials and player content.
+- Protected beta-load CI uses only an explicitly reviewed acceptance deployment,
+  default branch and required-reviewer environment. Credentials are temporary,
+  removed on step exit, and excluded from artifacts. Required reviewers and
+  branch protection must actually be configured; YAML does not adopt them.
+- Release evidence hashes and Cargo metadata SBOM declarations do not prove
+  publisher identity, licensing rights or authorized owner decisions. Review
+  exact code/artifact/container tuples, advisories, notices, signing policy,
+  private reporting/support owners and service acceptance before distribution.
+  `publish = false` remains in force.
+
+See `docs/P1_ACCEPTANCE.md` and `docs/verification/p1-implementation-ledger.md`.
 
 ## Contents
 
@@ -300,7 +335,11 @@ Transport v0.1 adds a loopback-only, exact-Origin browser service. Registry pass
 
 The service rejects wildcard/query-token authentication, requires exact Origin values, and exposes insecure HTTP only through an explicit local-development flag. Body, frame, gameplay/control/output queues, handshake, idle, control, socket-write, and cleanup bounds are enforced. Out-of-band cancellation handles logout, expiry, takeover, shutdown, and slow consumers; attachment generations and recipient revalidation prevent stale execution/delivery. CSP and `textContent` rendering keep browser output data-only.
 
-This remains a static local registry with no recovery/MFA, no rate policy beyond hash concurrency, no durable revocation or sessions, no built-in TLS, no proxy-header trust, and no production deployment assessment. The browser assets and real loopback WebSocket cases are automated-tested; interactive accessibility testing has not been performed. See [SERVER.md](docs/SERVER.md) and [PROTOCOL_V1.md](docs/PROTOCOL_V1.md).
+That original local mode remains a static registry. Current PostgreSQL mode
+adds durable sessions/revocation and identity linking; operator assurance is
+separate from player login. Live provider/recovery acceptance remains open,
+and neither local success nor configured TLS ingress establishes a production
+security assessment. The browser assets and real loopback WebSocket cases are automated-tested; interactive accessibility testing has not been performed. See [SERVER.md](docs/SERVER.md) and [PROTOCOL_V1.md](docs/PROTOCOL_V1.md).
 
 ### Content and publication
 

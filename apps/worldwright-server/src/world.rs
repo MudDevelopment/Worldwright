@@ -171,8 +171,22 @@ pub(crate) struct DurableGameplayMutation {
     pub(crate) result: serde_json::Value,
 }
 
+pub(crate) struct DurableTickMutation {
+    lease: WriterLease,
+    release: Sha256Digest,
+    game: GameContract,
+    version: u64,
+    runtime: worldwright_core::runtime::DurableWorldState,
+    rooms: Vec<DurableCharacterRoom>,
+    now: Tick,
+}
+
 #[async_trait]
 pub(crate) trait DurableStore: Send + Sync {
+    async fn commit_tick(&self, input: DurableTickMutation) -> Result<u64, PersistenceError> {
+        let _ = input;
+        Err(PersistenceError::InvalidData)
+    }
     #[allow(dead_code)]
     async fn commit_gameplay(
         &self,
@@ -209,6 +223,10 @@ pub(crate) trait DurableStore: Send + Sync {
 
 #[async_trait]
 impl DurableStore for PostgresStore {
+    async fn commit_tick(&self, input: DurableTickMutation) -> Result<u64, PersistenceError> {
+        self.commit_gameplay_tick(input.lease, input.release, input.game, input.version,
+            worldwright_persistence::GameplayState { runtime: &input.runtime, rooms: &input.rooms, now: input.now }).await
+    }
     async fn commit_gameplay(
         &self,
         input: DurableGameplayMutation,
@@ -337,6 +355,7 @@ pub(crate) struct WorldHandle {
     accepting: Arc<AtomicBool>,
     connected_clients: Arc<AtomicU64>,
     admission_rejections: Arc<AtomicU64>,
+    timings: Arc<crate::metrics::GameplayTimings>,
 }
 
 pub(crate) enum Outbound {
@@ -365,6 +384,7 @@ pub(crate) enum SubmitError {
 }
 
 struct GameplayRequest {
+    enqueued_at: Instant,
     actor: ActorContext,
     request_id: String,
     command: ClientCommand,
@@ -426,6 +446,7 @@ struct Owner {
     connected_clients: Arc<AtomicU64>,
     random: OwnerRandom,
     staged_messages: Option<Vec<(ActorContext, ServerMessage)>>,
+    timings: Arc<crate::metrics::GameplayTimings>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -582,6 +603,7 @@ impl WorldHandle {
         let accepting = Arc::new(AtomicBool::new(true));
         let connected_clients = Arc::new(AtomicU64::new(0));
         let admission_rejections = Arc::new(AtomicU64::new(0));
+        let timings = Arc::new(crate::metrics::GameplayTimings::default());
         let random = match game {
             crate::GameProfile::Reference => OwnerRandom::Unavailable,
             crate::GameProfile::Expedition => OwnerRandom::seeded().ok_or_else(|| {
@@ -603,6 +625,7 @@ impl WorldHandle {
             connected_clients: connected_clients.clone(),
             random,
             staged_messages: None,
+            timings: Arc::clone(&timings),
         };
         tokio::spawn(owner.run());
         Ok(Self {
@@ -612,6 +635,7 @@ impl WorldHandle {
             accepting,
             connected_clients,
             admission_rejections,
+            timings,
         })
     }
 
@@ -701,6 +725,7 @@ impl WorldHandle {
         }
         self.gameplay
             .try_send(GameplayRequest {
+                enqueued_at: Instant::now(),
                 actor,
                 request_id,
                 command,
@@ -712,6 +737,11 @@ impl WorldHandle {
                 mpsc::error::TrySendError::Full(_) => SubmitError::Full,
                 mpsc::error::TrySendError::Closed(_) => SubmitError::Closed,
             })
+    }
+
+    pub(crate) fn telemetry(&self) -> String {
+        format!("worldwright_ready {}\nworldwright_connected_clients {}\nworldwright_admission_rejections_total {}\n{}",
+            u8::from(self.is_ready()), self.connected_clients(), self.admission_rejections(), self.timings.render())
     }
 
     pub(crate) fn is_ready(&self) -> bool {
@@ -748,11 +778,15 @@ impl WorldHandle {
 
 impl Owner {
     async fn run(mut self) {
+        let mut gameplay_timer = tokio::time::interval(Duration::from_millis(100));
+        gameplay_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut release_monitor = self
             .durable
             .as_ref()
             .map(|_| tokio::time::interval(Duration::from_secs(1)));
         loop {
+            if self.control.is_closed() && self.control.is_empty()
+                && self.gameplay.is_closed() && self.gameplay.is_empty() { break; }
             tokio::select! {
                 biased;
                 _ = async {
@@ -766,6 +800,9 @@ impl Owner {
                 Some(request) = self.control.recv() => {
                     if self.handle_control(request).await { break; }
                 }
+                _ = gameplay_timer.tick() => {
+                    if self.advance_idle().await { break; }
+                }
                 Some(request) = self.gameplay.recv() => {
                     if self.handle_gameplay(request).await { break; }
                 }
@@ -773,6 +810,53 @@ impl Owner {
             }
         }
         self.shutdown_routes(DisconnectReason::Shutdown);
+    }
+
+    async fn advance_idle(&mut self) -> bool {
+        let _timer_timing = self.timings.start(5);
+        let Ok(elapsed) = u64::try_from(self.started.elapsed().as_millis()) else {
+            return self.durable_failure(DisconnectReason::Internal);
+        };
+        let now = Tick::from_millis(elapsed);
+        if !self.runtime.next_scheduled_at().is_some_and(|at| at <= now) { return false; }
+        let checkpoint = self.runtime.snapshot();
+        let result = match self.runtime.advance(now) {
+            Ok(result) => result,
+            Err(_) => return self.durable_failure(DisconnectReason::Internal),
+        };
+        if result.events.is_empty() { return false; }
+        let Some(context) = self.durable.clone() else { return false; };
+        let snapshot = self.runtime.snapshot();
+        let runtime = match snapshot.durable_state() {
+            Ok(runtime) => runtime,
+            Err(_) => return self.durable_failure(DisconnectReason::Internal),
+        };
+        let mut rooms = Vec::new();
+        for character in snapshot.characters() {
+            let Some(room_definition) = snapshot.room_of(character).and_then(|room| {
+                self.lookup.room_ids.iter().find_map(|(definition, id)|
+                    (*id == room).then(|| definition.to_string()))
+            }) else { return self.durable_failure(DisconnectReason::Internal); };
+            rooms.push(DurableCharacterRoom { character, room_definition });
+        }
+        match context.store.commit_tick(DurableTickMutation {
+            lease: context.lease, release: context.release_digest, game: context.game,
+            version: context.game_state_version, runtime, rooms, now,
+        }).await {
+            Ok(version) => {
+                if let Some(current) = self.durable.as_mut() { current.game_state_version = version; }
+                false
+            }
+            Err(error) => {
+                let _ = self.runtime.restore_checkpoint(checkpoint);
+                let reason = if matches!(error, PersistenceError::StaleWriter) {
+                    DisconnectReason::Protocol(ErrorCode::WriterFenced)
+                } else if matches!(error, PersistenceError::UnknownOutcome) {
+                    DisconnectReason::Protocol(ErrorCode::OperationPending)
+                } else { DisconnectReason::Protocol(ErrorCode::TemporarilyUnavailable) };
+                self.durable_failure(reason)
+            }
+        }
     }
 
     async fn monitor_release(&mut self) -> bool {
@@ -835,6 +919,7 @@ impl Owner {
                     let status = self
                         .commit_durable_command(
                             GameplayRequest {
+                                enqueued_at: Instant::now(),
                                 actor,
                                 request_id,
                                 command: ClientCommand::Look,
@@ -967,6 +1052,8 @@ impl Owner {
     }
 
     async fn handle_gameplay(&mut self, request: GameplayRequest) -> bool {
+        self.timings.observe(0, request.enqueued_at.elapsed());
+        let _owner_timing = self.timings.start(1);
         let durable_command = matches!(
             request.command,
             ClientCommand::Inventory
@@ -1170,6 +1257,7 @@ impl Owner {
             _ => return DurableCommandStatus::Failed,
         };
         let checkpoint = self.runtime.snapshot();
+        let random_checkpoint = self.random;
         let kind = match &request.command {
             ClientCommand::Look => worldwright_persistence::GameplayIntentKind::Look,
             ClientCommand::Move { .. } => worldwright_persistence::GameplayIntentKind::Move,
@@ -1188,10 +1276,13 @@ impl Owner {
         };
         debug_assert!(self.staged_messages.is_none());
         self.staged_messages = Some(prelude.clone());
-        let execution =
-            self.execute_command(request.actor, &request.request_id, request.command.clone());
+        let execution = {
+            let _planning_timing = self.timings.start(2);
+            self.execute_command(request.actor, &request.request_id, request.command.clone())
+        };
         let staged = self.staged_messages.take().unwrap_or_default();
         if let Err(error) = execution {
+            self.random = random_checkpoint;
             if self.runtime.restore_checkpoint(checkpoint).is_err() {
                 self.durable_failure(DisconnectReason::Internal);
                 return DurableCommandStatus::Stop;
@@ -1275,6 +1366,7 @@ impl Owner {
             character: request.actor.character,
             token_hash: worldwright_persistence::session_token_hash(&token),
         };
+        let sql_timing = self.timings.start(3);
         let commit = context
             .store
             .commit_gameplay(DurableGameplayMutation {
@@ -1293,9 +1385,11 @@ impl Owner {
                 result,
             })
             .await;
+        drop(sql_timing);
         match commit {
             Ok(commit) => {
                 if commit.replayed {
+                    self.random = random_checkpoint;
                     if self.runtime.restore_checkpoint(checkpoint).is_err() {
                         self.durable_failure(DisconnectReason::Internal);
                         return DurableCommandStatus::Stop;
@@ -1325,6 +1419,7 @@ impl Owner {
                 DurableCommandStatus::Succeeded
             }
             Err(error) => {
+                self.random = random_checkpoint;
                 let _ = self.runtime.restore_checkpoint(checkpoint);
                 if self.map_durable_failure(request.actor, Some(request.request_id), error) {
                     DurableCommandStatus::Stop
@@ -1591,7 +1686,6 @@ impl Owner {
             return Err(WorldError::StaleAttachment);
         }
         self.runtime
-            .snapshot()
             .room_of(actor.character)
             .ok_or(WorldError::UnknownCharacter)
     }
@@ -1646,11 +1740,12 @@ impl Owner {
     }
 
     fn send_to_actor(&mut self, actor: ActorContext, message: ServerMessage) -> bool {
+        let _delivery_timing = self.timings.start(4);
         let Some(route) = self.routes.get(&actor.character) else {
             return false;
         };
         if route.actor != actor
-            || self.runtime.snapshot().attachment(actor.character) != Some(actor)
+            || self.runtime.attachment(actor.character) != Some(actor)
         {
             return false;
         }
@@ -1672,7 +1767,7 @@ impl Owner {
         self.routes
             .get(&actor.character)
             .is_some_and(|route| route.actor == actor)
-            && self.runtime.snapshot().attachment(actor.character) == Some(actor)
+            && self.runtime.attachment(actor.character) == Some(actor)
     }
 
     fn remove_route(&mut self, actor: ActorContext, reason: DisconnectReason) {
@@ -1686,7 +1781,7 @@ impl Owner {
                 // The route map owns the one connected-client gauge decrement.
                 self.connected_clients.fetch_sub(1, Ordering::Relaxed);
             }
-            if self.runtime.snapshot().attachment(actor.character) == Some(actor) {
+            if self.runtime.attachment(actor.character) == Some(actor) {
                 let _ = self.runtime.detach(actor);
             }
         }
@@ -1764,6 +1859,7 @@ fn map_world_error(error: WorldError) -> (ErrorCode, &'static str, bool) {
     }
 }
 
+#[derive(Clone, Copy)]
 enum OwnerRandom {
     Unavailable,
     Seeded(u64),

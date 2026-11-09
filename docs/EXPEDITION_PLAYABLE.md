@@ -33,8 +33,11 @@ production game.
 ## Timing and persistence boundaries
 
 Recovery is scheduled one second after rest or a final strike. It is applied by
-`runtime.advance` on the next gameplay command after that deadline, not by an
-independent idle timer. Wait at least one second, then issue `status`/`look`.
+`runtime.advance`. The blocking terminal adapter applies it on the next command
+after the deadline. Multiplayer now polls due work independently every 100 ms;
+PostgreSQL mode commits timer state and audit before making it visible. Live
+idle/restart/failure acceptance remains required. Issue `status`/`look` to inspect
+current state; no separate browser push event is promised for recovery.
 Executable and preview progress are ephemeral. Local multiplayer retains
 progress across reattachment while the server lives. PostgreSQL multiplayer uses
 the already implemented general gameplay snapshot/receipt transaction path;
@@ -59,9 +62,11 @@ cargo run --locked --offline
 
 The first test command creates Cargo.lock; retain/review it. Generated main now
 calls `worldwright_expedition::terminal::run` with embedded world JSON, so the
-compiled game runs outside its generated directory. SDK dependency paths still
-point into the source checkout during compilation; relocatable SDK distribution
-remains roadmap work. An older generated expedition main can opt in with:
+compiled game runs outside its generated directory. New projects carry a bounded
+private SDK in `sdk/` with relative dependencies, so the whole project can move
+before compilation. Installed CLIs can use `WORLDWRIGHT_SDK_BUNDLE` pointing to a
+trusted matching bundle. Preserve its provenance manifest; registry dependencies
+still need an approved cache/bootstrap, and this does not grant licensing rights. An older generated expedition main can opt in with:
 
 ```rust
 fn main() -> std::process::ExitCode {

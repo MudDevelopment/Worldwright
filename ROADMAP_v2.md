@@ -23,10 +23,13 @@ expedition executables and expedition previews run the shared real host; Studio
 packages the selected game; browser expedition commands use the multiplayer
 owner and page-unique receipt IDs. Added regression tests cover these paths.
 WWV2-003/004 now need execution evidence, not their original source wiring.
-WWV2-015 is partially addressed (executable + first bootstrap + nested target
-isolation), but SDK relocation remains open. See `docs/EXPEDITION_PLAYABLE.md`.
+WWV2-015 now includes relative bundled SDK dependencies, supplied matching bundle
+support and playable entry points for both templates. Relocation/build tests are
+authored but native acceptance remains open. See `docs/EXPEDITION_PLAYABLE.md`.
 No current Cargo pass, real browser run or live PostgreSQL proof is claimed.
-Delayed recovery remains command-driven; WWV2-007 is not closed.
+Multiplayer now has independently polled, fenced idle timer commits and RNG
+rollback. The blocking terminal remains command-driven. WWV2-007 is not closed:
+live idle/restart/failure/randomness evidence is still required.
 
 ## Selected P0 implementation follow-through — November 9, 2026
 
@@ -44,6 +47,35 @@ checks passed. Two real Studio cases skipped; Cargo/rustfmt/PowerShell/Helm/PG/
 hosted execution is unobserved. **Six source tracks implemented does not mean
 six P0 acceptance tracks closed.** See `docs/P0_ACCEPTANCE.md` and
 `docs/verification/p0-implementation-ledger.md` for current required commands.
+
+## P1 continuation/status — November 9, 2026
+
+All requested P1 IDs remain open for full acceptance. Source changes and authored
+regressions are tracked in `docs/verification/p1-implementation-ledger.md`; run
+commands and prerequisites are in `docs/P1_ACCEPTANCE.md`. Implemented source is
+not a passing native build or an approval decision.
+
+| ID | Current source follow-through | Remaining gate |
+|---|---|---|
+| WWV2-005 | Cookie-only session probe and page-resume connection; stale-response guards and Node lifecycle checks | Real provider/browser and concurrent auth-cookie race acceptance |
+| WWV2-006 | Timer rollback/reconstruction, OIDC linking/concurrency/revocation and receipt-preserving cleanup DB regressions; CI runs full ignored suite | Live DB plus process/unknown-COMMIT/restore/provider matrix |
+| WWV2-007 | Bounded owner idle polling, atomic fenced timer audit/state commit, durable-command RNG rollback | Real idle/restart/crash/randomness tests |
+| WWV2-010 | Backend capabilities, UTF-8 hints, HTTP and 1024-room/64-exit DOM regressions | Real browser maximum-size/accessibility acceptance |
+| WWV2-011 | Per-run output, streaming UTF-8, bounded input, I/O reaping before receipt, platform tree cleanup paths | Real stop/crash/SIGTERM and orphan/PID/pipe race evidence |
+| WWV2-012 | Narrow runtime inspection and six fixed timing stages | Fixed beta-250 measurement and detailed clone/lock/commit profiling |
+| WWV2-013 | External dispatch explicitly unsupported; bounded expired-session pruning preserves replay identities | Broader privacy/retention adoption and live cleanup/recovery |
+| WWV2-014 | Separate loopback telemetry, full DB CI, container CLI smoke, reviewer-gated manual unchanged load profile, report retention | Hosted CI, reviewers/rulesets and real deployment/load acceptance |
+| WWV2-015 | Relative bundled SDK, installed-source override and both playable templates; pre-build relocation regression | Approved native generated-project/bundle builds without original checkout |
+| WWV2-017 | README/DESIGN/SECURITY/development/playable/migration docs reconciled; historical observations retained | Remaining architecture/handoff/status/helper sweep |
+| WWV2-018 | Linux per-owner 0700 directory and 0600 slot creation; explicit refusal of unsafe existing paths | Windows ACL/key authority, multi-user/race/rotation review and real tests |
+| WWV2-019 | Evidence/SBOM collector and exact-tuple owner/evidence records; no implied licensing or signing authority | Real advisory/notices/signing/legal/security/service approvals and pinned deployment images |
+
+The container job is CLI/linkage smoke, not a running-service or deployed-image
+certification. Its local image config ID is not a registry manifest digest.
+The beta job never accepts tunable workload thresholds and is disabled unless
+explicitly dispatched on the default branch using acceptance-only credentials.
+GitHub.com and Enterprise artifact-action versions are selected separately;
+organizational runner/action/environment approval remains necessary.
 
 ## Contents
 
@@ -192,7 +224,11 @@ A 250-client profile fits below the 256-character ceiling numerically; that is n
 
 **Priority here is delivery ordering, not a vulnerability severity rating.** P0 blocks a credible next acceptance run; P1 blocks an integrated beta; P2 improves maintainability or extends proven capability. Findings are not fixed merely by appearing in this document.
 
-| ID | Priority | Source-confirmed issue / evidence gap | Work and acceptance criterion |
+**The findings table preserves the original review snapshot.** Consult the P1
+status section and ledgers above for source work completed since that review;
+these historical observations are not current assertions that new code is absent.
+
+| ID | Priority | Review-snapshot issue / evidence gap | Work and acceptance criterion |
 |---|---|---|---|
 | WWV2-001 | P0 | Source corrected: private owned default-parent preparation, path/permission checks and no silent chmod. Eight synthetic launcher/diagnostic contracts passed. | Real fresh-HOME/XDG Studio/package/reopen/SIGTERM tests are authored and CI-wired but unexecuted here; manual desktop acceptance remains open. |
 | WWV2-002 | P0 | Source corrected: fuller redacted doctor, pinned compiler/Cargo enforcement and fresh explicit native check workflow on both hosts; first-failure and target isolation contracts passed synthetically. | Current fmt/compiler/Clippy/tests/build/rustdoc and PowerShell/Ubuntu/hosted runs must execute before acceptance. Historical Windows passes do not verify this patch. |

@@ -115,13 +115,32 @@ The server status command reports protocol/browser implementation and process-lo
 - Rustup installs the declared toolchain on the hosted runners.
 - Checkout is pinned to the verified upstream v4 commit `11d5960a326750d5838078e36cf38b85af677262`.
 - Workflow token permissions are read-only for repository contents; checkout does not persist credentials.
-- Jobs have a 20-minute timeout and per-ref cancellation of superseded runs.
+- Main CI jobs have explicit 15–30-minute timeouts and per-ref cancellation of superseded runs.
 - A final check detects tracked Cargo.lock modifications.
-- No publishing, deployment, production credentials, privileged containers, or `pull_request_target` execution is configured.
+- No publishing, deployment, production credentials, privileged containers, or `pull_request_target` execution is configured. The separate P1 workflow has an explicitly dispatched/default-branch-only acceptance credential job; configure required environment reviewers before use.
 
 **Configuration is supplied; CI has not been run on a remote repository.** Add the workflow to the actual repository and inspect both jobs before treating it as an enforced gate. Configure branch protection/rulesets separately; a YAML file does not enforce merge policy by itself.
 
 For GitHub Enterprise or restricted organizational hosting, confirm approved runners, toolchain downloads, and availability/mirroring of the pinned checkout action. Change runner labels through review where required. Never run arbitrary pull-request code on a privileged persistent self-hosted runner with production secrets.
+
+## P1 CI and acceptance continuation
+
+The current workflow runs the full ignored PostgreSQL suite, verifies required
+new timer/OIDC/receipt-retention tests exist and retains evidence. Required Node
+fixtures now include cookie resume/late-response behavior and Studio
+1024-room/64-exit/UTF-8 capability boundaries. Node fixtures are not real browser,
+provider or database proof.
+
+`.github/workflows/p1-acceptance.yml` adds a development container CLI/linkage
+smoke and a manual/default-branch-only protected fixed beta-250 run. Required
+reviewers/acceptance-only credentials must be configured separately; it must not
+be run against production. Container help is not running-service proof. Artifact
+action pins are selected separately for GitHub.com v4 and Enterprise v3.
+
+See `P1_ACCEPTANCE.md` and `verification/p1-implementation-ledger.md` for current
+migration, native build, telemetry, generated-project, provider/process and owner
+gates. Configured CI has not been observed running here. Historical Linux/npm
+or Windows logs below remain evidence for their original increments only.
 
 ## Local Evidence and Limits
 

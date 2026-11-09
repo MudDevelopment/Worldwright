@@ -5,7 +5,7 @@
 | Attribute | Value |
 |---|---|
 | Document version | 0.3 — current M4/M5 implementation alignment |
-| Updated | November 6, 2026 |
+| Updated | November 9, 2026 — P1 continuation; live acceptance pending |
 | Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): M4/M5 awaiting PostgreSQL verification; M6 implemented awaiting PostgreSQL/recovery execution |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
@@ -37,8 +37,9 @@ accidental reuse of historical durable receipts.
 
 Terminal input/output remain bounded and control-safe; OS randomness supplies
 real gameplay rolls, while tests inject fixed rolls. Local/preview state is
-ephemeral. Recovery is still command-driven, applied at the next action after
-its deadline, not an independently committed idle-timer transaction. The
+ephemeral. The blocking terminal adapter applies recovery on a later command;
+the multiplayer owner independently polls due work and commits durable idle
+timer transitions before visibility. The
 PostgreSQL completion/replay contract is not changed by browser aliases.
 Regression code exists but current compile, Clippy, runtime/browser and live DB
 verification are pending; see `docs/EXPEDITION_PLAYABLE.md`.
@@ -65,6 +66,46 @@ results. Browser UUID lifecycle fixtures are distinct from the new real-PG
 receipt test and actual browser acceptance. Configured jobs are not passing
 jobs or branch-protection adoption. See `docs/P0_ACCEPTANCE.md` and
 `docs/verification/p0-implementation-ledger.md`; full acceptance remains open.
+
+## Current P1 contracts — November 9, 2026
+
+- Current priorities and evidence are recorded in `ROADMAP_v2.md` and
+  `docs/verification/p1-implementation-ledger.md`; historical milestone text is
+  not a statement that newer implemented paths are absent.
+- The owner polls gameplay timers every 100 ms with missed-tick Delay behavior.
+  Due work is bounded by the runtime schedule capacity. Durable timer state,
+  room references, expected state version and timer audit commit under the same
+  writer/release fence. Timers do not invent player sessions or player receipts.
+  SQL failure/uncertainty stops the owner; no uncommitted timer output is sent.
+- Gameplay PRNG state is checkpointed for durable rejected/replayed/rolled-back
+  commands. Committed results remain authoritative. The PRNG is not persisted;
+  controlled restart creates a fresh seed and uncommitted reevaluation can roll
+  differently. This is not deterministic historical replay or security RNG.
+- `GET /api/v1/session` returns a cookie-only 204/401 probe, or a bounded service
+  failure; it exposes no token or principal fields. The WebSocket still
+  revalidates current authentication. Page reload attaches afresh and never
+  manufactures a retry from command history.
+- Studio capabilities schema version 1 is additive. Bounds derive from backend
+  runtime/content constants; browser UTF-8 hints do not replace validation.
+- Optional `WORLDWRIGHT_TELEMETRY_BIND` is a separate loopback-only listener,
+  disabled by default. Six fixed timing dimensions cover queue, owner, planning,
+  SQL, delivery and idle ticks. They are cumulative observational histograms,
+  not business authority or proof of a stage-by-stage database lock profile.
+- New projects carry `sdk/` with relative path dependencies and embedded content.
+  Supplied matching bundles are verified and copied under explicit bounds.
+  Bundles are private source/provenance, not a signed publisher identity.
+- Preview input admission is a bounded four-entry queue, not proof a command
+  executed. Per-run capture prevents old readers from modifying replacement
+  status. A successful receipt waits for process exit and finished I/O workers.
+  Tree cleanup is platform-dependent and still needs real crash/SIGTERM testing.
+- External outbox dispatch is unsupported. Session pruning deletes expired
+  hashes only. No audit/receipt/OIDC-link retention policy is claimed to be
+  adopted; no cleanup may silently reopen replay or business entitlements.
+
+**Schema history:** `20261118000400_gameplay_timer_audit.sql` is an additive
+migration. Older migrations are immutable; apply explicitly before new startup.
+The older binary/migration ledger and rollback compatibility still require
+review. Detailed run commands and remaining gates are in `docs/P1_ACCEPTANCE.md`.
 
 ## Contents
 
@@ -463,7 +504,10 @@ For an unresolved commit, use a fresh database connection and wait for the origi
 
 ### Outbox and audit
 
-Use an outbox for durable side effects that must be dispatched after a transaction, such as external notifications or downstream indexing. Polling and retries are bounded; delivery is at least once unless a stronger consumer protocol is implemented.
+Outbox dispatch is a target design for external notifications or indexing, not
+an implemented delivery guarantee. Current code stores outbox rows but explicitly
+marks external dispatch unsupported. Enabling delivery later requires bounded
+retry, consumer deduplication, authority and recovery acceptance.
 
 Ordinary room text does not need an outbox in the initial system. Critical command results are recoverable from receipts rather than guaranteed by transient WebSocket delivery.
 
@@ -535,7 +579,11 @@ The server composition root now provides a bounded authenticated browser/WebSock
 
 One Tokio owner task exclusively owns `WorldRuntime`, `WorldLookup`, operation/tick state, and exact attachment routes. Bounded gameplay, control, and per-connection output queues use admission deadlines and out-of-band cancellation for takeover, revocation, shutdown, slow consumers, and internal failures. The transport translates protocol DTOs into runtime intents, revalidates attachments and recipient routes, and keeps Move's follow-up Look as a separate execution. Browser assets render text through DOM text nodes and enforce envelope epoch/sequence checks.
 
-This is implemented and tested only as a process-local, loopback development slice. It has no durable account/session state, restart recovery, database commitment, stable SDK/protocol compatibility policy, built-in TLS termination, proxy trust, public deployment assessment, or interactive accessibility assessment. See [protocol v1](docs/PROTOCOL_V1.md) and [server guide](docs/SERVER.md).
+The original M3 slice is process-local. Current PostgreSQL mode adds durable
+accounts/sessions, general gameplay state/receipts and fenced reconstruction;
+OIDC identity linking is also implemented. Their live recovery/provider acceptance
+remains open. Neither mode supplies built-in TLS termination or establishes a
+production deployment or interactive accessibility assessment. See [protocol v1](docs/PROTOCOL_V1.md) and [server guide](docs/SERVER.md).
 
 ## Implemented Content Schema and Conversion
 

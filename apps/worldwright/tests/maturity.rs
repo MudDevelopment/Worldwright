@@ -137,6 +137,14 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
         assert!(project.join("src/main.rs").is_file());
         assert!(project.join("tests/content.rs").is_file());
         assert!(project.join("content/world.json").is_file());
+        assert!(project.join("sdk/bundle-manifest.json").is_file());
+        let manifest = fs::read_to_string(project.join("Cargo.toml")).unwrap();
+        assert!(manifest.contains("sdk/crates/worldwright-sdk"));
+        assert!(!manifest.contains(env!("CARGO_MANIFEST_DIR")));
+        // Build only after moving the whole project, including its SDK workspace.
+        let relocated = parent.join(format!("relocated-{name}"));
+        fs::rename(&project, &relocated).unwrap();
+        let project = relocated;
 
         let target = parent.join("target");
         let host = host_target();
@@ -148,7 +156,7 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
             .status()
             .unwrap();
         assert!(status.success(), "{template}");
-        if template == "expedition" {
+        {
             let binary = target
                 .join(&host)
                 .join("debug")
@@ -182,9 +190,14 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
                 String::from_utf8_lossy(&output.stderr)
             );
             let text = String::from_utf8(output.stdout).unwrap();
-            assert!(text.contains("Supplies: 3 | Threat: 0 | Victories: 0 | Rank: Scout"));
-            assert!(text.contains("Foraging recovers"));
-            assert!(text.contains("Recovery is scheduled"));
+            if template == "expedition" {
+                assert!(text.contains("Supplies: 3 | Threat: 0 | Victories: 0 | Rank: Scout"));
+                assert!(text.contains("Foraging recovers"));
+                assert!(text.contains("Recovery is scheduled"));
+            } else {
+                assert!(text.contains("Worldwright Reference"));
+                assert!(!text.contains("Supplies:"));
+            }
             assert!(text.contains("Goodbye."));
         }
         fs::remove_dir_all(parent).unwrap();

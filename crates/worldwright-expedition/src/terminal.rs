@@ -1,6 +1,7 @@
 //! Playable single-player adapter shared by generated games and artifact preview.
 //! State is ephemeral. Scheduled recovery is applied on the next command after
-//! its deadline, exactly as in the multiplayer owner; no idle tick is claimed.
+//! its deadline in this blocking terminal adapter. The multiplayer owner also
+//! advances scheduled work while idle; local terminal progress remains ephemeral.
 use crate::{ExpeditionGame, action_id, initialize_character};
 use std::{
     error::Error,
@@ -43,8 +44,20 @@ pub fn run(bytes: &[u8]) -> ExitCode {
 
 /// Run validated artifact content; the caller verifies the artifact digest.
 pub fn run_content(content: &ValidatedWorldContent, digest: Option<&str>) -> ExitCode {
+    run_profile(content, digest, true)
+}
+
+/// Play the reference rules from relocatable embedded content.
+pub fn run_reference(bytes: &[u8]) -> ExitCode {
+    match load_bytes("embedded reference content", bytes, Default::default()) {
+        Ok(content) => run_profile(&content, None, false),
+        Err(report) => { eprintln!("{report}"); ExitCode::from(1) }
+    }
+}
+
+fn run_profile(content: &ValidatedWorldContent, digest: Option<&str>, expedition: bool) -> ExitCode {
     let result = (|| -> Result<(), Box<dyn Error>> {
-        let mut session = Session::new(content)?;
+        let mut session = if expedition { Session::new(content)? } else { Session::new_profile(content, false)? };
         let stdin = io::stdin();
         let stdout = io::stdout();
         let prompt = stdin.is_terminal() && stdout.is_terminal();
@@ -60,10 +73,11 @@ pub fn run_content(content: &ValidatedWorldContent, digest: Option<&str>) -> Exi
             } else {
                 writeln!(
                     output,
-                    "Worldwright Expedition — one local player; no login, network, or persistence."
+                    "Worldwright {} — one local player; no login, network, or persistence.",
+                    if expedition { "Expedition" } else { "Reference" }
                 )?;
             }
-            writeln!(output, "{HELP}")?;
+            writeln!(output, "{}", if expedition { HELP } else { "Commands: look (l), go <exit>, say <text>, help, quit (exit)" })?;
             session.apply("look", Tick::ZERO, &mut SystemRandom, &mut output)?;
             let started = Instant::now();
             loop {
@@ -122,14 +136,21 @@ struct Session {
 }
 impl Session {
     fn new(content: &ValidatedWorldContent) -> Result<Self, Box<dyn Error>> {
+        Self::new_profile(content, true)
+    }
+    fn new_profile(content: &ValidatedWorldContent, expedition: bool) -> Result<Self, Box<dyn Error>> {
         let world = WorldId::from_u128(1)?;
         let account = AccountId::from_u128(1)?;
         let character = CharacterId::from_u128(1)?;
         let (mut builder, lookup) = instantiate(content, world)?.into_parts();
         builder.add_character(character, account, lookup.entry_room)?;
-        initialize_character(&mut builder, character)?;
         let mut rules = RuleRegistry::new();
-        ExpeditionGame.register_rules(&mut rules)?;
+        if expedition {
+            initialize_character(&mut builder, character)?;
+            ExpeditionGame.register_rules(&mut rules)?;
+        } else {
+            worldwright_sdk::runtime::ReferenceGame.register_rules(&mut rules)?;
+        }
         let mut runtime = builder.build(rules)?;
         let actor = runtime.attach(account, character, ConnectionId::from_u128(1)?)?;
         Ok(Self {

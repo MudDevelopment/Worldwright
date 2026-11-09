@@ -5,7 +5,7 @@ const assert = require('assert');
 const path = require('path');
 const source = fs.readFileSync(path.join(__dirname, '../apps/worldwright-server/assets/app.js'), 'utf8');
 let page = 0;
-async function fixture() {
+async function fixture({autoLogin=true, resumeStatus=401, fetchHook=null} = {}) {
   const pageId = ++page;
   const elements = {};
   const timers = new Set();
@@ -17,6 +17,7 @@ async function fixture() {
       replaceChildren(){this.childElementCount=0;} };
   }
   const sockets=[];
+  const requests=[];
   class Socket {
     static OPEN=1;
     constructor(){this.readyState=1;this.handlers={};this.sent=[];sockets.push(this);}
@@ -29,7 +30,11 @@ async function fixture() {
     window:{setInterval:()=>{timers.add(++timerId);return timerId;},clearInterval:id=>timers.delete(id)},
     location:{protocol:'https:',host:'acceptance.invalid'}, WebSocket:Socket,
     crypto:{randomUUID:()=>`${String(pageId).padStart(8,'0')}-0000-4000-8000-000000000000`},
-    fetch:async()=>({ok:true}),console,
+    fetch:async(url, options)=>{
+      requests.push({url, options});
+      if (fetchHook) return fetchHook(options.method);
+      return {ok: options.method !== 'GET' || resumeStatus === 204, status: options.method === 'GET' ? resumeStatus : 204};
+    },console,
   };
   vm.runInNewContext(source,context);
   function message(socket, sequence, body) {
@@ -48,11 +53,36 @@ async function fixture() {
     element('command-form').handlers.submit({preventDefault(){}});
     return sockets.at(-1).sent.at(-1);
   }
-  const socket=await login();
-  return {socket,sockets,command,login,message,timers,element,
+  await new Promise(resolve=>setImmediate(resolve));
+  const socket=autoLogin ? await login() : sockets.at(-1);
+  return {socket,sockets,command,login,message,timers,element,requests,
     logout:()=>element('logout').handlers.click()};
 }
 (async()=>{
+  for (const resumeStatus of [401,503]) {
+    const page=await fixture({autoLogin:false,resumeStatus});
+    assert.equal(page.sockets.length,0,'failed cookie probe cannot connect');
+    assert.equal(page.element('command-submit').disabled,true);
+    assert.equal(page.requests[0].options.credentials,'same-origin');
+    assert.equal(page.requests[0].options.cache,'no-store');
+    assert(!page.requests[0].options.body,'resume sends no password or cookie body');
+  }
+  const resumed=await fixture({autoLogin:false,resumeStatus:204});
+  assert.equal(resumed.sockets.length,1,'valid cookie reconnects without POST login');
+  assert.equal(resumed.element('command-submit').disabled,true,'wait for authenticated attachment');
+  resumed.socket.handlers.open();
+  resumed.message(resumed.socket,1,{type:'welcome'});
+  resumed.message(resumed.socket,2,{type:'attached',character_name:'Alice'});
+  assert.equal(resumed.element('command-submit').disabled,false);
+  assert.equal(resumed.requests.filter(request=>request.options.method==='POST').length,0);
+  assert.equal(resumed.socket.sent.filter(message=>message.type==='command').length,0,'resume never resends old commands');
+  let resolveProbe;
+  const pending=await fixture({autoLogin:false,fetchHook:method=>method==='GET' ?
+    new Promise(resolve=>{resolveProbe=resolve;}) : Promise.resolve({ok:true,status:204})});
+  await pending.logout();
+  resolveProbe({ok:true,status:204});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(pending.sockets.length,0,'late cookie probe cannot reconnect after logout');
   const first=await fixture();
   const firstAttach=first.socket.sent.find(message=>message.type==='attach').request_id;
   const firstCommand=first.command('forage');
@@ -107,5 +137,5 @@ async function fixture() {
   assert.equal(first.element('command-submit').disabled,true);
   first.command('rest');
   assert.equal(current.sent.length,count,'logged-out commands not sent');
-  console.log('PASS: actions/status, matching-sequence reload/new-tab IDs, reconnect, stale stream/timer isolation, no automatic receipt replay, logout');
+  console.log('PASS: cookie resume/expiry/unavailability/logout race, actions/status, reload/new-tab IDs, reconnect, stale streams/timers, no automatic replay, logout');
 })().catch(error=>{console.error(error);process.exit(1);});

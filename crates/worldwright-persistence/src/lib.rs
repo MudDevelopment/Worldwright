@@ -5,6 +5,7 @@ mod operational;
 mod operational_queries;
 mod operations;
 mod releases;
+mod retention;
 mod store;
 mod types;
 
@@ -17,6 +18,7 @@ pub use oidc::{
     oidc_token_hash,
 };
 pub use store::PostgresStore;
+pub use retention::{EXTERNAL_OUTBOX_DISPATCH_SUPPORTED, MAX_RETENTION_BATCH};
 pub use types::{
     ActivationPlan, AuthenticatedActor, BootstrapOperator, DurableCharacterRoom,
     DurableContentReferences, DurableGameSnapshot, GameplayCommit, GameplayIntentKind,
@@ -1060,6 +1062,119 @@ mod database_tests {
             .bind(types::uuid_of(world)).fetch_one(reconstructed.pool_for_test()).await.unwrap();
         assert_eq!((receipts, audit), (4, 4));
         reconstructed.close_for_test().await;
+        db.finish().await;
+    }
+
+    async fn prepared_game_state() -> (TestDb, WriterLease, Sha256Digest, worldwright_core::runtime::DurableWorldState, Vec<DurableCharacterRoom>) {
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.unwrap();
+        let world = seed().world;
+        let artifact = release_artifact("p1-game-state");
+        let digest = Sha256Digest::from_bytes(&artifact);
+        let request = PublicationId::from_u128(991).unwrap();
+        db.store.submit_publication(request, world, &artifact, PublicationKind::Activate,
+            DeploymentTarget::Staging, None, "requester").await.unwrap();
+        db.store.review_publication(request, "reviewer", ReviewDecision::Approve, "p1 test").await.unwrap();
+        let plan = db.store.begin_activation(request, ActivationId::from_u128(992).unwrap(),
+            WriterId::from_u128(991).unwrap(), "operator").await.unwrap();
+        db.store.complete_activation(plan).await.unwrap();
+        let lease = db.store.acquire_writer(world, WriterId::from_u128(992).unwrap()).await.unwrap();
+        let mut rooms: Vec<_> = db.store.identities(world).await.unwrap().iter().map(|identity|
+            DurableCharacterRoom { character: identity.character(), room_definition: identity.room_definition().into() }).collect();
+        rooms.sort_by_key(|room| room.character);
+        let runtime = worldwright_core::runtime::DurableWorldState { world, revision: 0, counters: vec![], scheduled: vec![] };
+        db.store.initialize_game_state(lease, digest, GameContract::Reference,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO }).await.unwrap();
+        (db, lease, digest, runtime, rooms)
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn timer_commit_fences_reconstructs_and_rolls_back_atomically() {
+        use worldwright_core::time::Tick;
+        let (db, lease, digest, mut runtime, rooms) = prepared_game_state().await;
+        runtime.revision = 1;
+        assert_eq!(db.store.commit_gameplay_tick(lease, digest, GameContract::Reference, 1,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(1000) }).await.unwrap(), 2);
+        let reconstructed = db.reconnect_store().await;
+        assert_eq!(reconstructed.load_game_state(lease, digest, GameContract::Reference).await.unwrap().runtime.revision, 1);
+        runtime.revision = 2;
+        assert!(matches!(reconstructed.commit_gameplay_tick(lease, digest, GameContract::Reference, 1,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(2000) }).await, Err(PersistenceError::StaleGameState)));
+        // Inject an audit failure AFTER candidate writes; the whole transaction must roll back.
+        sqlx::query("ALTER TABLE worldwright_gameplay_timer_audit ADD CONSTRAINT p1_reject_next CHECK (state_version < 3)")
+            .execute(reconstructed.pool_for_test()).await.unwrap();
+        assert!(reconstructed.commit_gameplay_tick(lease, digest, GameContract::Reference, 2,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(2000) }).await.is_err());
+        let loaded = reconstructed.load_game_state(lease, digest, GameContract::Reference).await.unwrap();
+        assert_eq!((loaded.state_version, loaded.runtime.revision), (2, 1));
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM worldwright_gameplay_timer_audit")
+            .fetch_one(reconstructed.pool_for_test()).await.unwrap();
+        assert_eq!(count, 1);
+        let fresh = reconstructed.acquire_writer(lease.world(), WriterId::from_u128(993).unwrap()).await.unwrap();
+        assert!(matches!(reconstructed.commit_gameplay_tick(lease, digest, GameContract::Reference, 2,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(2000) }).await, Err(PersistenceError::StaleWriter)));
+        assert_eq!(reconstructed.load_game_state(fresh, digest, GameContract::Reference).await.unwrap().state_version, 2);
+        reconstructed.close_for_test().await;
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn oidc_link_concurrency_collision_revocation_and_restart() {
+        use worldwright_core::ids::InviteId;
+        let db = TestDb::new().await;
+        db.store.seed(&seed()).await.unwrap();
+        let world = seed().world;
+        let invite_hash = oidc_token_hash("p1-invite");
+        db.store.issue_oidc_invite(OidcInviteSpec { invite: InviteId::from_u128(901).unwrap(), world,
+            username: "alice", issuer: "https://identity.example.invalid", token_hash: &invite_hash, ttl_seconds: 300 }).await.unwrap();
+        let first_hash = session_token_hash("oidc-first");
+        let second_hash = session_token_hash("oidc-second");
+        let input = |hash| OidcLoginSpec { world, issuer: "https://identity.example.invalid", subject: "provider-subject",
+            invite_hash: Some(&invite_hash), session_hash: hash, session_ttl_seconds: SESSION_TTL_SECONDS, max_sessions: MAX_DURABLE_SESSIONS };
+        let (first, second) = tokio::join!(db.store.login_oidc(input(&first_hash)), db.store.login_oidc(input(&second_hash)));
+        let first = first.unwrap();
+        let second = second.unwrap();
+        assert_ne!(first.linked, second.linked);
+        assert_eq!(first.principal, second.principal);
+        assert_eq!(first.principal.account, AccountId::from_u128(1).unwrap());
+        assert!(matches!(db.store.login_oidc(input(&first_hash)).await, Err(PersistenceError::SessionCollision)));
+        let other_hash = session_token_hash("oidc-other-issuer");
+        let other = OidcLoginSpec { issuer: "https://other.example.invalid", session_hash: &other_hash, ..input(&other_hash) };
+        assert!(db.store.login_oidc(other).await.is_err());
+        let (identities, audits): (i64, i64) = sqlx::query_as("SELECT (SELECT COUNT(*) FROM worldwright_oidc_identities), (SELECT COUNT(*) FROM worldwright_oidc_audit)")
+            .fetch_one(db.store.pool_for_test()).await.unwrap();
+        assert_eq!((identities, audits), (1, 2));
+        let restarted = db.reconnect_store().await;
+        let resumed_hash = session_token_hash("oidc-after-restart");
+        let resumed = restarted.login_oidc(OidcLoginSpec { invite_hash: None, ..input(&resumed_hash) }).await.unwrap();
+        assert!(!resumed.linked);
+        assert_eq!(resumed.principal, first.principal);
+        restarted.revoke_session(&resumed_hash).await.unwrap();
+        assert!(restarted.session(world, &resumed_hash).await.unwrap().is_none());
+        restarted.close_for_test().await;
+        db.finish().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WORLDWRIGHT_TEST_DATABASE_URL"]
+    async fn session_retention_preserves_receipts_and_active_sessions() {
+        let (db, lease, digest, mut runtime, rooms) = prepared_game_state().await;
+        let expired = actor(&db.store, 1, 1, "Alice", "p1-expired").await;
+        let active = actor(&db.store, 2, 2, "Bob", "p1-active").await;
+        runtime.revision = 1;
+        db.store.commit_gameplay(gameplay_mutation(lease, digest, &expired,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO })).await.unwrap();
+        sqlx::query("UPDATE worldwright_sessions SET created_at=clock_timestamp()-INTERVAL '2 days', expires_at=clock_timestamp()-INTERVAL '1 day' WHERE token_hash=$1")
+            .bind(expired.token_hash.as_slice()).execute(db.store.pool_for_test()).await.unwrap();
+        assert_eq!(db.store.prune_expired_player_sessions(1).await.unwrap(), 1);
+        assert_eq!(db.store.prune_expired_player_sessions(1).await.unwrap(), 0);
+        assert!(db.store.session(lease.world(), active.token_hash).await.unwrap().is_some());
+        let reattached = actor(&db.store, 1, 1, "Alice", "p1-active-alice").await;
+        let replay = db.store.commit_gameplay(gameplay_mutation(lease, digest, &reattached,
+            GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO })).await.unwrap();
+        assert!(replay.replayed);
         db.finish().await;
     }
 

@@ -124,6 +124,7 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/app.css", get(css))
         .route("/app.js", get(js))
         .route("/api/v1/workspace", get(workspace))
+        .route("/api/v1/capabilities", get(capabilities))
         .route("/api/v1/revisions/{revision}/validate", post(validate))
         .route("/api/v1/revisions/{revision}/export", get(export))
         .route(
@@ -153,6 +154,18 @@ pub(crate) fn router(state: AppState) -> Router {
         .layer(middleware::map_response(headers))
         .with_state(state)
 }
+async fn capabilities() -> axum::Json<serde_json::Value> {
+    axum::Json(json!({
+        "schema_version": 1,
+        "max_rooms": worldwright_core::runtime::MAX_ROOMS,
+        "max_exits_per_room": worldwright_core::runtime::MAX_EXITS_PER_ROOM,
+        "max_text_bytes": worldwright_core::command::PlayerText::MAX_BYTES,
+        "max_definition_bytes": worldwright_core::ids::DefinitionId::MAX_BYTES,
+        "max_exit_label_bytes": 64,
+        "max_input_bytes": worldwright_content::MAX_INPUT_BYTES
+    }))
+}
+
 async fn headers(mut response: Response) -> Response {
     let h = response.headers_mut();
     h.insert("content-security-policy",HeaderValue::from_static("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"));
@@ -701,6 +714,24 @@ mod tests {
             },
             root,
         )
+    }
+
+    #[tokio::test]
+    async fn http_capabilities_use_authoritative_bounds() {
+        let (state, root) = state();
+        let response = router(state).oneshot(axum::http::Request::builder()
+            .uri("/api/v1/capabilities").header("host", "127.0.0.1:3010")
+            .body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let value: serde_json::Value = serde_json::from_slice(
+            &response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["max_rooms"], worldwright_core::runtime::MAX_ROOMS);
+        assert_eq!(value["max_exits_per_room"], worldwright_core::runtime::MAX_EXITS_PER_ROOM);
+        assert_eq!(value["max_text_bytes"], worldwright_core::command::PlayerText::MAX_BYTES);
+        assert_eq!(value["max_input_bytes"], worldwright_content::MAX_INPUT_BYTES);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test]

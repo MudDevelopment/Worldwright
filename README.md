@@ -27,10 +27,10 @@ multiplayer owner. Supplies, threats, victories and ranks remain server/rule
 owned, not browser state. See [playable expedition](docs/EXPEDITION_PLAYABLE.md)
 for startup, timing, schema compatibility and regression commands.
 
-**Verification:** this patch has not yet been compiled/tested with Cargo here.
-Earlier Windows passes do not verify these edits. Recovery remains applied on
-the next gameplay command after its deadline; independent idle ticks and live
-PostgreSQL recovery acceptance remain open.
+**Verification:** current P0/P1 edits have not yet been compiled/tested with Cargo
+here; earlier Windows passes do not verify them. The multiplayer owner now has
+independent bounded idle-timer commits. The blocking terminal adapter remains
+command-driven; live PostgreSQL recovery acceptance is still open.
 
 ## P0 source follow-through — November 9, 2026
 
@@ -49,6 +49,42 @@ See [P0 acceptance](docs/P0_ACCEPTANCE.md) and the
 **All six source tracks are implemented; their full acceptance tracks remain
 open.** Synthetic/schema checks passed; current Cargo/PowerShell/real Studio,
 Helm/PostgreSQL and hosted-CI passes have not been observed here.
+
+## P1 continuation — November 9, 2026
+
+Current backlog/status authority is [ROADMAP v2](ROADMAP_v2.md), with the
+[P1 ledger](docs/verification/p1-implementation-ledger.md) and
+[P1 acceptance guide](docs/P1_ACCEPTANCE.md). Older milestone reports remain
+historical evidence, not proof of these edits.
+
+- Browser startup probes `GET /api/v1/session` using the existing HttpOnly cookie;
+  a valid session connects without another password login. No pending command
+  history is automatically resent.
+- Studio reads `GET /api/v1/capabilities`; room/exit bounds and UTF-8 text hints
+  come from backend constants rather than the old 1000/256 UI limits.
+- For optional metrics, set `WORLDWRIGHT_TELEMETRY_BIND=127.0.0.1:9090` (or an
+  explicit nonzero IPv6 loopback port). This separate listener exposes only
+  `/metrics`, is disabled by default and does not enable operator routes.
+- New generated projects carry relative `sdk/` dependencies. To generate from an
+  installed CLI after removing its original checkout, set `WORLDWRIGHT_SDK_BUNDLE`
+  to a trusted, verified private bundle of the matching version. This is private
+  source delivery, not a license grant or a dependency cache.
+- Preview uses run-scoped capture and a bounded input queue. Unix process groups
+  and Windows taskkill supply cleanup paths; process-tree/ACL certification is
+  still pending. These are not an OS sandbox or an egress firewall.
+- PostgreSQL requires the additive `20261118000400_gameplay_timer_audit.sql`
+  migration before updated startup. Startup verifies migrations; apply them
+  explicitly through the existing database migrate workflow.
+- External outbox dispatch is unsupported. Bounded expired-player-session
+  cleanup preserves receipts, business uniqueness, OIDC links and audits.
+- CI runs the full ignored PostgreSQL suite and includes a separate development
+  container CLI smoke job. Fixed beta-250 load is manual, default-branch-only,
+  and requires the protected `worldwright-acceptance` environment and
+  acceptance-only credentials. Configured jobs are not observed passes.
+
+Release evidence is collected with `scripts/release-evidence.py`; named owner
+approvals and exact-digest live evidence remain required. `publish = false`,
+licensing/support/reporting decisions and production-readiness restrictions remain.
 
 ## Current implementation
 
@@ -204,8 +240,8 @@ The table separates reported local implementation from target architecture. Deta
 The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as
 `0.1.0-dev.0`. Content loading and release packaging use pinned Serde/JSON;
 the server integrates Tokio, Axum, Argon2, getrandom, futures, and
-SQLx/PostgreSQL. Askama and production authorization remain outside the
-implemented slice.
+SQLx/PostgreSQL. Askama remains deferred. Scoped operator authorization is
+implemented; its live acceptance, owner adoption and production exposure remain open.
 
 ### Runtime Model
 
@@ -344,7 +380,8 @@ Maintainers should record architectural decisions, review public API changes, an
 
 ## Delivery Roadmap
 
-[ROAD-MAP.md](ROAD-MAP.md) is authoritative for the **eight dependency-ordered milestones**. This summary replaces the earlier six-phase outline. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the latest implemented slice, next work, and increment-specific historical evidence.
+[ROADMAP_v2.md](ROADMAP_v2.md) is authoritative for current priorities and acceptance.
+[ROAD-MAP.md](ROAD-MAP.md) retains the historical **eight dependency-ordered milestones**. This summary replaces the earlier six-phase outline. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the latest implemented slice, next work, and increment-specific historical evidence.
 
 | Milestone | Focus | Status and exit evidence |
 |---|---|---|
@@ -365,10 +402,12 @@ evidence; durable expedition state and broader capacity remain open. Production
 activation uses auth-v1 request/review and current MFA-backed grants; M6 is not
 production readiness evidence.
 
-Protocol v1 request IDs remain stream-local correlation; `accepted` means
-admission and `command_result` means in-memory execution. The durable semantic
-contract remains distinct and current M4 gaps include durable-key/reconciliation
-semantics, authentication-outage handling, and live PostgreSQL evidence.
+`accepted` remains admission, not commit. In local mode `command_result` describes
+in-memory execution. In PostgreSQL mode the general gameplay path commits scoped
+receipts/state before final output and completion; same-intent receipt reuse is
+subject to current authority and changed-intent reuse conflicts. Browser page IDs
+are unique and no old command history is blindly resent. Full live recovery,
+provider, deployment and capacity evidence remains open.
 
 ### Dependency and release boundaries
 

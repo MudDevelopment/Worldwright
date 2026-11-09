@@ -1,4 +1,4 @@
-name: Rust and P0 acceptance checks
+name: Rust and P0/P1 acceptance checks
 
 'on':
   push:
@@ -59,6 +59,7 @@ jobs:
           node --check apps/worldwright-server/assets/app.js
           node --check apps/worldwright-studio/assets/app.js
           node scripts/test-expedition-browser.cjs
+          node scripts/test-studio-capabilities.cjs
       - name: Real Ubuntu Studio first-run and game contract smoke
         if: runner.os != 'Windows'
         shell: bash
@@ -113,7 +114,7 @@ jobs:
           ./deploy/helm/worldwright/tests/render.ps1
 
   gameplay-receipts:
-    name: required PostgreSQL browser receipt lifecycle
+    name: required PostgreSQL persistence and identity regressions
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -139,8 +140,28 @@ jobs:
       - name: Bootstrap pinned Rust dependencies
         shell: bash
         run: bash scripts/dev.sh bootstrap
-      - name: Verify required test exists then execute it (no silent zero tests)
+      - name: Verify required tests exist and run every ignored database test
         shell: bash
         run: |
-          cargo test -p worldwright-persistence --locked --offline gameplay_browser_request_id_lifecycle -- --ignored --list | grep -q '^database_tests::gameplay_browser_request_id_lifecycle: test$'
-          cargo test -p worldwright-persistence --locked --offline gameplay_browser_request_id_lifecycle -- --ignored --test-threads=1
+          set -euo pipefail
+          cargo test -p worldwright-persistence --locked --offline -- --ignored --list > "$RUNNER_TEMP/worldwright-db-tests.txt"
+          for test in gameplay_browser_request_id_lifecycle timer_commit_fences_reconstructs_and_rolls_back_atomically oidc_link_concurrency_collision_revocation_and_restart session_retention_preserves_receipts_and_active_sessions; do
+            grep -Fx "database_tests::$test: test" "$RUNNER_TEMP/worldwright-db-tests.txt"
+          done
+          cargo test -p worldwright-persistence --locked --offline -- --ignored --test-threads=1 2>&1 | tee "$RUNNER_TEMP/worldwright-db.log"
+      - name: Retain database evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: database-regressions
+          path: ${{ runner.temp }}/worldwright-db*
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain database evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: database-regressions
+          path: ${{ runner.temp }}/worldwright-db*
+          retention-days: 14
+          if-no-files-found: error

@@ -198,6 +198,16 @@ impl WorldRuntime {
     pub fn snapshot(&self) -> WorldSnapshot {
         WorldSnapshot(self.state.clone())
     }
+    /// Trusted host inspection without cloning an administrative world snapshot.
+    pub fn room_of(&self, character: CharacterId) -> Option<RoomId> {
+        self.state.characters.get(&character).map(|record| record.room)
+    }
+    pub fn attachment(&self, character: CharacterId) -> Option<ActorContext> {
+        self.state.attachments.get(&character).copied()
+    }
+    pub fn next_scheduled_at(&self) -> Option<Tick> {
+        self.state.scheduler.iter().next().map(|(at, _)| at)
+    }
     /// Restores trusted host checkpoint state after an unobserved command.
     pub fn restore_checkpoint(&mut self, checkpoint: WorldSnapshot) -> Result<(), WorldError> {
         if checkpoint.world_id() != self.state.id {

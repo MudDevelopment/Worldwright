@@ -201,6 +201,50 @@ impl crate::store::PostgresStore {
         Ok(1)
     }
 
+    /// Commits owner-driven due work under the same writer/release/version fence.
+    /// An uncertain commit stops the owner; reconstruction, not a blind retry,
+    /// determines whether the timer transition committed.
+    pub async fn commit_gameplay_tick(
+        &self,
+        lease: WriterLease,
+        expected_release: Sha256Digest,
+        game: GameContract,
+        expected_state_version: u64,
+        state: GameplayState<'_>,
+    ) -> Result<u64, PersistenceError> {
+        validate_gameplay_state(lease.world(), state)?;
+        let mut tx = self.pool().begin().await?;
+        let locked = lock_game_world(&mut tx, lease).await?;
+        validate_locked_world(&locked, expected_release, game, Some(expected_state_version))?;
+        lock_exact_characters(&mut tx, lease.world(), state.rooms).await?;
+        let next = expected_state_version.checked_add(1).ok_or(PersistenceError::CounterExhausted)?;
+        replace_game_state(&mut tx, lease.world(), state).await?;
+        let changed = sqlx::query(
+            "UPDATE worldwright_worlds SET game_state_version=$3, runtime_revision=$4, \
+             updated_at=clock_timestamp() WHERE world_id=$1 AND game_state_version=$2",
+        )
+        .bind(uuid_of(lease.world()))
+        .bind(i64_from_u64(expected_state_version, false)?)
+        .bind(i64_from_u64(next, true)?)
+        .bind(i64_from_u64(state.runtime.revision, false)?)
+        .execute(&mut *tx).await?;
+        if changed.rows_affected() != 1 { return Err(PersistenceError::StaleGameState); }
+        sqlx::query(
+            "INSERT INTO worldwright_gameplay_timer_audit \
+             (world_id,state_version,runtime_revision,writer_id,writer_epoch,authority_incarnation) \
+             VALUES ($1,$2,$3,$4,$5,$6)",
+        )
+        .bind(uuid_of(lease.world()))
+        .bind(i64_from_u64(next, true)?)
+        .bind(i64_from_u64(state.runtime.revision, false)?)
+        .bind(uuid_of(lease.writer()))
+        .bind(i64_from_u64(lease.epoch(), true)?)
+        .bind(uuid_of(lease.incarnation()))
+        .execute(&mut *tx).await?;
+        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)?;
+        Ok(next)
+    }
+
     pub async fn commit_gameplay(
         &self,
         input: GameplayMutation<'_>,
