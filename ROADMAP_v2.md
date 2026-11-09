@@ -69,10 +69,6 @@ No Cargo build, PostgreSQL test, Helm render, container build, cluster install, 
 
 The fresh native Windows run did not reproduce the 395 missing-prelude errors. Do not add suggested imports to cached registry dependencies or declare the earlier fault a proven dependency bug. Toolchain selection, target selection, and fresh build artifacts changed together.
 
-### 1.4 TRF path clarification
-
-The supplied nested generated-game test output used a `D:\projects\TRF_rust\...\target` directory. That is an **output-path observation**, not evidence that TRF source is compiled into Worldwright. The inspected workspace/member manifests and Worldwright local-package lock entries contain no TRF path dependency. The exact inherited Cargo setting responsible for that output location has not been established. The roadmap addresses build isolation without asserting a foreign-source dependency or an exhaustive absence-of-TRF forensic result.
-
 ---
 
 ## 2. Corrected current baseline
