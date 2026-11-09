@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "scope": "selected current source readback in Linux sandbox; not native execution in the Windows repository",
+  "host_os": "Linux",
+  "python": "3.12.3",
+  "tools": {
+    "cargo": null,
+    "rustc": null,
+    "rustfmt": null,
+    "helm": null,
+    "pwsh": null,
+    "docker": null,
+    "node": "/usr/bin/node",
+    "chromium": "/usr/local/bin/chromium"
+  },
+  "checks": [
+    {"check":"helper-tests","exit_code":0,"log_sha256":"3cc07082b91daa4e48e6879f4313bd7bfbcd5dc676a6f24ce4a154796305a505","total":14,"skipped":0},
+    {"check":"launcher-tests","exit_code":0,"log_sha256":"e340aedea98d55e8a95251ea668dc9e787da32bbdfbca75b0c96f06ece407dee","total":12,"skipped":2},
+    {"check":"r0-prerequisites","exit_code":1,"log_sha256":"a6173fbc161388ec5854c27f22b435de9b084b508e38486edd8edd960bc2b4f8"},
+    {"check":"package-prerequisites","exit_code":1,"log_sha256":"131a8faa242a7c5efb04c1bcdeec9c736f2474e0d1b84fd3b490b84b80120841"},
+    {"check":"r1-prerequisites","exit_code":1,"log_sha256":"4c762e57ded01fa65051e7f8a9ab51010d12aa279184c7e3dc901ee8893581c2"},
+    {"check":"closure-rejection","exit_code":1,"log_sha256":"58c0ef13c94370023f729966294b55b8bce17fbe8a9275df04fc2f02454e8dd2"}
+  ],
+  "r0_failure": "missing required R0 tool: cargo",
+  "package_created": false,
+  "r1_failure": "ValueError: real package directory required",
+  "full_r0_closed": false,
+  "full_r1_closed": false,
+  "evidence_note": "These are helper and prerequisite observations, not substitute native reports. Log digests identify the observed sandbox run; full host acceptance requires fresh real reports/logs and authenticated manual observations."
+}

@@ -101,11 +101,16 @@ async fn shutdown_signal() -> Result<(), String> {
         use tokio::signal::unix::{SignalKind, signal};
         let mut terminate = signal(SignalKind::terminate())
             .map_err(|_| "Studio shutdown signal failed".to_owned())?;
+        let mut hangup = signal(SignalKind::hangup())
+            .map_err(|_| "Studio shutdown signal failed".to_owned())?;
         tokio::select! {
             result = tokio::signal::ctrl_c() => {
                 result.map_err(|_| "Studio shutdown signal failed".to_owned())
             }
             signal = terminate.recv() => {
+                signal.ok_or_else(|| "Studio shutdown signal failed".to_owned())
+            }
+            signal = hangup.recv() => {
                 signal.ok_or_else(|| "Studio shutdown signal failed".to_owned())
             }
         }

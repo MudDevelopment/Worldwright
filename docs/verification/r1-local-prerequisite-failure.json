@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "track": "R1",
+  "status": "failed",
+  "cases": [],
+  "manual_status": "not_checked",
+  "distribution": {
+    "id": "ubuntu",
+    "version": "24.04"
+  },
+  "failure": "ValueError: real package directory required"
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "track": "R0",
+  "status": "failed",
+  "host_os": "Linux",
+  "host_os_version": "#1 SMP Sun Jan 10 15:06:54 PST 2016",
+  "python_version": "3.12.3",
+  "phases": [],
+  "overrides": {
+    "CARGO_BUILD_TARGET": false,
+    "CARGO_TARGET_DIR": false,
+    "RUSTUP_TOOLCHAIN": false,
+    "RUSTC": false,
+    "RUSTDOC": false,
+    "RUSTFLAGS": false,
+    "CARGO_ENCODED_RUSTFLAGS": false,
+    "RUSTDOCFLAGS": false,
+    "RUSTC_WRAPPER": false,
+    "RUSTC_WORKSPACE_WRAPPER": false,
+    "RUSTC_BOOTSTRAP": false
+  },
+  "target_directory": "/tmp/worldwright-r0-r1-attempt-6vwqyk40/r0/native-target",
+  "failure": "missing required R0 tool: cargo"
+}

@@ -1,0 +1,95 @@
+name: R0 and installed Ubuntu R1 evidence
+
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-r0-r1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: worldwright_test_r0
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-r0-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d worldwright_test_r0"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      WORLDWRIGHT_TEST_DATABASE_URL: postgresql://postgres:disposable-r0-only@127.0.0.1:5432/worldwright_test_r0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Approved test dependencies and native bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/r0-r1-venv"
+          "$RUNNER_TEMP/r0-r1-venv/bin/python" -m pip install -r deploy/helm/worldwright/tests/requirements.txt -r scripts/r1-requirements.txt
+          echo "$RUNNER_TEMP/r0-r1-venv/bin" >> "$GITHUB_PATH"
+          bash scripts/dev.sh bootstrap
+      - name: Helper and launcher regression gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/desktop.sh scripts/dev.sh
+          python scripts/test-r0-r1.py
+          python scripts/test-desktop.py -q
+      - name: Actual complete R0 Ubuntu evidence
+        shell: bash
+        run: python scripts/r0-verify.py --output "$RUNNER_TEMP/r0-evidence"
+      - name: Build and verify private installed package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/package-desktop.py build --r0-report "$RUNNER_TEMP/r0-evidence/r0-report.json" --output "$RUNNER_TEMP/worldwright-private.tar.gz"
+          mkdir -m 700 "$RUNNER_TEMP/r1-unpacked"
+          tar -xzf "$RUNNER_TEMP/worldwright-private.tar.gz" -C "$RUNNER_TEMP/r1-unpacked"
+          package=$(find "$RUNNER_TEMP/r1-unpacked" -mindepth 1 -maxdepth 1 -type d)
+          test -n "$package"
+          python scripts/package-desktop.py verify --directory "$package"
+          echo "R1_PACKAGE=$package" >> "$GITHUB_ENV"
+      - name: Real installed browser/process R1 automation
+        shell: bash
+        run: |
+          set -euo pipefail
+          browser=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          test -n "$browser"
+          python scripts/r1-desktop-verify.py --package-directory "$R1_PACKAGE" --browser-executable "$browser" --output "$RUNNER_TEMP/r1-evidence"
+      - name: Retain private evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r0-r1-ubuntu-evidence
+          path: |
+            ${{ runner.temp }}/r0-evidence/*.json
+            ${{ runner.temp }}/r0-evidence/*.log
+            ${{ runner.temp }}/r1-evidence/*
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain private evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r0-r1-ubuntu-evidence
+          path: |
+            ${{ runner.temp }}/r0-evidence/*.json
+            ${{ runner.temp }}/r0-evidence/*.log
+            ${{ runner.temp }}/r1-evidence/*
+          retention-days: 14
+          if-no-files-found: error
+# Windows native/chart regressions remain required in ci.yml. R0 Windows JSON
+# and manual X11/Wayland/Firefox/credential review are NOT supplied by this job.
+# No package publication, manual approval fabrication or R1 full closure occurs.

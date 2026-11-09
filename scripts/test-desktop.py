@@ -1,6 +1,6 @@
 """Linux launcher/diagnostic contracts; optional real Studio/CLI startup gate.
 
-Python 3.10+, stdlib only. No production files or credentials are used. Synthetic
+Python 3.11+, stdlib only. No production files or credentials are used. Synthetic
 executables do NOT prove a Rust build; --real-studio/--real-preview additionally
 exercise already-built native binaries through the same launcher and HTTP API.
 """
@@ -31,7 +31,7 @@ class Fixture:
         self.repo = self.root / "repository with spaces"
         scripts = self.repo / "scripts"
         scripts.mkdir(parents=True)
-        for name in ("desktop.sh", "dev.sh"):
+        for name in ("desktop.sh", "dev.sh", "cleanup-session.py", "package-desktop.py"):
             shutil.copy2(ROOT / "scripts" / name, scripts / name)
         shutil.copy2(ROOT / "rust-toolchain.toml", self.repo / "rust-toolchain.toml")
         shutil.copy2(ROOT / "Cargo.lock", self.repo / "Cargo.lock")
@@ -72,10 +72,10 @@ class Fixture:
     def workspace(self) -> Path:
         data = Path(self.env.get("XDG_DATA_HOME", str(self.home / ".local/share")))
         return data / "worldwright/studio"
-    def launch(self, *args: str) -> str:
+    def launch(self, *args: str, installed: bool = False) -> str:
         log = self.root / "launcher.log"
         self.log_handle = log.open("w")
-        self.process = subprocess.Popen(["bash", str(self.repo / "scripts/desktop.sh"), "--no-browser", *args],
+        self.process = subprocess.Popen(["bash", str(self.repo / "scripts/desktop.sh"), *(["--installed"] if installed else []), "--no-browser", *args],
             cwd=self.root, env=self.env, stdout=self.log_handle, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
@@ -145,6 +145,27 @@ class LauncherTests(unittest.TestCase):
     def setUp(self):
         self.fixture = Fixture()
         self.addCleanup(self.fixture.close)
+    def test_synthetic_installed_launcher_never_calls_build_tools(self):
+        f = self.fixture
+        f.repo.chmod(0o700)
+        installed = f.repo / 'bin'; installed.mkdir()
+        for name in ('worldwright', 'worldwright-studio'):
+            shutil.copy2(f.repo / 'target' / HOST / 'debug' / name, installed / name)
+        shutil.rmtree(f.repo / 'target')
+        (f.repo / 'Cargo.lock').unlink()
+        (f.repo / 'rust-toolchain.toml').unlink()
+        import hashlib
+        files = [{'path': path.relative_to(f.repo).as_posix(), 'bytes': path.stat().st_size,
+                  'mode': path.stat().st_mode & 0o777,
+                  'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+                 for path in f.repo.rglob('*') if path.is_file()]
+        (f.repo / 'package-manifest.json').write_text(json.dumps({'schema_version':1,
+            'distribution':'private-acceptance-only', 'files':files}))
+        f.launch(installed=True)
+        self.assertFalse(Path(f.env['WW_TRACE']).exists(), 'installed launcher invoked Cargo')
+        f.stop()
+        self.assertFalse((f.repo / 'Cargo.lock').exists())
+
     def test_fresh_default_parent_private_native_override_and_reopen(self):
         f = self.fixture
         f.env["CARGO_TARGET_DIR"] = str(f.root / "unrelated target")
@@ -191,6 +212,16 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("must be private", result.stderr)
         self.assertEqual(parent.stat().st_mode & 0o777, 0o755)
         self.assertFalse(f.workspace().exists())
+
+    def test_existing_nonprivate_workspace_is_not_silently_chmodded(self):
+        f = self.fixture
+        workspace = f.root / 'explicit existing workspace'
+        workspace.mkdir(); workspace.chmod(0o755)
+        result = f.run('desktop.sh', '--no-browser', str(workspace))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Workspace must be private', result.stderr)
+        self.assertEqual(workspace.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(list(workspace.iterdir()), [])
 
     def test_fresh_xdg_with_spaces(self):
         f = self.fixture

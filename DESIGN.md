@@ -5,8 +5,8 @@
 | Attribute | Value |
 |---|---|
 | Document version | 0.3 — current M4/M5 implementation alignment |
-| Updated | November 9, 2026 — P1/P2 continuation; native/live acceptance pending |
-| Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): M4/M5 awaiting PostgreSQL verification; M6 implemented awaiting PostgreSQL/recovery execution |
+| Updated | November 9, 2026 — P1/P2 and R0/R1; native/live/manual acceptance pending |
+| Delivery authority | [ROADMAP_v2.md](ROADMAP_v2.md) current priorities/release tracks; [ROAD-MAP.md](ROAD-MAP.md) historical milestones; no R0/R1 closure |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
@@ -136,6 +136,47 @@ P2 changes do not alter database migrations, game contracts, auth/listeners,
 licensing or production policy. Documentation and source tests are installed;
 full native/relocated/hosted acceptance remains open. See `docs/P2_ACCEPTANCE.md`
 and `docs/verification/p2-implementation-ledger.md`.
+
+## R0/R1 provenance and installed desktop contracts
+
+R0/R1 acceptance is tied to an actual source/lock/toolchain/host/package tuple,
+not a conversation status or an earlier milestone pass. The runners use new
+external target/evidence directories, offline locked resolution and first-failure
+semantics. Canonical text inventory normalizes LF/CRLF only; real binary hashes
+remain byte-exact. Closure recomputes the source inventory, verifies its Cargo.lock
+entry, checks every required phase/log and binds the package to original Ubuntu
+R0 report bytes and binary hashes. The Ubuntu 24.04 distribution is recorded and
+required; another Linux host cannot be relabeled as Ubuntu acceptance.
+
+Private packaging is a separate operation after complete R0 success. It contains
+CLI/Studio, compiled-in web assets, launcher/verifier/cleanup and inventory,
+not a build tree, Rust SDK/cache or operator credentials. Metadata records debug
+profile and resolved runtime libraries. Stable archive uid/gid/mtime and empty
+gzip filename avoid filename/time artifacts, but do not imply independently
+compiled binaries are reproducible or a publisher authenticated the package.
+
+Installed launcher mode never invokes Cargo. Studio owns a new Linux session;
+its preview can have a different process group while remaining in that session.
+Pidfds pin process lifetimes for cleanup rather than signaling reusable numeric
+PIDs. Cooperative TERM is bounded; forced cleanup fails graceful acceptance.
+INT/TERM/HUP go through launcher cleanup; Studio also handles HUP through its
+shared shutdown path. Browser processes are outside the managed Studio session.
+This is trusted local process hygiene, not a sandbox against native code that
+escapes sessions or performs ambient I/O.
+
+R1 browser automation drives real forms/HTTP and artifact execution. Its status
+is deliberately `automated_passed_manual_pending`. X11/Wayland, Firefox, keyboard/
+scaling/accessibility and Windows credential/discovery observations require
+actual authorized humans. Failure paths keep failed reports and clean any
+identified session. A structural validator rejects missing, contradictory or
+invalid evidence; it does not authenticate humans or adopt their authority.
+
+Ubuntu and reviewed/default-branch Windows CI jobs are configured separately;
+Windows disposable DB credentials and required environment reviewers must be
+provisioned through organizational approval, not inferred from YAML. Details and
+all remaining gates: `docs/R0_R1_ACCEPTANCE.md` and
+`docs/verification/r0-r1-acceptance-ledger.md`. No schema migration, game rule,
+operator exposure, license grant, or R2+ readiness is introduced by these tools.
 
 ## Contents
 

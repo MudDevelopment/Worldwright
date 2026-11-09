@@ -10,10 +10,10 @@ Worldwright is **a toolkit for building games, not a single game or setting**. A
 
 > **Project status:** Milestones 1–3 are implemented development slices. **Milestone 4 — Durable Gameplay v0.1**, **Milestone 5 — Content Release and Preview v0.1**, **Milestone 6 — Operational Control v0.1**, and **Milestone 7 — Builder Workflow and Studio v0.1** are implemented awaiting their stated live evidence. M6/M7 are not production ready. See [road map](ROAD-MAP.md), [Studio guide](docs/STUDIO_V1.md), [operations contract](docs/OPERATIONS_V1.md), [release contract](docs/RELEASE_V1.md), and [M7 verification](docs/verification/milestone-7-report.md).
 >
-> **Documentation alignment — November 6, 2026:** This README reflects the
-> current source and verification evidence. Current evidence is Windows-local;
-> live PostgreSQL, hosted CI, Linux, deployment, and production-host evidence
-> remain pending.
+> **Evidence alignment — November 9, 2026:** Older milestone reports retain
+> their original Windows/Linux scope. Current source includes P0/P1/P2 and R0/R1
+> follow-through; helper checks are not native Rust or desktop acceptance.
+> Current native PostgreSQL, paired-host and hosted/manual evidence remains pending.
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
@@ -106,6 +106,39 @@ See [P2 acceptance](docs/P2_ACCEPTANCE.md) and the
   with Python 3.11+. Eight source/TOML/fixture checks and six mutation-rejection
   cases passed against current readback files. Native P2 Rust, actual
   bundle/consumer execution and hosted acceptance are still pending.
+
+## R0/R1 execution and private desktop package
+
+R0/R1 are release tracks, NOT the P0/P1 priority labels. See the
+[R0/R1 acceptance guide](docs/R0_R1_ACCEPTANCE.md) and
+[ledger](docs/verification/r0-r1-acceptance-ledger.md).
+
+- `python scripts/r0-verify.py --output <new-private-directory>` runs the full
+  pinned/native/integration gates and retains failure evidence. It requires
+  approved cache/tools and a disposable PostgreSQL test database; no successful skips.
+- `scripts/package-desktop.py build` requires complete, same-source Ubuntu R0
+  evidence and matching binaries. The private archive records debug profile,
+  runtime libraries, binary/file hashes and original R0 identity; it is not a
+  licensed or signed supported release, AppImage, .deb or native GUI installer.
+- Installed `bin/worldwright-desktop` uses bundled binaries and needs Python
+  3.11+, Bash/coreutils, setsid/pidfds and compatible libraries, not Cargo or the
+  original source checkout. Studio assets are compiled into its Rust binary.
+  Game source compilation still requires a matching development toolchain/SDK.
+- Existing workspace/package directories must be owned/private; unsafe paths
+  fail rather than being silently chmodded. TERM/INT/HUP drive session cleanup;
+  failed/forced cleanup is not reported as graceful success. The browser is not killed.
+- `scripts/r1-desktop-verify.py` exercises the installed package with real
+  Chromium/HTTP/process checks. Its passing automation status still leaves
+  Firefox/X11/Wayland/accessibility and Windows credential/discovery review pending.
+- `scripts/r0-r1-close.py` checks complete log/source/lock/host/binary/package
+  tuples and manual record structure. Humans must authenticate observations and
+  adopt closure; this checker cannot grant reviewer authority or license rights.
+
+Ubuntu CI is in `r0-r1.yml`. `r0-windows.yml` is explicitly dispatched on the
+  default branch with an acceptance-only database secret; configure required
+  reviewers on `worldwright-r0-windows` BEFORE provisioning it. YAML does not
+  configure those protections or establish a hosted pass. No full R0/R1 exit is
+  currently closed.
 
 ## Current implementation
 
@@ -256,7 +289,7 @@ The table separates reported local implementation from target architecture. Deta
 | World content | Strict JSON schema v1 and immutable content-release artifacts | Packaging/inspect/preview implemented; live PostgreSQL activation evidence pending |
 | Server configuration | Versioned TOML with validated settings and secret references | Proposed; existing CLI settings do not establish this configuration schema |
 | Deployment | Single authoritative process initially; private database for durable operation | Local mode is process-local; durable mode is implemented; production topology remains undecided |
-| Packaging | Reproducible binaries or containers | Deployment packaging and verification remain planned |
+| Packaging | Private native desktop archive and development container | Builders/gates implemented; actual R0/R1 acceptance and approved redistribution remain open |
 
 The workspace pins Rust 1.85.1, uses edition 2024, and versions packages as
 `0.1.0-dev.0`. Content loading and release packaging use pinned Serde/JSON;
@@ -675,7 +708,8 @@ cargo run -p worldwright -- benchmark --clients 100 --commands-per-client 100 --
 
 See [Toolkit v1](docs/TOOLKIT_V1.md), [M8 summary](Milestone-8-summary.md),
 and [M8 evidence](docs/verification/milestone-8-report.md). M8 uses the
-current-plus-previous 0.x compatibility window with one-minor deprecation.
+intended current-plus-previous 0.x compatibility window with one-minor deprecation;
+only actual API-v1 support is advertised today, not a fictional previous release.
 The 100-client figure is a development objective, not a beta commitment.
 
 ## Current M7 status

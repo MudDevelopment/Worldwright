@@ -1,0 +1,67 @@
+name: Reviewed native Windows R0 evidence
+
+'on':
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-r0:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: windows-latest
+    timeout-minutes: 60
+    environment: worldwright-r0-windows
+    env:
+      WORLDWRIGHT_TEST_DATABASE_URL: ${{ secrets.WORLDWRIGHT_R0_TEST_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Explicit disposable database and approved tool bootstrap
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WORLDWRIGHT_TEST_DATABASE_URL)) {
+            throw 'Configure reviewed environment WORLDWRIGHT_R0_TEST_DATABASE_URL for a disposable worldwright_test database. No successful DB skip.'
+          }
+          $venv = Join-Path $env:RUNNER_TEMP 'r0-python'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { throw 'venv creation failed' }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          & $python -m pip install -r deploy/helm/worldwright/tests/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'test dependency install failed' }
+          (Join-Path $venv 'Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          ./scripts/dev.ps1 bootstrap
+      - name: Actual full Windows R0 report
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/r0-verify.py --output (Join-Path $env:RUNNER_TEMP 'r0-windows-evidence')
+          if ($LASTEXITCODE -ne 0) { throw 'R0 Windows failed; retain private failure report' }
+      - name: Retain evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r0-windows-evidence
+          path: |
+            ${{ runner.temp }}/r0-windows-evidence/*.json
+            ${{ runner.temp }}/r0-windows-evidence/*.log
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r0-windows-evidence
+          path: |
+            ${{ runner.temp }}/r0-windows-evidence/*.json
+            ${{ runner.temp }}/r0-windows-evidence/*.log
+          retention-days: 14
+          if-no-files-found: error
+# Configure required reviewers/branch restrictions on worldwright-r0-windows
+# before provisioning its acceptance-only secret. This file does not adopt
+# environment protection, provide database access or establish a hosted pass.

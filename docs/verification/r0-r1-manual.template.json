@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "package_manifest_sha256": "",
+  "notice": "Template only. Empty/not_checked fields block R0/R1 closure. An authorized human must perform and authenticate each observation; hashes are not signatures.",
+  "cases": [
+    {"case":"chromium-x11","status":"not_checked","reviewer":"","observed_at":"","browser_or_platform_version":"","evidence_sha256":""},
+    {"case":"chromium-wayland","status":"not_checked","reviewer":"","observed_at":"","browser_or_platform_version":"","evidence_sha256":""},
+    {"case":"firefox-x11","status":"not_checked","reviewer":"","observed_at":"","browser_or_platform_version":"","evidence_sha256":""},
+    {"case":"firefox-wayland","status":"not_checked","reviewer":"","observed_at":"","browser_or_platform_version":"","evidence_sha256":""},
+    {"case":"manual-no-browser","status":"not_checked","reviewer":"","observed_at":"","browser_or_platform_version":"","evidence_sha256":""},
+    {"case":"windows-credentials-and-discovery","status":"not_checked","reviewer":"","observed_at":"","browser_or_platform_version":"","evidence_sha256":""}
+  ]
+}

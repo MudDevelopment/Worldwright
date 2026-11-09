@@ -101,6 +101,35 @@ source-contract logs, with missing-log refusal. Full native/relocated/hosted acc
 SDK lists still advertise only API version 1: no fictional prior package minor,
 ABI support, optimization gain, or production-readiness claim is invented.
 
+## R0/R1 execution follow-through — November 9, 2026
+
+R0/R1 are the release tracks in section 5, not P0/P1 priority labels. Current
+commands and every required gate are in `docs/R0_R1_ACCEPTANCE.md`; statuses and
+observed blockers are in `docs/verification/r0-r1-acceptance-ledger.md`.
+
+- R0 runner records the native source/lock/toolchain/config/graph/binary tuple,
+  runs all required phases and rejects missing tools or source/log drift.
+- Private packaging requires complete same-source Ubuntu R0 evidence; installed
+  mode needs no Cargo/build checkout for supported Studio runtime operations.
+- Session/pidfd cleanup, SIGHUP, timeout/crash and privacy rejection paths are
+  installed; real supported-host process/browser acceptance remains required.
+- Ubuntu CI and reviewed/default-branch Windows R0 CI are wired. Windows needs
+  an approved disposable test DB secret and adopted environment protection;
+  workflow existence does not prove adoption or execution.
+- Current local checks: 14 helper tests and 10 synthetic launcher tests passed;
+  two real-binary cases skipped without supplied binaries. Python/Bash syntax
+  and workflow wiring checks passed on selected current readback files.
+- The actual local R0 gate attempt stopped at missing Cargo before any native
+  phase. Packaging refused failed R0 evidence; no real archive was created.
+  R1 automation refused the absent real package; same-tuple closure returned
+  NOT CLOSED. All six human observations remain unfilled, not fabricated.
+
+**Neither R0 nor R1 is closed.** Native Ubuntu/Windows, real package/desktop,
+manual browser/display/credential observations and authorized closure remain
+execution/approval obligations. `r0-r1-local-observations.json` and explicitly
+named local prerequisite-failure JSON files preserve that limited scope; they
+are not accepted native reports or production-readiness evidence.
+
 ## Contents
 
 1. [Review scope and evidence](#1-review-scope-and-evidence)

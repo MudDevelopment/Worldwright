@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document version | 0.1 |
-| Updated | November 9, 2026 — current P1 controls; not a certification |
+| Updated | November 9, 2026 — P1 and R0/R1 controls; not a certification |
 | Status | M4/M5 controls await live PostgreSQL verification; M6 is implemented awaiting live PostgreSQL/recovery execution and is not production ready |
 | Accountable roles | Security owner and service owner, with authorized project-owner oversight |
 | Related documents | [README](README.md), [Design](DESIGN.md), [Architecture](ARCHITECTURE.md), [Contributing](CONTRIBUTING.md), [Conduct](CODE_OF_CONDUCT.md) |
@@ -69,6 +69,43 @@ Live PostgreSQL and recovery behavior remain unverified.
   `publish = false` remains in force.
 
 See `docs/P1_ACCEPTANCE.md` and `docs/verification/p1-implementation-ledger.md`.
+
+## R0/R1 package, process and evidence boundaries
+
+Private acceptance packaging requires complete same-source Ubuntu R0 logs,
+source/lock inventory and matching binaries. It rejects malformed inventory
+records, bad hashes/modes, symlinks and unexpected files. Existing output files
+are not overwritten. The package contains no operator keys, account registries,
+production configuration or license grant. Hash verification does NOT authenticate
+a publisher if both manifest and files are replaced; verify external archive/
+evidence digests and reviewer authority before trusting a package. Native code
+and runtime libraries remain trusted code with user-process privileges.
+
+Installed mode uses no Cargo/checkout for supported Studio edit/package/preview
+operations. It still requires trusted runtime executables, Python 3.11+, Bash,
+Linux setsid/pidfds and compatible libraries. Owned private directories and
+no-symlink rules tighten filesystem exposure; no automatic chmod or ownership
+repair is performed. Shell path checks are not race-proof protection in an
+attacker-controlled directory hierarchy.
+
+Cleanup uses a Studio session and pinned pidfds, includes preview process groups,
+and retains failure on forced cleanup. It is not a sandbox against malicious
+native code escaping sessions. Browser processes are not terminated with Studio.
+Real timeout/pipe/crash and supported-host behavior must pass actual acceptance.
+
+R0 logs/config fingerprints are private evidence, not authorization. Database URLs
+are supplied via approved environment/secret delivery, not command arguments;
+known test URL logging is redacted. Review compiler/tool output for sensitive
+material before sharing: this is not universal log DLP. The reviewed Windows
+workflow needs required environment reviewers and an acceptance-only disposable
+DB secret; merely committing workflow YAML does not install those protections.
+
+R1 automation cannot approve Firefox/X11/Wayland/accessibility, Windows credentials
+or human reviewer identity. The manual template is intentionally unobserved and
+must remain pending until authenticated observations exist. Closure checks complete
+source/log/host/package identities and rejects missing/invalid manual records;
+it does not grant legal rights, operational authority or R2+ readiness.
+See `docs/R0_R1_ACCEPTANCE.md` and the R0/R1 ledger for evidence and limitations.
 
 ## Contents
 
