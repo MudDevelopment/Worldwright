@@ -9,6 +9,7 @@ description = "Independent Worldwright expedition game rules"
 [dependencies]
 worldwright-core.workspace = true
 worldwright-sdk.workspace = true
+getrandom.workspace = true
 
 [lints]
 workspace = true

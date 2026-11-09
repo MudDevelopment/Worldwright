@@ -17,6 +17,21 @@ Worldwright is **a toolkit for building games, not a single game or setting**. A
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
+## Playable expedition update — November 9, 2026
+
+The generated expedition executable now runs the game instead of printing only
+its ID. Official preview dispatches the artifact's game contract; Studio adds a
+reference/expedition packaging selector. The browser accepts `forage`,
+`encounter`, `strike`, `rest`, and status/rank aliases through the existing
+multiplayer owner. Supplies, threats, victories and ranks remain server/rule
+owned, not browser state. See [playable expedition](docs/EXPEDITION_PLAYABLE.md)
+for startup, timing, schema compatibility and regression commands.
+
+**Verification:** this patch has not yet been compiled/tested with Cargo here.
+Earlier Windows passes do not verify these edits. Recovery remains applied on
+the next gameplay command after its deadline; independent idle ticks and live
+PostgreSQL recovery acceptance remain open.
+
 ## Current implementation
 
 The workspace contains the current Rust workspace packages. M6 provides scoped operator authorization,

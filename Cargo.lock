@@ -3107,6 +3107,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "worldwright-content",
+ "worldwright-expedition",
  "worldwright-release",
  "worldwright-sdk",
  "worldwright-testkit",
@@ -3143,6 +3144,7 @@ version = "0.1.0-dev.0"
 name = "worldwright-expedition"
 version = "0.1.0-dev.0"
 dependencies = [
+ "getrandom 0.3.4",
  "worldwright-core",
  "worldwright-sdk",
 ]

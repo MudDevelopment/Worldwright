@@ -34,8 +34,19 @@ pub(super) fn play(path: &Path) -> ExitCode {
     play_content(&content, DisplayMode::Local)
 }
 
-pub(super) fn preview(content: &ValidatedWorldContent, digest: Sha256Digest) -> ExitCode {
-    play_content(content, DisplayMode::Preview(digest))
+pub(super) fn preview(
+    content: &ValidatedWorldContent,
+    digest: Sha256Digest,
+    game: worldwright_release::GameContract,
+) -> ExitCode {
+    match game {
+        worldwright_release::GameContract::Reference => {
+            play_content(content, DisplayMode::Preview(digest))
+        }
+        worldwright_release::GameContract::Expedition => {
+            worldwright_expedition::terminal::run_content(content, Some(&digest.to_string()))
+        }
+    }
 }
 
 fn play_content(content: &ValidatedWorldContent, mode: DisplayMode) -> ExitCode {

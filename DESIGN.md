@@ -19,6 +19,30 @@
 >
 > **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROAD-MAP owns milestone scope, dependency order, blocking decisions, and exit evidence. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
 
+## Playable second-game integration — November 9, 2026
+
+The generated expedition program and official expedition artifact preview share
+`worldwright_expedition::terminal`, using the existing `ExpeditionGame` and
+`initialize_character` public seams. No duplicate supplies/combat/rank rules
+are implemented in either host or browser. The multiplayer owner's existing
+game-profile and PostgreSQL commit wiring are retained. Friendly browser
+commands map to the same namespaced actions; page-unique UUID request IDs avoid
+accidental reuse of historical durable receipts.
+
+| Interface change | Classification | Compatibility |
+|---|---|---|
+| Optional Studio package `game` string (`reference`/`expedition`) | Additive HTTP request change | Missing/null retains reference; unsupported names fail explicitly. Rust struct literals must add `game: None` or `Some(...)`. |
+| Generated expedition executable starts actual runtime | Behavior implementation | Existing generated files are not overwritten; new templates embed content and run shared host. |
+| Existing artifact/sidecar/draft/DB formats | Unchanged | Existing immutable artifacts retain their original game contract. |
+
+Terminal input/output remain bounded and control-safe; OS randomness supplies
+real gameplay rolls, while tests inject fixed rolls. Local/preview state is
+ephemeral. Recovery is still command-driven, applied at the next action after
+its deadline, not an independently committed idle-timer transaction. The
+PostgreSQL completion/replay contract is not changed by browser aliases.
+Regression code exists but current compile, Clippy, runtime/browser and live DB
+verification are pending; see `docs/EXPEDITION_PLAYABLE.md`.
+
 ## Contents
 
 - [Purpose and Scope](#purpose-and-scope)

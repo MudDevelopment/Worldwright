@@ -40,3 +40,14 @@ operator/protocol/release/SQL adapter files used targeted sections; representati
 tests and supplied execution records supplemented source review. Independent
 full static/security/supply-chain audit and real Ubuntu/DB/deployment verification
 remain open. Gaps are tracked in ROADMAP_v2.md, not treated as fixed by prose.
+
+## Playable second-game follow-through — November 9, 2026
+
+Source update: new expedition terminal host; generated executable runtime;
+manifest-aware preview dispatch; optional Studio game selection; friendly
+multiplayer/browser actions and UUID page request namespaces. Regression code
+added for host/generation/artifact/network progression and recovery. Nested
+build targets are now explicit. WWV2-003/004 source gaps corrected, verification
+pending; WWV2-015 partially addressed. Idle ticks, live durable game recovery,
+SDK relocation and broader acceptance remain open. No current Cargo results
+were observed through EWW; prior Windows test evidence predates this patch.

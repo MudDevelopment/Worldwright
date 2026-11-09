@@ -1,4 +1,17 @@
-//! Independent turn-based expedition rules built only on public SDK seams.
+//! Expedition rules and playable host built on public SDK seams.
+
+pub mod terminal;
+
+/// Friendly executable/browser commands map to the same authoritative actions.
+pub fn action_id(command: &str) -> Option<&'static str> {
+    match command {
+        "forage" => Some(FORAGE_ACTION),
+        "encounter" => Some(ENCOUNTER_ACTION),
+        "strike" => Some(STRIKE_ACTION),
+        "rest" => Some(REST_ACTION),
+        _ => None,
+    }
+}
 
 use std::fmt;
 use worldwright_sdk::{

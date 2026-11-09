@@ -895,6 +895,7 @@ element("package-form").addEventListener("submit", async (event) => {
       snapshot_sha256: state.snapshot.snapshot_sha256,
       release_id: element("release-id").value,
       builder_identity: element("builder-identity").value,
+      game: element("package-game").value,
     });
     state.artifacts = [
       record,

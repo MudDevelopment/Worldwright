@@ -316,6 +316,10 @@ async fn package(State(state): State<AppState>, body: Bytes) -> Response {
     let Ok(request) = serde_json::from_slice::<PackageRequest>(&body) else {
         return error(StatusCode::BAD_REQUEST, "invalid package request");
     };
+    if request.game.as_deref().unwrap_or("reference")
+        .parse::<worldwright_release::GameContract>().is_err() {
+        return error(StatusCode::UNPROCESSABLE_ENTITY, "unsupported game contract");
+    }
     match tokio::task::spawn_blocking(move || state.workspace.package(request)).await {
         Ok(Ok(record)) => json_response(StatusCode::OK, &record),
         Ok(Err(WorkspaceError::Conflict { .. })) => {
@@ -940,6 +944,7 @@ mod tests {
                 snapshot_sha256: snapshot.snapshot_sha256.clone(),
                 release_id: "studio-acceptance".into(),
                 builder_identity: "studio-test".into(),
+                game: None,
             })
             .unwrap();
         state

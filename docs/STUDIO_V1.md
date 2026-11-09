@@ -83,3 +83,13 @@ The UI includes semantic forms/buttons, labels, skip navigation, live status
 announcements, visible focus, responsive reflow, reduced-motion styling, and
 dialog confirmation flows. No manual screen-reader, keyboard, zoom, or browser
 matrix was performed; accessibility conformance is not claimed.
+
+## Game selection update — November 9, 2026
+
+Studio now offers Reference/Expedition in the package form and sends optional
+`game` on the package request. Missing/null retains the reference default;
+unknown names return an explicit unsupported-game error. Existing draft,
+artifact-sidecar and publication schemas are unchanged. Artifact game identity
+remains hashed into its manifest, and official preview now dispatches that
+contract rather than always choosing reference rules. Current regression
+execution is pending; see `EXPEDITION_PLAYABLE.md`.

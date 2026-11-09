@@ -11,6 +11,14 @@
   let socket = null;
   const heartbeatTimers = new WeakMap();
   let requestNumber = 0;
+  // Fresh pages must not reuse durable receipt IDs from a previous game session.
+  const requestNamespace = crypto.randomUUID().replaceAll("-", "");
+  const expeditionActions = Object.freeze({
+    forage: "expedition:actions.forage",
+    encounter: "expedition:actions.encounter",
+    strike: "expedition:actions.strike",
+    rest: "expedition:actions.rest",
+  });
 
   function setStatus(value) {
     status.textContent = value;
@@ -32,7 +40,7 @@
 
   function nextRequestId() {
     requestNumber += 1;
-    return `browser-${requestNumber}`;
+    return `browser-${requestNamespace}-${requestNumber}`;
   }
 
   function send(current, message) {
@@ -186,7 +194,9 @@
     event.preventDefault();
     const value = commandInput.value.trim();
     const requestId = nextRequestId();
-    if (value === "look" || value === "l") {
+    if (Object.hasOwn(expeditionActions, value)) {
+      send(socket, { type: "command", request_id: requestId, command: { type: "game_action", action: expeditionActions[value], argument: null } });
+    } else if (["look", "l", "status", "supplies", "threat", "victories", "rank"].includes(value)) {
       send(socket, { type: "command", request_id: requestId, command: { type: "look" } });
     } else if (value === "inventory") {
       send(socket, { type: "command", request_id: requestId, command: { type: "inventory" } });
@@ -207,7 +217,7 @@
       const action = value.slice(7).trim();
       send(socket, { type: "command", request_id: requestId, command: { type: "game_action", action, argument: null } });
     } else {
-      print("Commands: look, l, go <exit-label>, say <text>, action <namespaced-id>, inventory, claim welcome, give <item-id> <username>");
+      print("Commands: look/status, go <exit-label>, say <text>, forage, encounter, strike, rest, rank, action <namespaced-id>, inventory, claim welcome, give <item-id> <username>. Expedition commands require the expedition server profile.");
     }
     commandInput.value = "";
   });

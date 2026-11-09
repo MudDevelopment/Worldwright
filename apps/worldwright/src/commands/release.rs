@@ -387,7 +387,11 @@ pub fn preview_worker(
         Ok(verified) => verified,
         Err(error) => return report_error("preview worker", error),
     };
-    play::preview(verified.content(), verified.artifact_digest())
+    play::preview(
+        verified.content(),
+        verified.artifact_digest(),
+        verified.manifest().game_contract(),
+    )
 }
 
 fn report_error(operation: &str, error: ReleaseError) -> ExitCode {

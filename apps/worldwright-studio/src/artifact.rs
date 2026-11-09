@@ -19,6 +19,9 @@ pub struct PackageRequest {
     pub snapshot_sha256: String,
     pub release_id: String,
     pub builder_identity: String,
+    /// Optional HTTP field; old requests still package the reference game.
+    #[serde(default)]
+    pub game: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +37,8 @@ pub struct ArtifactRecord {
 
 impl Workspace {
     pub fn package(&self, request: PackageRequest) -> Result<ArtifactRecord, WorkspaceError> {
+        let game: GameContract = request.game.as_deref().unwrap_or("reference").parse()
+            .map_err(|_| WorkspaceError::InvalidWorkspace("unsupported game contract"))?;
         let snapshot = self.revision(request.revision)?;
         let requested_digest = Sha256Digest::parse(&request.snapshot_sha256)
             .map_err(|_| WorkspaceError::InvalidWorkspace("snapshot digest is invalid"))?;
@@ -59,7 +64,7 @@ impl Workspace {
                     request.revision, request.snapshot_sha256
                 ),
                 builder_identity: request.builder_identity.clone(),
-                game: GameContract::Reference,
+                game,
             },
         )
         .map_err(|_| WorkspaceError::InvalidWorkspace("draft cannot be packaged"))?;
@@ -338,6 +343,35 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn selected_game_is_pinned_and_old_requests_remain_reference() {
+        let root = std::env::temp_dir().join(format!("worldwright-studio-game-{}-{}", std::process::id(), now()));
+        let workspace = Workspace::open_or_create(&root, None).unwrap();
+        let snapshot = workspace.latest().unwrap();
+        for (game, expected) in [(None, GameContract::Reference), (Some("expedition".to_owned()), GameContract::Expedition)] {
+            let record = workspace.package(PackageRequest {
+                revision: snapshot.revision,
+                snapshot_sha256: snapshot.snapshot_sha256.clone(),
+                release_id: format!("game-{}", expected),
+                builder_identity: "game-test".into(),
+                game,
+            }).unwrap();
+            let bytes = workspace.artifact_bytes(&record.artifact_digest).unwrap();
+            let verified = verify_bytes("test", &bytes, None).unwrap();
+            assert_eq!(verified.manifest().game_contract(), expected);
+            assert_eq!(workspace.artifact(&record.artifact_digest).unwrap(), record);
+        }
+        assert!(workspace.package(PackageRequest {
+            revision: snapshot.revision,
+            snapshot_sha256: snapshot.snapshot_sha256,
+            release_id: "unsupported".into(), builder_identity: "game-test".into(),
+            game: Some("unknown".into()),
+        }).is_err());
+        let old: PackageRequest = serde_json::from_str(r#"{"revision":1,"snapshot_sha256":"digest","release_id":"old","builder_identity":"test"}"#).unwrap();
+        assert!(old.game.is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn package_writes_immutable_artifact_and_sidecar() {
         let root = std::env::temp_dir().join(format!(
             "worldwright-studio-artifact-{}",
@@ -354,6 +388,7 @@ mod tests {
                 snapshot_sha256: snapshot.snapshot_sha256.clone(),
                 release_id: "studio-test".into(),
                 builder_identity: "studio-test".into(),
+                game: None,
             })
             .unwrap();
         let reused = workspace
@@ -362,6 +397,7 @@ mod tests {
                 snapshot_sha256: snapshot.snapshot_sha256,
                 release_id: "studio-test".into(),
                 builder_identity: "studio-test".into(),
+                game: None,
             })
             .unwrap();
         assert_eq!(record, reused);

@@ -141,6 +141,14 @@
         <h3 id="package-heading">Package artifact</h3>
         <form id="package-form">
           <div class="field">
+            <label for="package-game">Game rules</label>
+            <select id="package-game">
+              <option value="reference">Reference game</option>
+              <option value="expedition">Expedition — supplies, encounters and progression</option>
+            </select>
+            <small>Selection is pinned into the artifact; preview uses these exact rules.</small>
+          </div>
+          <div class="field">
             <label for="release-id">Release ID</label>
             <input id="release-id" required maxlength="64" value="studio-draft">
           </div>

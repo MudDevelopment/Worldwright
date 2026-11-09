@@ -16,6 +16,18 @@
 
 > **Executive decision:** Do not restart the foundation or describe Worldwright as an empty scaffold. The repository already has substantial runtime, content, transport, persistence, release, Studio, operator, SDK, and load tooling. The next work is to close real integration defects and produce Ubuntu, PostgreSQL, browser, deployment, and recovery evidence—not add more disconnected components.
 
+## Implementation update — November 9, 2026
+
+The playable second-game integration is now installed in source: generated
+expedition executables and expedition previews run the shared real host; Studio
+packages the selected game; browser expedition commands use the multiplayer
+owner and page-unique receipt IDs. Added regression tests cover these paths.
+WWV2-003/004 now need execution evidence, not their original source wiring.
+WWV2-015 is partially addressed (executable + first bootstrap + nested target
+isolation), but SDK relocation remains open. See `docs/EXPEDITION_PLAYABLE.md`.
+No current Cargo pass, real browser run or live PostgreSQL proof is claimed.
+Delayed recovery remains command-driven; WWV2-007 is not closed.
+
 ## Contents
 
 1. [Review scope and evidence](#1-review-scope-and-evidence)
@@ -124,7 +136,7 @@ All paths below are relative to the repository root.
 |---|---|---|
 | `apps/worldwright` | Developer CLI; `src/cli.rs`, `src/commands/{content,maturity,play,release,sdk}.rs` | Preserve validation/play/package/inspect/preview/generation/bundle commands; fix game-aware preview and installed-source resolution. |
 | `apps/worldwright-server` | Composition, authentication/OIDC, bounded world owner, REST/WebSocket, operations and release CLI | Close browser/commit semantics and live DB/deployment gaps instead of building a second server. |
-| `apps/worldwright-studio` | Loopback Axum editor; `workspace.rs`, `artifact.rs`, `preview.rs`, `publication.rs`, `web.rs` | Real authoring workflow; currently reference-only packaging, fixed workspace and loopback control client. |
+| `apps/worldwright-studio` | Loopback Axum editor; `workspace.rs`, `artifact.rs`, `preview.rs`, `publication.rs`, `web.rs` | Real authoring workflow; source now supports reference/expedition packaging, fixed workspace and loopback control client. New integration tests still need execution. |
 | `apps/worldwright-console` | Local Argon2/TOTP operator credential/token issuer and bounded loopback HTTP control client | Signing-key placement and Windows ACL handling need explicit acceptance; not a public unrestricted administrator shell. |
 | `apps/worldwright-load` | `cli.rs`, `fixture.rs`, `runner.rs`, `report.rs` | Fixed 250-account/7,500-command beta recipe is implemented, not measured. |
 | `crates/worldwright-core` | IDs/intent/rules/effects/scheduler, staged runtime execution, scoped views, checkpoint/restore | Supports counter adjustment/scheduled counter adjustment. Generic item effects and `WakeCharacter` remain unsupported. `WorldStub` is a legacy startup guard, not proof the actual server is missing. |
@@ -167,8 +179,8 @@ A 250-client profile fits below the 256-character ceiling numerically; that is n
 |---|---|---|---|
 | WWV2-001 | P0 | `scripts/desktop.sh` selects an XDG workspace whose parent may not exist; `Workspace::open_or_create` explicitly requires an existing real parent. | Safely create/validate the required user-owned default parent before launch, or supply an existing path. Test a fresh HOME/XDG tree, path spaces, symlinks, permission denial and reopen with the real Studio binary. |
 | WWV2-002 | P0 | Current Ubuntu full-workspace/desktop evidence is absent; post-edit formatting proof is missing. `doctor` only prints basic versions. | Run pinned formatting/check/Clippy/tests/build/rustdoc on Ubuntu and retained Windows at one recorded revision. Extend diagnostics with native host, executable paths, sysroot and sanitized override presence. |
-| WWV2-003 | P0 | CLI preview loads an artifact but calls reference-only terminal play without its game contract; Studio `Workspace::package` hardcodes `GameContract::Reference`. | Dispatch preview from validated game metadata, initialize expedition counters/rules and expose supported game selection consistently. Unsupported games must fail explicitly, not silently preview as reference. Test the exact same artifact in preview and deployed game. |
-| WWV2-004 | P0 | Player browser starts request IDs at `browser-1` on each page load, while durable receipts are scoped beyond a browser instance. | Give each fresh browser session/run a suitably unique request namespace. Retain original IDs only for deliberate same-intent reconciliation. Test reload/new-tab/reconnect, same-ID different-intent conflicts, and stale initial-Look replay. |
+| WWV2-003 | P0 | Original source gap corrected November 9: preview consumes the artifact game contract; Studio accepts supported game selection; generated expedition runs the shared playable host. | Added terminal/generation/packaging/multiplayer tests need real Cargo/browser execution. Exact-artifact deployment/live PostgreSQL parity remains pending; do not mark operational acceptance complete. |
+| WWV2-004 | P0 | Browser now uses a new UUID request namespace per page instead of restarting bare browser-N IDs. | Real reload/new-tab/reconnect and persistent-receipt tests remain pending; deliberate same-intent reconciliation retains its separate identity contract. |
 | WWV2-005 | P1 | OIDC callback sets a session cookie and redirects to `/`; browser JavaScript connects only after password-form login. | Add authenticated session-resume/connect behavior after page load, handling anonymous/expired/revoked/OIDC-disabled cases without exposing HttpOnly cookies. Successful OIDC must reach an attached playable character without a second password login. |
 | WWV2-006 | P1 | Existing 19 ignored DB tests do not establish the newly added general-gameplay/OIDC paths; live DB execution is absent. | Run existing tests and add direct integration/process tests for gameplay snapshots, schedule recovery, replay, stale state, issuer/subject/invite linking, revocation, concurrent callbacks and rollback/unknown outcomes. |
 | WWV2-007 | P1 | Owner invokes `runtime.advance` during commands, not an independent idle gameplay-timer branch; RNG is not part of checkpoint rollback. | Define command-driven versus real-time scheduling explicitly. If independent recovery is required, add bounded owner-driven ticks with durable commit semantics. Specify/retest randomness consumption on rejection/replay/restart; do not claim deterministic replay from checkpointing alone. |
@@ -403,7 +415,7 @@ cargo run -p worldwright --locked --offline -- content inspect ./expedition-acce
 cargo run -p worldwright --locked --offline -- preview ./expedition-acceptance.wwr
 ```
 
-The output path must be new and its parent available. **Current caveat:** the final preview command still executes reference rules; this recipe is intended to expose and later prove closure of WWV2-003, not to certify current expedition preview support.
+The output path must be new and its parent available. **Current caveat:** expedition preview dispatch has now been implemented in source; run this recipe and the new tests before certifying preview parity. Current live deployment/PostgreSQL evidence is still absent.
 
 ### 6.5 Container/chart
 
