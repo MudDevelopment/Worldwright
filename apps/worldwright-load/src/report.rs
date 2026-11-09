@@ -83,16 +83,16 @@ pub(crate) fn latency_stats(mut values: Vec<u64>) -> LatencyStats {
     LatencyStats {
         count: values.len() as u64,
         min_us: values[0],
-        p50_us: nearest_rank(&values, 50),
-        p95_us: nearest_rank(&values, 95),
-        p99_us: nearest_rank(&values, 99),
+        p50_us: nearest_rank(&values, 50).unwrap_or_default(),
+        p95_us: nearest_rank(&values, 95).unwrap_or_default(),
+        p99_us: nearest_rank(&values, 99).unwrap_or_default(),
         max_us: values[values.len() - 1],
     }
 }
 
-fn nearest_rank(values: &[u64], percentile: usize) -> u64 {
-    let rank = (percentile * values.len()).div_ceil(100).max(1);
-    values[rank - 1]
+fn nearest_rank(values: &[u64], percentile: usize) -> Option<u64> {
+    worldwright_core::measurement::nearest_rank_index(values.len(), percentile)
+        .map(|index| values[index])
 }
 
 pub(crate) fn evaluate(report: &mut LoadReport, profile: Profile) {
@@ -137,6 +137,17 @@ mod tests {
         let stats = latency_stats((1..=100).collect());
         assert_eq!((stats.p50_us, stats.p95_us, stats.p99_us), (50, 95, 99));
         assert_eq!(latency_stats(Vec::new()).count, 0);
+    }
+
+    #[test]
+    fn beta_percentiles_match_shared_small_and_full_sample_recipe() {
+        let stats = latency_stats((1..=20).collect());
+        assert_eq!((stats.p50_us, stats.p95_us, stats.p99_us), (10, 19, 20));
+        let stats = latency_stats((1..=7_500).rev().collect());
+        assert_eq!((stats.p50_us, stats.p95_us, stats.p99_us), (3_750, 7_125, 7_425));
+        assert_eq!(nearest_rank(&[], 50), None);
+        assert_eq!(nearest_rank(&[1], 0), None);
+        assert_eq!(nearest_rank(&[1], 101), None);
     }
 
     fn passing_report() -> LoadReport {

@@ -33,7 +33,7 @@ pub struct ValidatedWorldContent {
 }
 impl ValidatedWorldContent {
     pub fn schema_version(&self) -> u64 {
-        1
+        crate::CONTENT_SCHEMA_VERSION
     }
     pub fn namespace(&self) -> &str {
         &self.namespace

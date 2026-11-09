@@ -5,7 +5,10 @@ pub use worldwright_core::world::RoomDescription;
 pub use worldwright_core::{
     GameModule, ModuleRegistrationError, NotImplemented, WorldStub, WorldView,
 };
-pub use worldwright_core::{command, effect, ids, rule, runtime, scheduler, time};
+pub use worldwright_core::{command, effect, ids, measurement, rule, runtime, scheduler, time};
+
+/// Cargo package identity, distinct from SDK API or protocol versions.
+pub const SDK_PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub const SDK_API_VERSION: u32 = 1;
 pub const SUPPORTED_SDK_API_VERSIONS: &[u32] = &[SDK_API_VERSION];
@@ -27,12 +30,13 @@ pub const COMPATIBILITY: CompatibilityMatrix = CompatibilityMatrix {
     sdk_current: SDK_API_VERSION,
     sdk_supported: SUPPORTED_SDK_API_VERSIONS,
     protocol_supported: worldwright_protocol_versions(),
-    content_schema_supported: &[1],
+    content_schema_supported: worldwright_content::SUPPORTED_CONTENT_SCHEMA_VERSIONS,
     minimum_rust: MINIMUM_RUST_VERSION,
 };
 
 const fn worldwright_protocol_versions() -> &'static [u32] {
-    // Kept literal so the SDK remains independent of the transport crate.
+    // Intentional independent declaration: CLI dev-only drift tests compare it
+    // with the real protocol crate. The reduced SDK must not depend on transport.
     &[1]
 }
 
@@ -75,7 +79,8 @@ mod tests {
         assert_eq!(COMPATIBILITY.sdk_current, 1);
         assert_eq!(COMPATIBILITY.sdk_supported, &[1]);
         assert_eq!(COMPATIBILITY.protocol_supported, &[1]);
-        assert_eq!(COMPATIBILITY.content_schema_supported, &[1]);
+        assert_eq!(COMPATIBILITY.content_schema_supported, worldwright_content::SUPPORTED_CONTENT_SCHEMA_VERSIONS);
+        assert_eq!(super::SDK_PACKAGE_VERSION, env!("CARGO_PKG_VERSION"));
         assert_eq!(DEPRECATIONS[0].earliest_removal, "0.3");
     }
 }

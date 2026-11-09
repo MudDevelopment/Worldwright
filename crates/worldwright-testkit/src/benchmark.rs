@@ -14,6 +14,11 @@ use worldwright_core::{
     time::{RandomExhausted, RandomSource, Tick},
 };
 
+/// V2 changes only percentile selection from the historical v1 interpolation index.
+pub const RUNTIME_WORKLOAD_RECIPE: &str = "runtime-look-nearest-rank-v2";
+pub const RUNTIME_WORKLOAD_RECIPE_VERSION: u32 = 2;
+pub use worldwright_core::measurement::NEAREST_RANK_RECIPE;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Workload {
     pub clients: usize,
@@ -130,17 +135,17 @@ pub fn run_runtime_workload(workload: Workload) -> Result<WorkloadReport, Worklo
         clients: workload.clients,
         commands,
         elapsed,
-        p50: percentile(&latencies, 50),
-        p95: percentile(&latencies, 95),
-        p99: percentile(&latencies, 99),
+        p50: percentile(&latencies, 50).ok_or(WorkloadError::Execution)?,
+        p95: percentile(&latencies, 95).ok_or(WorkloadError::Execution)?,
+        p99: percentile(&latencies, 99).ok_or(WorkloadError::Execution)?,
         max: *latencies.last().ok_or(WorkloadError::Execution)?,
         delivered_messages,
     })
 }
 
-fn percentile(values: &[Duration], percentile: usize) -> Duration {
-    let index = ((values.len() - 1) * percentile).div_ceil(100);
-    values[index]
+fn percentile(values: &[Duration], percentile: usize) -> Option<Duration> {
+    worldwright_core::measurement::nearest_rank_index(values.len(), percentile)
+        .map(|index| values[index])
 }
 
 struct NoRandom;
@@ -153,6 +158,17 @@ impl RandomSource for NoRandom {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn runtime_percentiles_use_versioned_nearest_rank() {
+        let values: Vec<_> = (1..=20).map(Duration::from_nanos).collect();
+        assert_eq!(percentile(&values, 50), Some(Duration::from_nanos(10)));
+        assert_eq!(percentile(&values, 95), Some(Duration::from_nanos(19)));
+        assert_eq!(percentile(&values, 99), Some(Duration::from_nanos(20)));
+        assert_eq!(percentile(&[], 50), None);
+        assert_eq!(percentile(&values, 0), None);
+        assert_eq!(RUNTIME_WORKLOAD_RECIPE_VERSION, 2);
+        assert_eq!(NEAREST_RANK_RECIPE, worldwright_core::measurement::NEAREST_RANK_RECIPE);
+    }
     #[test]
     fn hundred_client_objective_completes_bounded_work() {
         let report = run_runtime_workload(Workload {

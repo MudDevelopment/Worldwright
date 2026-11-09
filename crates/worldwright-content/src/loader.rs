@@ -117,7 +117,7 @@ pub fn load_draft_bytes(
     // satisfy current required fields to receive the correct version error.
     let schema::Object(header): schema::Object<schema::VersionHeader> =
         serde_json::from_slice(bytes).map_err(|e| parse_report(source, "WWC_VERSION", e))?;
-    if header.schema_version != Some(1) {
+    if header.schema_version != Some(crate::CONTENT_SCHEMA_VERSION) {
         return Err(ContentReport::single(
             source,
             "WWC_VERSION",

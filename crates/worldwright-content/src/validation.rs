@@ -45,7 +45,7 @@ pub(crate) fn validate(
     cap: usize,
 ) -> Result<ValidatedWorldContent, ContentReport> {
     let mut report = ContentReport::new(source, cap);
-    if document.schema_version != 1 {
+    if document.schema_version != crate::CONTENT_SCHEMA_VERSION {
         report.push(
             "WWC_VERSION",
             "/schema_version",

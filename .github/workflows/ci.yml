@@ -1,4 +1,4 @@
-name: Rust and P0/P1 acceptance checks
+name: Rust and P0/P1/P2 acceptance checks
 
 'on':
   push:
@@ -51,6 +51,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/dev.ps1 check-native
+      - name: Required P2 source, bundle and fixture drift checks
+        shell: bash
+        run: python scripts/test-p2-contracts.py
       - name: Required browser adapter lifecycle tests
         shell: bash
         run: |

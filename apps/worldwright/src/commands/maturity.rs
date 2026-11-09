@@ -10,16 +10,21 @@ use worldwright_testkit::{Workload, run_runtime_workload};
 pub fn compatibility(json: bool) -> ExitCode {
     let matrix = worldwright_sdk::COMPATIBILITY;
     if json {
-        println!(
-            "{{\"sdk_current\":{},\"sdk_supported\":[1],\"protocol_supported\":[1],\"content_schema_supported\":[1],\"minimum_rust\":\"{}\",\"policy\":\"{}\"}}",
-            matrix.sdk_current,
-            matrix.minimum_rust,
-            worldwright_sdk::COMPATIBILITY_POLICY
-        );
+        println!("{}", serde_json::json!({
+            "schema_version": 1,
+            "sdk_package_version": worldwright_sdk::SDK_PACKAGE_VERSION,
+            "sdk_current": matrix.sdk_current,
+            "sdk_supported": matrix.sdk_supported,
+            "protocol_supported": matrix.protocol_supported,
+            "content_schema_supported": matrix.content_schema_supported,
+            "minimum_rust": matrix.minimum_rust,
+            "policy": worldwright_sdk::COMPATIBILITY_POLICY,
+        }));
     } else {
-        println!("SDK API: {} (supported: 1)", matrix.sdk_current);
-        println!("Protocol: 1");
-        println!("Content schema: 1");
+        println!("SDK package: {}", worldwright_sdk::SDK_PACKAGE_VERSION);
+        println!("SDK API: {} (supported: {:?})", matrix.sdk_current, matrix.sdk_supported);
+        println!("Protocol: {:?}", matrix.protocol_supported);
+        println!("Content schema: {:?}", matrix.content_schema_supported);
         println!("Minimum Rust: {}", matrix.minimum_rust);
         println!("Policy: {}", worldwright_sdk::COMPATIBILITY_POLICY);
     }
@@ -39,7 +44,10 @@ pub fn benchmark(clients: usize, commands_per_client: usize, json: bool) -> Exit
     };
     if json {
         println!(
-            "{{\"clients\":{},\"commands\":{},\"elapsed_ns\":{},\"p50_ns\":{},\"p95_ns\":{},\"p99_ns\":{},\"max_ns\":{},\"delivered_messages\":{}}}",
+            "{{\"schema_version\":2,\"recipe\":\"{}\",\"recipe_version\":{},\"percentile_recipe\":\"{}\",\"clients\":{},\"commands\":{},\"elapsed_ns\":{},\"p50_ns\":{},\"p95_ns\":{},\"p99_ns\":{},\"max_ns\":{},\"delivered_messages\":{}}}",
+            worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE,
+            worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE_VERSION,
+            worldwright_testkit::benchmark::NEAREST_RANK_RECIPE,
             report.clients,
             report.commands,
             report.elapsed.as_nanos(),
@@ -50,6 +58,7 @@ pub fn benchmark(clients: usize, commands_per_client: usize, json: bool) -> Exit
             report.delivered_messages
         );
     } else {
+        println!("Recipe: {} ({})", worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE, worldwright_testkit::benchmark::NEAREST_RANK_RECIPE);
         println!("Clients: {}", report.clients);
         println!("Commands: {}", report.commands);
         println!("Elapsed: {:?}", report.elapsed);

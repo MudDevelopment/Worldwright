@@ -125,21 +125,21 @@ pub(crate) fn bundle_result(out: &Path) -> Result<(), String> {
     }
     result
 }
-fn generated_cargo() -> &'static str {
+fn generated_cargo() -> String {
     r#"[workspace]
-members = ["crates/worldwright-core","crates/worldwright-content","crates/worldwright-sdk","crates/worldwright-expedition","crates/worldwright-testkit"]
+members = [@MEMBERS@]
 resolver = "3"
 [workspace.package]
-version = "0.1.0-dev.0"
+version = "@PACKAGE_VERSION@"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "@MIN_RUST@"
 publish = false
 [workspace.dependencies]
-worldwright-core = { path = "crates/worldwright-core", version = "=0.1.0-dev.0" }
-worldwright-content = { path = "crates/worldwright-content", version = "=0.1.0-dev.0" }
-worldwright-sdk = { path = "crates/worldwright-sdk", version = "=0.1.0-dev.0" }
-worldwright-expedition = { path = "crates/worldwright-expedition", version = "=0.1.0-dev.0" }
-worldwright-testkit = { path = "crates/worldwright-testkit", version = "=0.1.0-dev.0" }
+worldwright-core = { path = "crates/worldwright-core", version = "=@PACKAGE_VERSION@" }
+worldwright-content = { path = "crates/worldwright-content", version = "=@PACKAGE_VERSION@" }
+worldwright-sdk = { path = "crates/worldwright-sdk", version = "=@PACKAGE_VERSION@" }
+worldwright-expedition = { path = "crates/worldwright-expedition", version = "=@PACKAGE_VERSION@" }
+worldwright-testkit = { path = "crates/worldwright-testkit", version = "=@PACKAGE_VERSION@" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"
 serde_path_to_error = "=0.1.20"
@@ -149,9 +149,17 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = "warn"
 "#
+    .replace("@PACKAGE_VERSION@", worldwright_sdk::SDK_PACKAGE_VERSION)
+    .replace("@MIN_RUST@", worldwright_sdk::COMPATIBILITY.minimum_rust)
+    .replace("@MEMBERS@", &CRATES.iter().map(|name| format!("\"crates/{name}\""))
+        .collect::<Vec<_>>().join(","))
 }
-fn private_readme() -> &'static str {
-    "# Private SDK bundle\n\nInternal source delivery; no registry publication or license grant is inferred.\n\nCargo.lock is the reduced buildable SDK workspace lock. SOURCE-Cargo.lock records the full source workspace lock for provenance. Both are included in the manifest.\n\nRust 1.85.1; current and previous 0.x minor compatibility with one-minor deprecation.\n\nIncluded crates: worldwright-core, worldwright-content, worldwright-sdk, worldwright-expedition, worldwright-testkit.\n\nBuild: `cargo check --workspace --all-targets --locked --offline`\nTest: `cargo test --workspace --locked --offline`\n"
+fn private_readme() -> String {
+    "# Private SDK bundle\n\nInternal source delivery; no registry publication or license grant is inferred.\n\nCargo.lock is the reduced buildable SDK workspace lock. SOURCE-Cargo.lock records the full source workspace lock for provenance. Both are included in the manifest.\n\nSDK package @PACKAGE_VERSION@; Rust @MIN_RUST@; policy: @POLICY@. Only actually implemented API versions are advertised; no previous minor is invented.\n\nIncluded crates: @CRATES@.\n\nBuild: `cargo check --workspace --all-targets --locked --offline`\nTest: `cargo test --workspace --locked --offline`\n"
+    .replace("@PACKAGE_VERSION@", worldwright_sdk::SDK_PACKAGE_VERSION)
+    .replace("@MIN_RUST@", worldwright_sdk::COMPATIBILITY.minimum_rust)
+    .replace("@POLICY@", worldwright_sdk::COMPATIBILITY_POLICY)
+    .replace("@CRATES@", &CRATES.join(", "))
 }
 fn validate_parent(out: &Path) -> Result<(), String> {
     let parent = out
@@ -240,7 +248,7 @@ fn manifest_bytes(root: &Path) -> Result<Vec<u8>, String> {
     files.sort_by(|a, b| a.path.cmp(&b.path));
     let m = BundleManifest {
         schema_version: 1,
-        sdk_package_version: env!("CARGO_PKG_VERSION").into(),
+        sdk_package_version: worldwright_sdk::SDK_PACKAGE_VERSION.into(),
         sdk_api_version: worldwright_sdk::COMPATIBILITY.sdk_current,
         min_rust: worldwright_sdk::COMPATIBILITY.minimum_rust.into(),
         compatibility: worldwright_sdk::COMPATIBILITY_POLICY.into(),
@@ -332,7 +340,7 @@ pub(crate) fn verify_result(root: &Path) -> Result<(), String> {
     )
     .map_err(|_| "manifest invalid")?;
     if m.schema_version != 1
-        || m.sdk_package_version != env!("CARGO_PKG_VERSION")
+        || m.sdk_package_version != worldwright_sdk::SDK_PACKAGE_VERSION
         || m.sdk_api_version != worldwright_sdk::COMPATIBILITY.sdk_current
         || m.min_rust != worldwright_sdk::COMPATIBILITY.minimum_rust
         || m.compatibility != worldwright_sdk::COMPATIBILITY_POLICY
@@ -423,6 +431,22 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+    #[test]
+    fn generated_metadata_uses_sdk_authority() {
+        let cargo = generated_cargo();
+        assert!(!cargo.contains('@'));
+        assert!(cargo.contains(&format!("version = \"{}\"", worldwright_sdk::SDK_PACKAGE_VERSION)));
+        assert!(cargo.contains(&format!("rust-version = \"{}\"", worldwright_sdk::COMPATIBILITY.minimum_rust)));
+        for name in CRATES {
+            assert!(cargo.contains(&format!("\"crates/{name}\"")));
+            assert!(cargo.contains(&format!("{name} = {{ path = \"crates/{name}\", version = \"={}\" }}", worldwright_sdk::SDK_PACKAGE_VERSION)));
+        }
+        let readme = private_readme();
+        assert!(!readme.contains('@'));
+        assert!(readme.contains(worldwright_sdk::SDK_PACKAGE_VERSION));
+        assert!(readme.contains(worldwright_sdk::COMPATIBILITY.minimum_rust));
+        assert!(readme.contains(worldwright_sdk::COMPATIBILITY_POLICY));
     }
     #[test]
     fn generated_bundle_is_deterministic_and_verifiable() {

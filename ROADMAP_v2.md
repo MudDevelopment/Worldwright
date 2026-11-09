@@ -77,6 +77,20 @@ explicitly dispatched on the default branch using acceptance-only credentials.
 GitHub.com and Enterprise artifact-action versions are selected separately;
 organizational runner/action/environment approval remains necessary.
 
+## P2 execution track — WWV2-016
+
+The current backlog contains one explicitly P2 entry, WWV2-016. Its full item
+list and evidence live in `docs/verification/p2-implementation-ledger.md`:
+A — shared/versioned percentile recipes; B — SDK/CLI/bundle version drift;
+C — retained downstream API-v1 fixture; D — documentation and native acceptance.
+P0/P1 gates remain open and are not promoted by starting this track.
+
+**Planned measurement change:** the sequential runtime benchmark adopts nearest
+rank as recipe v2; historical v1 measurements retain their original selection
+formula. Beta-250 already uses nearest rank and its workload/thresholds stay fixed.
+SDK lists continue to advertise only real API version 1; no previous minor or ABI
+compatibility claim is invented.
+
 ## Contents
 
 1. [Review scope and evidence](#1-review-scope-and-evidence)

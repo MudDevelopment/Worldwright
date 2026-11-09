@@ -21,5 +21,8 @@ serde.workspace = true
 getrandom.workspace = true
 sha2.workspace = true
 
+[dev-dependencies]
+worldwright-protocol.workspace = true
+
 [lints]
 workspace = true

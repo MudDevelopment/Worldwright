@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sdk-api-v1-reference-consumer",
+  "captured_package_version": "0.1.0-dev.0",
+  "captured_from_released_package": false,
+  "sdk_api_version": 1,
+  "content_schema_version": 1,
+  "source_file": "consumer.rs",
+  "source_sha256_lf": "cdad147072a69bb3937e19c0a5dbc17c3d29c844cac13733caf912bcb7b42e11",
+  "claim": "retained source compatibility against the current SDK, not previous-minor or ABI proof"
+}

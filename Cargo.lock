@@ -3108,6 +3108,7 @@ dependencies = [
  "sha2",
  "worldwright-content",
  "worldwright-expedition",
+ "worldwright-protocol",
  "worldwright-release",
  "worldwright-sdk",
  "worldwright-testkit",

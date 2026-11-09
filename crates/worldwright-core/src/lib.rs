@@ -9,6 +9,7 @@ pub mod effect;
 pub mod error;
 pub mod game;
 pub mod ids;
+pub mod measurement;
 pub mod rule;
 pub mod runtime;
 pub mod scheduler;
