@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-console/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-console/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-load/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-server/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-studio/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright-studio/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/worldwright/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-content/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-content/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-core/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-expedition/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-operations/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-persistence/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-protocol/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-release/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-sdk/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-testkit/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/worldwright-testkit/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
