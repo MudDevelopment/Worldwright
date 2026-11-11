@@ -15,3 +15,28 @@ receipt is invented. Apply explicitly before updated durable startup. Existing
 migration files remain immutable and normal startup only verifies the ledger.
 Review old-binary rollback compatibility before deployment. The new migration
 and timer rollback/reconstruction tests have not been executed here against PostgreSQL.
+
+## R2 migration acceptance
+
+R2 uses the complete current inventory: the original seven plus
+`20261118000400_gameplay_timer_audit.sql`, eight immutable SQL files. The historical
+R2 roadmap's seven-file wording has been corrected, not implemented by deleting
+the timer migration. The isolated R2 migration test builds an old fixture from
+exact original SQL/checksums, upgrades with the real migrator, and rejects excess/
+future, checksum-mismatch and unsuccessful ledger entries. Only disposable
+fixture tables/ledgers are altered; applied source migrations are never edited.
+`r2-verify.py collect` records SHA-384 per SQL file, all ignored test discovery and
+execution counts, and bounded run-specific schema cleanup. A configured test is
+not a passed migration gate. See `docs/R2_ACCEPTANCE.md` for live requirements.
+
+### Observed fresh-apply blocker
+
+The unchanged-source PostgreSQL 16.11 preflight now fails at
+`20261106000100_operational_control.sql:188`: unquoted
+`authorization JSONB NOT NULL` is rejected as a reserved identifier (SQLstate
+42601). The current-run transaction/schema is rolled back/dropped, and the suite
+returns failure even though corrected expiry/proxy cases pass independently.
+No source migration/checksum is edited by the preflight. Confirm applied history
+and obtain an authorized immutable-migration/baseline repair decision before
+repairing this blocker; a later additive migration cannot fix preceding syntax.
+Actual evidence is in `docs/verification/r2-acceptance-ledger.md`.

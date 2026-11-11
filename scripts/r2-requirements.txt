@@ -1,0 +1,6 @@
+# Test/evidence helpers only; not runtime dependencies.
+psycopg[binary]==3.2.3
+PyJWT==2.10.1
+cryptography==50.0.2
+websockets==15.0.1
+playwright==1.56.0

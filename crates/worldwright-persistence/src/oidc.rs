@@ -69,7 +69,9 @@ impl crate::store::PostgresStore {
         if inserted.rows_affected() != 1 {
             return Err(PersistenceError::SessionCollision);
         }
-        tx.commit().await.map_err(PersistenceError::Database)?;
+        // A failed COMMIT acknowledgement is not evidence of rollback. Inspect
+        // uncertain invite issuance; do not claim the token was never persisted.
+        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)?;
         Ok(input.invite)
     }
 
@@ -218,7 +220,8 @@ impl crate::store::PostgresStore {
         .bind(invite_id)
         .execute(&mut *tx)
         .await?;
-        tx.commit().await.map_err(PersistenceError::Database)?;
+        // Never mint a browser cookie from an uncertain durable identity/session commit.
+        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)?;
         Ok(OidcSession {
             principal: SessionPrincipal {
                 account: account_id(account)?,

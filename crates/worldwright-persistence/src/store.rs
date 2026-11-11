@@ -6,7 +6,7 @@ use sqlx::{
 use std::str::FromStr;
 use worldwright_core::ids::WorldId;
 
-static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
+pub(crate) static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
 
 #[derive(Clone)]
 pub struct PostgresStore {

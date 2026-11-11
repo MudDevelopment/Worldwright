@@ -1896,6 +1896,19 @@ mod tests {
     use tokio::sync::watch;
     use worldwright_content::load_bytes;
 
+    #[test]
+    fn r2_gameplay_rng_checkpoint_rewinds_draws_without_constant_fallback() {
+        let mut random = OwnerRandom::Seeded(7);
+        let checkpoint = random;
+        let first = random.next_u64().unwrap();
+        let second = random.next_u64().unwrap();
+        random = checkpoint;
+        assert_eq!(random.next_u64().unwrap(), first);
+        assert_eq!(random.next_u64().unwrap(), second);
+        assert_ne!(first, second);
+        assert!(OwnerRandom::Unavailable.next_u64().is_err());
+    }
+
     fn principal(account: u128, character: u128, name: &str) -> crate::auth::Principal {
         crate::auth::Principal {
             account: worldwright_core::ids::AccountId::from_u128(account).expect("account"),

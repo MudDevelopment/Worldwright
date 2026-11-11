@@ -32,6 +32,7 @@ pub use types::{
 
 #[cfg(test)]
 mod database_tests {
+    mod r2;
     use super::*;
     use sqlx::{
         PgPool,
@@ -88,6 +89,8 @@ mod database_tests {
                 .execute(&admin)
                 .await
                 .expect("create test schema");
+            // The external R2 runner can clean only schemas actually created by this run.
+            eprintln!("WORLDWRIGHT_TEST_SCHEMA_CREATED={schema}");
             let search_path = format!("SET search_path TO \"{schema}\"");
             let pool = PgPoolOptions::new()
                 .max_connections(4)
@@ -156,6 +159,7 @@ mod database_tests {
                 .execute(&self.admin)
                 .await
                 .expect("drop test schema");
+            eprintln!("WORLDWRIGHT_TEST_SCHEMA_DROPPED={}", self.schema);
             self.admin.close().await;
         }
     }
@@ -379,7 +383,18 @@ mod database_tests {
             )
             .await
             .unwrap();
-        sqlx::query("UPDATE worldwright_sessions SET expires_at = clock_timestamp() - INTERVAL '1 second' WHERE token_hash = $1").bind(hash_b.as_slice()).execute(reconstructed.pool_for_test()).await.unwrap();
+        // Keep the immutable lifetime CHECK valid while simulating an expired session.
+        sqlx::query("UPDATE worldwright_sessions SET created_at = statement_timestamp() - INTERVAL '2 seconds', expires_at = statement_timestamp() - INTERVAL '1 second' WHERE token_hash = $1")
+            .bind(hash_b.as_slice())
+            .execute(reconstructed.pool_for_test())
+            .await
+            .unwrap();
+        let expired_fixture: bool = sqlx::query_scalar("SELECT created_at < expires_at AND expires_at < statement_timestamp() AND revoked_at IS NULL FROM worldwright_sessions WHERE token_hash = $1")
+            .bind(hash_b.as_slice())
+            .fetch_one(reconstructed.pool_for_test())
+            .await
+            .unwrap();
+        assert!(expired_fixture);
         assert!(
             reconstructed
                 .session(WorldId::from_u128(1).unwrap(), &hash_b)
@@ -1134,12 +1149,20 @@ mod database_tests {
         let input = |hash| OidcLoginSpec { world, issuer: "https://identity.example.invalid", subject: "provider-subject",
             invite_hash: Some(&invite_hash), session_hash: hash, session_ttl_seconds: SESSION_TTL_SECONDS, max_sessions: MAX_DURABLE_SESSIONS };
         let (first, second) = tokio::join!(db.store.login_oidc(input(&first_hash)), db.store.login_oidc(input(&second_hash)));
-        let first = first.unwrap();
-        let second = second.unwrap();
-        assert_ne!(first.linked, second.linked);
-        assert_eq!(first.principal, second.principal);
+        // The invite-only contract is authoritative: exactly one invited callback
+        // links; an already-linked identity must start a NEW flow without invite.
+        let first = match (first, second) {
+            (Ok(linked), Err(PersistenceError::IdentityConflict))
+            | (Err(PersistenceError::IdentityConflict), Ok(linked)) => linked,
+            _ => panic!("one-shot invite consumption was not enforced"),
+        };
+        assert!(first.linked);
         assert_eq!(first.principal.account, AccountId::from_u128(1).unwrap());
-        assert!(matches!(db.store.login_oidc(input(&first_hash)).await, Err(PersistenceError::SessionCollision)));
+        let login_hash = session_token_hash("oidc-explicit-no-invite-login");
+        let second = db.store.login_oidc(OidcLoginSpec { invite_hash:None, ..input(&login_hash) }).await.unwrap();
+        assert!(!second.linked);
+        assert_eq!(first.principal, second.principal);
+        assert!(matches!(db.store.login_oidc(OidcLoginSpec { invite_hash:None, ..input(&login_hash) }).await, Err(PersistenceError::SessionCollision)));
         let other_hash = session_token_hash("oidc-other-issuer");
         let other = OidcLoginSpec { issuer: "https://other.example.invalid", session_hash: &other_hash, ..input(&other_hash) };
         assert!(db.store.login_oidc(other).await.is_err());
@@ -1166,7 +1189,7 @@ mod database_tests {
         runtime.revision = 1;
         db.store.commit_gameplay(gameplay_mutation(lease, digest, &expired,
             GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO })).await.unwrap();
-        sqlx::query("UPDATE worldwright_sessions SET created_at=clock_timestamp()-INTERVAL '2 days', expires_at=clock_timestamp()-INTERVAL '1 day' WHERE token_hash=$1")
+        sqlx::query("UPDATE worldwright_sessions SET created_at=statement_timestamp()-INTERVAL '2 days', expires_at=statement_timestamp()-INTERVAL '1 day' WHERE token_hash=$1")
             .bind(expired.token_hash.as_slice()).execute(db.store.pool_for_test()).await.unwrap();
         assert_eq!(db.store.prune_expired_player_sessions(1).await.unwrap(), 1);
         assert_eq!(db.store.prune_expired_player_sessions(1).await.unwrap(), 0);

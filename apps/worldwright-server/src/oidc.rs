@@ -50,8 +50,17 @@ impl OidcService {
             .map_err(|_| crate::ServerError::Configuration("OIDC issuer is invalid"))?;
         let http = reqwest::ClientBuilder::new()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(10))
-            .build()
+            .timeout(Duration::from_secs(10));
+        // Fixture trust exists only in the test binary; never disable TLS verification.
+        #[cfg(test)]
+        let http = if let Ok(path) = std::env::var("WORLDWRIGHT_R2_CA") {
+            let pem = std::fs::read(path)
+                .map_err(|_| crate::ServerError::startup("test CA unavailable"))?;
+            let certificate = reqwest::Certificate::from_pem(&pem)
+                .map_err(|_| crate::ServerError::startup("test CA invalid"))?;
+            http.no_proxy().add_root_certificate(certificate)
+        } else { http };
+        let http = http.build()
             .map_err(|_| crate::ServerError::startup("OIDC HTTP client failed"))?;
         let metadata = CoreProviderMetadata::discover_async(issuer, &http)
             .await
@@ -66,6 +75,25 @@ impl OidcService {
             pending: Arc::new(Mutex::new(HashMap::new())),
             http,
         })
+    }
+    #[cfg(test)]
+    pub(crate) fn for_r2_test(config: OidcConfig, metadata: CoreProviderMetadata) -> Self {
+        Self { config, metadata,
+            auth: AuthService::from_records_for_test(vec![], Duration::from_secs(600)),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+            http: reqwest::ClientBuilder::new().no_proxy().redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_millis(50)).build().unwrap() }
+    }
+    #[cfg(test)]
+    pub(crate) fn assert_r2_pending(&self, state: &str, nonce: &str, challenge: &str) {
+        let pending = self.pending.lock().unwrap();
+        let record = pending.get(state).unwrap();
+        assert_eq!(record.nonce.secret(), nonce);
+        assert_eq!(PkceCodeChallenge::from_code_verifier_sha256(&record.verifier).as_str(), challenge);
+    }
+    #[cfg(test)]
+    pub(crate) fn expire_r2_pending(&self, state: &str) {
+        self.pending.lock().unwrap().get_mut(state).unwrap().expires = Instant::now();
     }
     pub fn start(&self, invite: Option<String>) -> Result<OidcStart, AuthError> {
         let invite_hash = invite

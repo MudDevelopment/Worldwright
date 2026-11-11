@@ -370,7 +370,7 @@ Security review begins in R0; R6 is its final integrated evidence track, not per
 
 **Owner:** Persistence/identity lead. **Prerequisite:** R0; an isolated disposable test database.
 
-1. Apply all seven migrations in order and verify fresh/upgrade/excess/future/checksum-mismatch cases; never edit an already applied migration to make tests pass.
+1. Apply the complete current migration inventory in order (original seven plus the additive timer-audit migration: eight as of November 10, 2026) and verify fresh/upgrade/excess/future/checksum-mismatch/failed-ledger cases; never edit an already applied migration to make tests pass.
 2. Run the existing ignored database suite with explicit credentials, database-name guard and schema cleanup.
 3. Add dedicated reference/expedition game-state tests: counters, rooms, schedules, versions, initial state, replay/conflicts, concurrent writers and restart.
 4. Add process-kill and commit-uncertainty cases; preserve receipts, required audit and independent entitlement uniqueness.

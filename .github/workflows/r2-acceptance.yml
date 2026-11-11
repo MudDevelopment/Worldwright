@@ -1,0 +1,103 @@
+name: R2 live PostgreSQL and controlled identity evidence
+
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-r2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: worldwright_test_r2
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-r2-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d worldwright_test_r2"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      WORLDWRIGHT_TEST_DATABASE_URL: postgresql://postgres:disposable-r2-only@127.0.0.1:5432/worldwright_test_r2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Install pinned evidence helpers and bootstrap native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/r2-venv"
+          "$RUNNER_TEMP/r2-venv/bin/python" -m pip install -r scripts/r2-requirements.txt -r scripts/r1-requirements.txt -r deploy/helm/worldwright/tests/requirements.txt
+          echo "$RUNNER_TEMP/r2-venv/bin" >> "$GITHUB_PATH"
+          bash scripts/dev.sh bootstrap
+      - name: Harness regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/test-r2.py
+          python scripts/test-r2-live.py
+      - name: Unchanged PostgreSQL migrations and expiry fixture SQL preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/r2-sql-preflight"
+          WORLDWRIGHT_R2_SQL_REPORT="$RUNNER_TEMP/r2-sql-preflight/sql.json" python scripts/test-r2-expiry-sql.py 2>&1 | tee "$RUNNER_TEMP/r2-sql-preflight/sql.log"
+      - name: Same-source complete R0 prerequisite
+        shell: bash
+        run: python scripts/r0-verify.py --output "$RUNNER_TEMP/r2-r0-evidence"
+      - name: Live database, real process faults and controlled HTTPS browser OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          browser=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          test -n "$browser"
+          python scripts/r2-verify.py collect --r0-report "$RUNNER_TEMP/r2-r0-evidence/r0-report.json" --browser-executable "$browser" --output "$RUNNER_TEMP/r2-evidence"
+      - name: Retain private evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r2-ubuntu-live-evidence
+          path: |
+            ${{ runner.temp }}/r2-sql-preflight/*.json
+            ${{ runner.temp }}/r2-sql-preflight/*.log
+            ${{ runner.temp }}/r2-r0-evidence/*.json
+            ${{ runner.temp }}/r2-r0-evidence/*.log
+            ${{ runner.temp }}/r2-evidence/*.json
+            ${{ runner.temp }}/r2-evidence/*.log
+            ${{ runner.temp }}/r2-evidence/process/*.json
+            ${{ runner.temp }}/r2-evidence/process/*.log
+            ${{ runner.temp }}/r2-evidence/controlled/*.json
+            ${{ runner.temp }}/r2-evidence/controlled/*.log
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain private evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r2-ubuntu-live-evidence
+          path: |
+            ${{ runner.temp }}/r2-sql-preflight/*.json
+            ${{ runner.temp }}/r2-sql-preflight/*.log
+            ${{ runner.temp }}/r2-r0-evidence/*.json
+            ${{ runner.temp }}/r2-r0-evidence/*.log
+            ${{ runner.temp }}/r2-evidence/*.json
+            ${{ runner.temp }}/r2-evidence/*.log
+            ${{ runner.temp }}/r2-evidence/process/*.json
+            ${{ runner.temp }}/r2-evidence/process/*.log
+            ${{ runner.temp }}/r2-evidence/controlled/*.json
+            ${{ runner.temp }}/r2-evidence/controlled/*.log
+          retention-days: 14
+          if-no-files-found: error
+# This job does NOT use production credentials, approve a provider, publish a
+# package, or close R2. Retained native Windows R0 evidence and independently
+# authenticated approved-provider adoption remain mandatory for closure.

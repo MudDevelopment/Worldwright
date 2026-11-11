@@ -560,3 +560,35 @@ Schema/checker/mock tests are not live authentication, database or cluster
 security evidence. New jobs must be required by maintainers' branch protection;
 workflow configuration does not itself adopt that policy. See docs/P0_ACCEPTANCE.md
 and docs/verification/p0-implementation-ledger.md for unclosed execution gates.
+
+## R2 test isolation and provider adoption
+
+R2 fixtures may run only against a loopback disposable `worldwright_test` database.
+The fault proxy deliberately uses an unencrypted local test hop to inspect
+PostgreSQL COMMIT frames; this is not a deployment TLS exception. Only uniquely
+created current-run/current-role schemas are eligible for fallback cleanup, and
+a leaked schema fails acceptance even when cleanup succeeds. Existing schemas,
+identity audit, business uniqueness and receipts are not erased to obtain a pass.
+
+The controlled HTTPS provider uses ephemeral keys and a test-only CA; Rust TLS
+verification stays enabled with that explicit root. Fixture-browser self-signed
+certificate acceptance is confined to the controlled harness. The cfg(test) CA
+hook cannot affect release binaries. The approved-provider observer keeps normal
+TLS validation and never captures credentials, tokens, authorization URLs or
+browser storage. Provider login/MFA occurs in the operator's browser, not chat.
+Do not upload private raw child logs until they have undergone the organization's
+sensitivity review; preserve evidence in an approved private location.
+
+Approved-provider adoption is not inferred from a nonempty reviewer string.
+Final R2 closure verifies an Ed25519 signature covering the complete provider
+report, source/lock/artifact/log digests, case matrix and adoption policy,
+deployment and expiry. The public key must be independently authorized; a key
+bundled by the report submitter is not a trust decision. This tooling neither
+creates owner keys nor signs/grants approvals. Credential retention, actual
+provider ownership and clock health remain owner-reviewed requirements.
+
+The gameplay xorshift PRNG is not a cryptographic random generator or serialized
+restart stream. Its seed uses system entropy, entropy failure is explicit, and
+rejected/replayed candidates rewind the checkpoint. Durable receipts/counters
+preserve committed outcomes. No speculative success/cookie may be returned from
+an uncertain COMMIT; reconstruct and inspect before retrying.

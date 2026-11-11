@@ -1,0 +1,42 @@
+Scope: current selected EWW readback; helper tests are not native Rust/SQLx or provider-adoption acceptance.
+
+scripts/test-r2.py: exit 0
+- test_absent_collection_phases_refuse_before_external_inputs: passed
+- test_changed_or_missing_log_fails: passed
+- test_missing_case_fails: passed
+- test_missing_cleanup_or_child_log_fails: passed
+- test_null_artifact_fails: passed
+- test_sample_provider_domain_is_not_approval: passed
+- test_synthetic_complete_shape_only: passed
+- test_wrong_source_fails: passed
+- test_expiry_python_fixtures_preserve_immutable_lifetime: passed
+- test_expiry_rust_fixtures_and_checks_are_retained: passed
+- test_signed_rsa_vectors_and_rotation: passed
+- test_source_case_inventory_not_native_execution: passed
+Observed: 12 tests, OK.
+
+scripts/test-r2-live.py: exit 0
+- test_signature_payload_expiry_and_wrong_key: passed
+- test_actual_tls_metadata_and_no_private_jwks: passed
+- test_bad_verifier_rejected_not_reusable: passed
+- test_exact_s256_and_one_shot_code: passed
+- test_outage: passed
+- test_rotation_and_signed_negative_modes: passed
+- test_all_fault_boundaries_on_synthetic_pg_sockets: passed
+- test_commit_packet_scope_and_bounds: passed
+Observed: 8 tests, OK. TLS is real local fixture TLS; this proxy unit uses synthetic PostgreSQL frames. Actual PostgreSQL proxy cases are separate in r2-local-sql-observations.log.
+
+node scripts/test-expedition-browser.cjs: exit 0
+PASS: cookie resume/expiry/unavailability/logout race, actions/status, reload/new-tab IDs, reconnect, stale streams/timers, no automatic replay, logout
+
+Rust grammar: 9 current readback source files passed tree-sitter parsing; NOT compilation or formatting.
+Python syntax: 11 current readback scripts passed AST parsing.
+Workflow YAML: Ubuntu 24.04 baseline, read-only permissions, SQL preflight before R0, both artifact hosting branches retain SQL JSON/log, no duplicate paths: passed.
+
+Native cargo fmt/check/clippy/test: all blocked because native cargo executable is absent.
+R0 prerequisite attempt: exit 1; missing required R0 tool: cargo.
+R2 collection attempt: exit 1; required native Cargo/rustc missing; no native phases executed.
+Current-owner process driver: exit 1; real compiled fixture executable required; no cases executed.
+Current-owner controlled OIDC driver: exit 1; real compiled fixture executable required; no cases executed.
+Closure attempt: exit 1; R2 NOT CLOSED: live collection not accepted.
+Actual approved provider/deployment/account and independently trusted owner adoption/key: not supplied; no actual provider login or adoption claimed.

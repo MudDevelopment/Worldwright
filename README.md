@@ -720,3 +720,36 @@ preview integration, and authenticated publication requests. It is not
 production ready. See [Studio v1](docs/STUDIO_V1.md) and
 [M7 verification](docs/verification/milestone-7-report.md). M8 is implemented
 with Windows-local evidence and explicit durability/capacity limits.
+
+## R2 executable acceptance tooling
+
+[R2 acceptance](docs/R2_ACCEPTANCE.md) now provides live PostgreSQL collection,
+real subprocess/COMMIT-acknowledgement fault exercises, a controlled HTTPS OIDC
+provider/browser harness, an actual-provider browser observer and independently
+signed owner-adoption verification. `scripts/r2-verify.py collect` requires a
+passed same-source R0 report, records the production server and separate test
+fixture hashes, runs every discovered ignored persistence test, and fails on
+missing tooling, required skips, leaked schemas or failed exercises. Use a new
+private evidence directory outside the checkout and a loopback disposable
+`worldwright_test` database; never production credentials.
+
+The configured `r2-acceptance.yml` workflow does not itself constitute live
+acceptance or approve a provider. The observer produces `observed_not_adopted`;
+full R2 closure also requires retained current Windows R0 evidence and a complete
+real-provider matrix signed by an independently trusted owner key. The current
+migration inventory is eight immutable SQL files, not the historical seven.
+OIDC links only an invited, pre-seeded account on first login; later logins start
+without an invite. It does not create accounts or silently fall back to password
+login. Multiplayer timers run independently; terminal turns remain command-driven.
+See the [R2 ledger](docs/verification/r2-acceptance-ledger.md) for observed results
+and open prerequisites. No R2 release acceptance is claimed by these source edits.
+
+R2 expiry-fixture follow-through: `scripts/test-r2-expiry-sql.py` extracts and
+executes the actual corrected fixture SQL against an explicitly supplied loopback
+`worldwright_test` database, tests real COMMIT fault boundaries, and separately
+requires all eight unchanged source migrations to apply. CI retains its private
+preflight report/log; it is not a substitute for native Rust/SQLx acceptance.
+The current full-migration preflight fails at
+`20261106000100_operational_control.sql:188` (unquoted reserved `authorization`).
+The corrected expiry cases pass; fresh-database/R2 acceptance remains blocked.
+See the R2 ledger for exact evidence and the immutable-migration repair boundary.

@@ -1,7 +1,7 @@
 use crate::{PersistenceError, types::*};
 use serde_json::{Value, json};
 use sqlx::{FromRow, Postgres, Transaction};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Instant};
 use worldwright_core::{
     ids::{DefinitionId, WorldId},
     runtime::{CounterState, DurableWorldState, MAX_COUNTER_VALUE, ScheduledCounterState},
@@ -111,7 +111,7 @@ impl crate::store::PostgresStore {
         let scheduled_rows: Vec<(i16, uuid::Uuid, String, i64, i64)> = sqlx::query_as(
             "SELECT schedule_ordinal, character_id, counter_key, delta, \
              GREATEST(0::NUMERIC, CEIL(EXTRACT(EPOCH FROM \
-             (due_at - clock_timestamp())) * 1000))::BIGINT AS remaining_millis \
+             (due_at - statement_timestamp())) * 1000))::BIGINT AS remaining_millis \
              FROM worldwright_scheduled_counter_adjustments WHERE world_id = $1 \
              ORDER BY due_at, schedule_ordinal LIMIT 129",
         )
@@ -166,6 +166,7 @@ impl crate::store::PostgresStore {
         game: GameContract,
         state: GameplayState<'_>,
     ) -> Result<u64, PersistenceError> {
+        let observed_at = Instant::now();
         validate_gameplay_state(lease.world(), state)?;
         let mut tx = self.pool().begin().await?;
         let locked = lock_game_world(&mut tx, lease).await?;
@@ -183,7 +184,7 @@ impl crate::store::PostgresStore {
         if counter_count != 0 || schedule_count != 0 {
             return Err(PersistenceError::InvalidData);
         }
-        replace_game_state(&mut tx, lease.world(), state).await?;
+        replace_game_state(&mut tx, lease.world(), state, observed_at).await?;
         let changed = sqlx::query(
             "UPDATE worldwright_worlds SET game_state_version = 1, runtime_revision = $2, \
              updated_at = clock_timestamp() WHERE world_id = $1 AND game_state_version = 0",
@@ -212,13 +213,14 @@ impl crate::store::PostgresStore {
         expected_state_version: u64,
         state: GameplayState<'_>,
     ) -> Result<u64, PersistenceError> {
+        let observed_at = Instant::now();
         validate_gameplay_state(lease.world(), state)?;
         let mut tx = self.pool().begin().await?;
         let locked = lock_game_world(&mut tx, lease).await?;
         validate_locked_world(&locked, expected_release, game, Some(expected_state_version))?;
         lock_exact_characters(&mut tx, lease.world(), state.rooms).await?;
         let next = expected_state_version.checked_add(1).ok_or(PersistenceError::CounterExhausted)?;
-        replace_game_state(&mut tx, lease.world(), state).await?;
+        replace_game_state(&mut tx, lease.world(), state, observed_at).await?;
         let changed = sqlx::query(
             "UPDATE worldwright_worlds SET game_state_version=$3, runtime_revision=$4, \
              updated_at=clock_timestamp() WHERE world_id=$1 AND game_state_version=$2",
@@ -249,6 +251,7 @@ impl crate::store::PostgresStore {
         &self,
         input: GameplayMutation<'_>,
     ) -> Result<GameplayCommit, PersistenceError> {
+        let observed_at = Instant::now();
         validate_request_id(input.request_id)?;
         if input.lease.world() != input.actor.world
             || input.intent.is_empty()
@@ -291,7 +294,7 @@ impl crate::store::PostgresStore {
             .expected_state_version
             .checked_add(1)
             .ok_or(PersistenceError::CounterExhausted)?;
-        replace_game_state(&mut tx, input.actor.world, input.state).await?;
+        replace_game_state(&mut tx, input.actor.world, input.state, observed_at).await?;
         let changed = sqlx::query(
             "UPDATE worldwright_worlds SET game_state_version = $3, runtime_revision = $4, \
              updated_at = clock_timestamp() WHERE world_id = $1 AND game_state_version = $2",
@@ -446,7 +449,17 @@ async fn replace_game_state(
     tx: &mut Transaction<'_, Postgres>,
     world: WorldId,
     state: GameplayState<'_>,
+    observed_at: Instant,
 ) -> Result<(), PersistenceError> {
+    // One database-wall-clock anchor for all deadlines. Subtract time spent in
+    // validation/pool/locks so persistence latency does not extend recovery.
+    let (sampled_wall_ms,): (i64,) = sqlx::query_as(
+        "SELECT FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT",
+    ).fetch_one(&mut **tx).await?;
+    let elapsed_ms = i64::try_from(observed_at.elapsed().as_millis())
+        .map_err(|_| PersistenceError::CounterExhausted)?;
+    let anchor_ms = sampled_wall_ms.checked_sub(elapsed_ms)
+        .ok_or(PersistenceError::CounterExhausted)?;
     for room in state.rooms {
         sqlx::query(
             "UPDATE worldwright_characters SET room_definition = $3, version = version + 1, \
@@ -480,22 +493,23 @@ async fn replace_game_state(
         .execute(&mut **tx)
         .await?;
     for (ordinal, scheduled) in state.runtime.scheduled.iter().enumerate() {
-        let remaining = scheduled
-            .at
-            .as_millis()
-            .saturating_sub(state.now.as_millis());
+        let offset_ms = i64_from_u64(scheduled.at.as_millis(), false)?
+            .checked_sub(i64_from_u64(state.now.as_millis(), false)?)
+            .ok_or(PersistenceError::CounterExhausted)?;
+        let due_ms = anchor_ms.checked_add(offset_ms)
+            .ok_or(PersistenceError::CounterExhausted)?;
         sqlx::query(
             "INSERT INTO worldwright_scheduled_counter_adjustments \
              (world_id, schedule_ordinal, character_id, counter_key, delta, due_at) \
              VALUES ($1, $2, $3, $4, $5, \
-              clock_timestamp() + ($6::DOUBLE PRECISION * INTERVAL '1 millisecond'))",
+              to_timestamp($6::DOUBLE PRECISION / 1000.0))",
         )
         .bind(uuid_of(world))
         .bind(i16::try_from(ordinal).map_err(|_| PersistenceError::InvalidData)?)
         .bind(uuid_of(scheduled.character))
         .bind(scheduled.key.as_str())
         .bind(scheduled.delta)
-        .bind(i64_from_u64(remaining, false)?)
+        .bind(due_ms)
         .execute(&mut **tx)
         .await?;
     }

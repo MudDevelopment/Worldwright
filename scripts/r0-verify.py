@@ -135,7 +135,7 @@ def main() -> int:
         run('build', ['cargo', 'build', *common])
         suffix = '.exe' if os.name == 'nt' else ''
         report['binaries'] = {}
-        for name in ('worldwright', 'worldwright-studio'):
+        for name in ('worldwright', 'worldwright-studio', 'worldwright-server'):
             binary = target / host / 'debug' / (name + suffix)
             run(name + '-version', [str(binary), '--version'])
             report['binaries'][name] = {'path': str(binary), 'sha256': digest(binary)}

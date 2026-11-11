@@ -1249,3 +1249,54 @@ bytes, and reuses the existing M5 preview command. Publication requests carry
 the exact artifact and `StudioReviewContext` through the authenticated M6
 server; submission is not approval or activation. Live PostgreSQL/operator
 publication and manual browser accessibility evidence remain pending.
+
+## R2 correctness and evidence composition — November 10, 2026
+
+R2 extends the existing store/owner contracts, not the wire/game/config schemas.
+OIDC invite and login transaction COMMIT acknowledgement failures are classified
+as `UnknownOutcome`; uncertain identity/session commits never mint a successful
+browser cookie. One invited callback links a pre-seeded account; reuse conflicts,
+and subsequent login is a separate no-invite flow. Provider issuer/subject is the
+identity key, not an untrusted display name or email.
+
+Durable deadlines use one database-wall-clock anchor per candidate, subtracting
+validation/pool/lock latency measured with `Instant`. A stable statement timestamp
+reconstructs all remaining deadlines; ordering is deadline then stored ordinal.
+Due work is clamped to zero across downtime and committed by the independent
+100-ms owner loop with timer audit and writer/release/state-version fences. The
+clock remains subject to real database wall-clock changes; no arbitrary-clock
+immunity is promised. Gameplay RNG checkpoint rewind protects rejected/replayed
+candidates. The PRNG stream is deliberately process-local/reseeded on restart;
+committed outcomes, not the future stream, are durable.
+
+`r2_fixture_process` is a cfg(test)-only real server subprocess with an isolated
+schema and optional fixture CA. `r2-wire.py` implements actual protocol-frame
+COMMIT gates and acknowledgement loss; `r2-provider.py` implements local HTTPS
+metadata, JWKS, signed ID tokens and strict S256/code/client/redirect binding.
+`r2-live.py` runs actual owner/store/browser flows and records cleanup and child
+log digests. They are executable integration drivers, not validators pretending
+to execute external evidence. Test binary identity is separate from the R0
+production server artifact identity; no fixture trust/fault control enters a
+normal production binary.
+
+`r2-verify.py` composes native tests, real fault/provider runs, immutable migration
+inventory and same-source R0 provenance. Ordinary collection stays unclosed.
+`r2-approved.py` observes actual HTTPS browser attachment without handling real
+credentials; it cannot grant adoption or claim unexecuted provider cases.
+`r2-approval.py` verifies an owner's whole-report Ed25519 signature using an
+independently provisioned trust key, policy/deployment reference and expiry.
+Final closure requires actual Ubuntu evidence plus current Windows R0 and the
+complete adopted provider matrix. See `docs/R2_ACCEPTANCE.md` for commands and
+`docs/verification/r2-acceptance-ledger.md` for observed versus open evidence.
+
+R2 expiry fixtures now preserve the immutable session/invite lifetime constraint:
+`created_at < expires_at < statement_timestamp()`. The Python session exercise
+is scoped to Alice's unrevoked rows; the native store regression separately checks
+expired identity/session rejection and the old invalid setup's CHECK error 23514.
+A source-extracted SQL regression distinguishes auth-schema/proxy execution from
+a separate complete migration-inventory gate. Real PostgreSQL exposed a fresh
+migration syntax defect in the unquoted `authorization` column of the operational
+migration. This is a failed gate, not permission to alter an applied migration or
+checksum. The repair needs authoritative applied history/baseline approval; the
+ledger records it. No new public/game/config protocol or schema version is implied
+by correcting test fixtures or adding this fail-closed preflight.

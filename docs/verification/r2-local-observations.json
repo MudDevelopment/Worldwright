@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "kind": "local-r2-followthrough-observations",
+  "scope": "Current selected EWW readback executed in the sandbox; not a complete checkout or native Rust/SQLx/current-owner/provider-adoption acceptance report",
+  "full_r2_closed": false,
+  "distribution": {"id": "ubuntu", "version": "24.04", "description": "Ubuntu 24.04.5 LTS"},
+  "helpers": {"test-r2.py": {"exit_code": 0, "tests_passed": 12}, "test-r2-live.py": {"exit_code": 0, "tests_passed": 8}, "test-expedition-browser.cjs": {"exit_code": 0, "status": "passed"}},
+  "rust_grammar": {"status": "passed", "files_checked": 9, "not_compilation_or_formatting": true},
+  "python_syntax": {"status": "passed", "scripts_checked": 11},
+  "workflow_checks": {"status": "passed", "scope": "YAML, Ubuntu baseline, read-only permissions, SQL preflight precedes R0, both hosting surfaces retain SQL JSON/log, no duplicate paths; no hosted run observed"},
+  "supplementary_sql": {
+    "status": "failed",
+    "exit_code": 1,
+    "database": "worldwright_test_r2_local",
+    "role": "sandbox",
+    "engine": "PostgreSQL 16.11 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+    "binary_provenance": "Test-only npm package @embedded-postgres/linux-x64@16.11.0-beta.16; non-root, private data directory, loopback only; not deployment adoption",
+    "tests_run": 9,
+    "tests_passed": 8,
+    "errors": 1,
+    "skipped": 0,
+    "passed_scope": "Actual corrected Python/Rust expiry fixture SQL, CHECK rejection of old invalid setup, scoped expiry/revocation preservation, authentication prerequisite SQL, real PostgreSQL pre-forward/post-COMMIT/lost-ack proxy boundaries",
+    "failure": {"test": "FullMigrationTests.test_complete_current_migrations_apply_unchanged", "migration": "20261106000100_operational_control.sql", "line": 188, "sqlstate": "42601", "detail": "authorization JSONB NOT NULL is an unquoted reserved identifier"},
+    "log": "r2-local-sql-observations.log",
+    "log_sha256": "f1a80d93ab5466c2824cf98cca4403f6deb60b1ebc1c051dcaab026d79b84b03",
+    "leftover_test_schemas": [],
+    "postgres_stopped_after_checks": true,
+    "not_rust_sqlx_owner_acceptance": true
+  },
+  "native_commands": {"cargo fmt --all -- --check": "blocked: cargo absent", "cargo check --all-targets": "blocked: cargo absent", "cargo clippy --all-targets --all-features -- -D warnings": "blocked: cargo absent", "cargo test": "blocked: cargo absent"},
+  "gate_attempts": {
+    "R0": {"exit_code": 1, "status": "failed", "native_phases_executed": 0, "failure": "missing required R0 tool: cargo"},
+    "R2_collection": {"exit_code": 1, "status": "failed", "native_phases_executed": 0, "failure": "required native Cargo/rustc missing"},
+    "current_owner_process": {"exit_code": 1, "status": "failed", "cases_executed": 0, "failure": "real compiled fixture executable required"},
+    "current_owner_controlled_provider": {"exit_code": 1, "status": "failed", "cases_executed": 0, "failure": "real compiled fixture executable required"},
+    "closure": {"exit_code": 1, "status": "refused", "failure": "R2 NOT CLOSED: live collection not accepted"}
+  },
+  "approved_provider": {"status": "blocked", "reason": "No actual approved issuer/deployment/account or independently authorized owner adoption/key supplied; no actual provider login claimed"},
+  "migration_repair": {"status": "blocked", "reason": "Authoritative applied history and approved immutable-migration/baseline repair decision absent; no SQL source/checksum rewritten or preprocessed"},
+  "readback_sha256": {
+    "scripts/r2-live.py": "816798b83f0ecb401f79fe33e978ef3b71c46b3adaea5c2b9c669a85916fe958",
+    "scripts/r2-verify.py": "c18f3d87e70f0a8a16411a8d6fc918c5ea529d7c8a6977c4365baca8104fd744",
+    "scripts/test-r2-expiry-sql.py": "71f619c07d74ecec096005669c2956f05043d177f4a6205309579b8abaff446e",
+    "scripts/test-r2.py": "5e1246c92c9b4c8d7e7672aa1d2e2df0004f08241ad59ea3bfe26863b8bf4b97",
+    "crates/worldwright-persistence/src/lib.rs": "c951da53693edbf50f83d335433c1173825bff2b1cb17e04fd9f330c2efb2dee",
+    "crates/worldwright-persistence/src/database_tests/r2.rs": "a955fd6998ab1f490529fa95b1b65b7cf0e51d2b949e6f07b92415d5b54cdf71",
+    ".github/workflows/r2-acceptance.yml": "a8b6c5a97ee4e02933519d0526a0f8e2d6488d8f09a04cf0074256e78048c158"
+  },
+  "immutable_migration_sha384": {
+    "20261020000100_durable_gameplay.sql": "31b8b74a47c7c03a44ebd1d7cad997adb4323df4ad2dd1400a7b3bf9f8730daba6b5289b1625cf8eefbe98ff98b88f5a",
+    "20261102000100_content_release.sql": "1ed595a96f83f3e3ddc82072b279a843ea46529722afe0787a92c8c56c9cd7308c6286d622af239684e0c4aa98955dec",
+    "20261106000100_operational_control.sql": "6ddb32cf0e6f68bb1c0de353b58400896a90c664d0afc6c4401995fb2a8cf221d75f099c9ee16f4f794a394691e0998a",
+    "20261110000100_studio_workflow.sql": "7b288bc3a5868c141460689053b9c6f6edb43aafe824d24999c5f1c2b7bde7719adc2dd040818dcae07937aa77d59979",
+    "20261118000100_game_contracts.sql": "1fe6ef5f1ee716914ece1f78a836c92acfe0ddc92f74cf8b1d1efa1fde780bcf0cc9868de96376c1bd47c4c52a6d1bec",
+    "20261118000200_durable_game_state.sql": "cc70be5657c800c24d6725f88687e2db6b19baeedffba9bd19f904ee8e5fe0850143b5d5ee4aed5b7ee68dc05f294beb",
+    "20261118000300_oidc_identity.sql": "5326e6942b64f24b8a964c0b8e480227275902b2ad5097b0152a191dd3a3645ca28e79992286b3706dbf49da4f0450c7",
+    "20261118000400_gameplay_timer_audit.sql": "9f7ec4ee77ed2f3b12e94ddfc42e68abbaa0df1c047fca81bc56f2392709e21ad31c650085bc19a0f490c9af470217f8"
+  }
+}
