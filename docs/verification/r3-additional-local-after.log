@@ -1,0 +1,14 @@
+test_cli_help_has_no_side_effects (__main__.LocalGuards.test_cli_help_has_no_side_effects) ... ok
+test_collector_and_closure_exit_semantics_agree (__main__.LocalGuards.test_collector_and_closure_exit_semantics_agree) ... ok
+test_fixture_result_cannot_replace_actual_role_proof (__main__.LocalGuards.test_fixture_result_cannot_replace_actual_role_proof) ... ok
+test_oci_index_scope_and_exact_bytes (__main__.LocalGuards.test_oci_index_scope_and_exact_bytes) ... ok
+test_plan_exact_integer_version (__main__.LocalGuards.test_plan_exact_integer_version) ... ok
+test_plan_missing_unknown_and_unsafe_scope (__main__.LocalGuards.test_plan_missing_unknown_and_unsafe_scope) ... ok
+test_report_bounds_directory_and_bad_json (__main__.LocalGuards.test_report_bounds_directory_and_bad_json) ... ok
+test_report_leaf_symlink_refused (__main__.LocalGuards.test_report_leaf_symlink_refused) ... ok
+test_reviewers_require_nonblank_bounded_text (__main__.LocalGuards.test_reviewers_require_nonblank_bounded_text) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.539s
+
+OK

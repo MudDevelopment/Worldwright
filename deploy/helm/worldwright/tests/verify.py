@@ -7,12 +7,13 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import ipaddress
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 import yaml
-from jsonschema import Draft7Validator
+from jsonschema import Draft7Validator, ValidationError
 
 OIDC = {
     "oidc.enabled": True,
@@ -46,6 +47,19 @@ def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
 
+def validate_values(values: dict, chart: Path) -> None:
+    schema = json.loads((chart / 'values.schema.json').read_text())
+    Draft7Validator(schema).validate(values)
+    require(values['postgres']['existingSecret'] != values['postgres']['migrationSecret'], 'postgres migrationSecret must be distinct')
+    require(values['publicOrigin'] == 'https://' + values['ingress']['host'], 'publicOrigin must match ingress host')
+    policy = values['networkPolicy']
+    network = ipaddress.ip_network(policy['postgresCidr'], strict=True)
+    require(network.is_private and not network.is_loopback and network.prefixlen > 0, 'postgresCidr must be a private canonical non-loopback network')
+    for cidr in policy['httpsEgressCidrs']:
+        network = ipaddress.ip_network(cidr, strict=True)
+        require(network.prefixlen > 0 and not network.is_loopback and not network.is_unspecified, 'HTTPS egress CIDR must be bounded, canonical and non-loopback')
+
+
 def schema_matrix(chart: Path) -> int:
     schema = json.loads((chart / "values.schema.json").read_text())
     Draft7Validator.check_schema(schema)
@@ -57,7 +71,14 @@ def schema_matrix(chart: Path) -> int:
     def check(value: dict, expected: bool, label: str) -> None:
         nonlocal count
         errors = list(validator.iter_errors(value))
-        require(bool(errors) != expected, f"schema {label}: expected valid={expected}; {[e.message for e in errors]}")
+        try:
+            validate_values(value, chart)
+            valid = True
+        except (AssertionError, ValueError, KeyError, TypeError, ValidationError) as error:
+            valid = False
+            if not errors:
+                errors = [error]
+        require(valid == expected, f"schema {label}: expected valid={expected}; {[str(e) for e in errors]}")
         count += 1
     check(defaults, False, "unconfigured deployment still fails closed")
     for game in ("reference", "expedition"):
@@ -88,7 +109,9 @@ def schema_matrix(chart: Path) -> int:
         ({"game": "unknown"}, "unknown game"),
     ]:
         check(apply(values, overrides), False, label)
-    check(apply(values, {"image.digest": "", "image.allowMutableTag": True, "image.tag": "acceptance"}), True, "explicit mutable image opt-in")
+    check(apply(values, {"image.digest": "", "image.allowMutableTag": True, "image.tag": "acceptance"}), False, "format 2 refuses mutable image opt-in")
+    for override in ({'postgres.migrationSecret': ''}, {'postgres.migrationSecret': 'world-postgres'}, {'networkPolicy.enabled': False}, {'networkPolicy.postgresCidr': '0.0.0.0/0'}, {'networkPolicy.dnsPodSelector': {}}, {'networkPolicy.namespaceSelector': {}}, {**OIDC, 'networkPolicy.httpsEgressCidrs': []}, {'configVersion': 1}):
+        check(apply(values, override), False, 'restricted deployment refusal')
     print(f"PASS: {count} JSON Schema cases (not Helm rendering)")
     return count
 
@@ -144,7 +167,8 @@ def rendered_resources(text: str, game: str, oidc: bool) -> None:
         require(secure["readOnlyRootFilesystem"] is True, "read-only root filesystem")
         require(secure["capabilities"]["drop"] == ["ALL"], "drop all capabilities")
         refs = {item["name"]: item.get("valueFrom", {}).get("secretKeyRef") for item in container["env"]}
-        require(refs["WORLDWRIGHT_DATABASE_URL"] == {"name": "world-postgres", "key": "WORLDWRIGHT_DATABASE_URL"}, "Postgres secretKeyRef")
+        expected_secret = 'world-postgres-migrate' if container is migration else 'world-postgres'
+        require(refs["WORLDWRIGHT_DATABASE_URL"] == {"name": expected_secret, "key": "WORLDWRIGHT_DATABASE_URL"}, "Postgres secretKeyRef identity separation")
         require(all("value" not in item for item in container["env"]), "no plaintext environment credentials")
     args = server["args"]
     for required in ("serve", "--acquire-writer", "--behind-tls-ingress"):
@@ -169,7 +193,19 @@ def rendered_resources(text: str, game: str, oidc: bool) -> None:
     require(one("Service")["spec"]["type"] == "ClusterIP", "private service")
     require(one("ConfigMap")["data"]["GAME_PROFILE"] == game, "config map profile")
     one("ServiceAccount")
-    require("super-secret" not in text and "client-secret-value" not in text, "secret sentinel leakage")
+    policy = one('NetworkPolicy')['spec']
+    require(policy['podSelector']['matchLabels'] == {'app.kubernetes.io/name':'worldwright','app.kubernetes.io/instance':'worldwright'}, 'networkPolicy release-scoped pod selector')
+    require(policy['policyTypes'] == ['Ingress','Egress'], 'networkPolicy both directions')
+    peer = policy['ingress'][0]['from'][0]
+    require(peer.get('namespaceSelector',{}).get('matchLabels') and peer.get('podSelector',{}).get('matchLabels'), 'combined ingress namespace/pod peer')
+    for rule in policy['egress']:
+        require(rule.get('to'), 'networkPolicy must not allow unscoped DNS/HTTPS egress')
+        for destination in rule['to']:
+            if 'ipBlock' in destination:
+                require(ipaddress.ip_network(destination['ipBlock']['cidr'], strict=True).prefixlen > 0, 'networkPolicy refuses world CIDR')
+            else:
+                require(destination.get('namespaceSelector',{}).get('matchLabels') and destination.get('podSelector',{}).get('matchLabels'), 'combined DNS namespace/pod peer')
+    require('super-secret' not in text and "client-secret-value" not in text, "secret sentinel leakage")
 
 def helm_matrix(chart: Path) -> None:
     helm = shutil.which("helm")
@@ -195,6 +231,7 @@ def helm_matrix(chart: Path) -> None:
         ({**OIDC, "oidc.redirectUri": "https://wrong.example.invalid/api/v1/oidc/callback"}, "redirectUri"),
         ({"oidc.clientSecret": "client-secret-value"}, "oidc"),
     ]
+    negative += [({'postgres.migrationSecret': ''},'postgres'), ({'postgres.migrationSecret': 'world-postgres'},'postgres'), ({'networkPolicy.enabled': False},'networkPolicy'), ({'networkPolicy.namespaceSelector': {}},'networkPolicy'), ({**OIDC,'networkPolicy.httpsEgressCidrs': []},'networkPolicy'), ({'configVersion':1},'configVersion')]
     negative += [({**OIDC, f"oidc.{key}": ""}, "oidc") for key in ("issuer", "clientId", "redirectUri", "existingSecret", "key")]
     for overrides, reason in negative:
         invoke(helm_command(helm, chart, "template", overrides), failure=reason)

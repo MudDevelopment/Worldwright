@@ -1,0 +1,33 @@
+WORLDWRIGHT_R2_SCHEMA_CREATED=ww_r2_eb0b3594a7764e6f9b3d210a8e2e1b25
+test_actual_postgres_commit_fault_boundaries (__main__.ExpirySqlTests.test_actual_postgres_commit_fault_boundaries) ... ok
+test_actual_python_invite_fixture_sql (__main__.ExpirySqlTests.test_actual_python_invite_fixture_sql) ... ok
+test_actual_python_session_sql_scoped_and_preserves_revocation (__main__.ExpirySqlTests.test_actual_python_session_sql_scoped_and_preserves_revocation) ... ok
+test_actual_rust_retention_fixture_sql (__main__.ExpirySqlTests.test_actual_rust_retention_fixture_sql) ... ok
+test_actual_rust_session_fixture_sql (__main__.ExpirySqlTests.test_actual_rust_session_fixture_sql) ... ok
+test_migrations_source_immutable_and_tables_present (__main__.ExpirySqlTests.test_migrations_source_immutable_and_tables_present) ... ok
+test_old_invite_fixture_rejected_by_existing_check (__main__.ExpirySqlTests.test_old_invite_fixture_rejected_by_existing_check) ... ok
+test_old_session_fixture_rejected_by_existing_check (__main__.ExpirySqlTests.test_old_session_fixture_rejected_by_existing_check) ... ok
+WORLDWRIGHT_R2_SCHEMA_DROPPED=ww_r2_eb0b3594a7764e6f9b3d210a8e2e1b25
+test_complete_current_migrations_apply_unchanged (__main__.FullMigrationTests.test_complete_current_migrations_apply_unchanged) ... WORLDWRIGHT_R2_SCHEMA_CREATED=ww_r2_65d5e15bfbe8405eab529250c4e6884e
+WORLDWRIGHT_R2_MIGRATION=20261020000100_durable_gameplay.sql
+WORLDWRIGHT_R2_MIGRATION=20261102000100_content_release.sql
+WORLDWRIGHT_R2_MIGRATION=20261106000100_operational_control.sql
+WORLDWRIGHT_R2_SCHEMA_DROPPED=ww_r2_65d5e15bfbe8405eab529250c4e6884e
+ERROR
+
+======================================================================
+ERROR: test_complete_current_migrations_apply_unchanged (__main__.FullMigrationTests.test_complete_current_migrations_apply_unchanged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r2-expiry-sql.py", line 193, in test_complete_current_migrations_apply_unchanged
+    cursor.execute(migration.read_text())
+  File "/tmp/r2-check-venv/lib/python3.12/site-packages/psycopg/cursor.py", line 97, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.SyntaxError: syntax error at or near "authorization"
+LINE 188:     authorization JSONB NOT NULL,
+              ^
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.648s
+
+FAILED (errors=1)

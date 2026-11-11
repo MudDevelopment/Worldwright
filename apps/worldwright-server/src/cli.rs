@@ -1156,7 +1156,7 @@ where
                 "worldwright-server: database and release workflows are implemented; status is not readiness"
             );
             println!(
-                "worldwright-server: reference and local-only expedition game profiles are implemented"
+                "worldwright-server: reference and expedition profiles support verified PostgreSQL state"
             );
             println!("worldwright-server: status is not a readiness probe");
             ExitCode::SUCCESS
@@ -1193,8 +1193,14 @@ where
                     if io::stdout().flush().is_err() {
                         return ExitCode::from(1);
                     }
-                    let shutdown = async {
-                        let _ = tokio::signal::ctrl_c().await;
+                    // Install handlers before serving. Unix SIGTERM/SIGHUP must enter the
+                    // same bounded drain path as Ctrl+C, not terminate PID 1 abruptly.
+                    let shutdown = match crate::lifecycle::shutdown_signal() {
+                        Ok(shutdown) => shutdown,
+                        Err(error) => {
+                            eprintln!("worldwright-server: shutdown signal registration failed: {error}");
+                            return ExitCode::from(1);
+                        }
                     };
                     match server.serve(shutdown).await {
                         Ok(()) => ExitCode::SUCCESS,

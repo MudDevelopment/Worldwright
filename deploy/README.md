@@ -1,76 +1,129 @@
-# Deployment
+# Restricted Worldwright deployment — R3
 
-The repository includes an implemented local Worldwright server image and
-Helm chart at `deploy/helm/worldwright`. The chart has no bundled PostgreSQL:
-provide an existing database secret and current migrations.
+The current deployment contract is chart **0.2.0**, values **`configVersion: 2`**,
+application **`0.1.0-dev.0`**, Linux/amd64 image build, and one `Recreate` writer.
+This is private staging tooling, not an accepted public/production service.
+Current R0/R2 prerequisites remain open. See [R3 acceptance](../docs/R3_ACCEPTANCE.md)
+and the [R3 ledger](../docs/verification/r3-acceptance-ledger.md) for observed checks
+and blocked gates. Historical milestone reports do not verify current source.
 
-## Image
+## Image: required immutable base inputs
 
-Build the pinned multi-stage image from the repository root:
+`Dockerfile` no longer has mutable builder/runtime defaults. An unqualified
+`docker build .` is intentionally insufficient. Choose approved digest-pinned
+builder and Debian-12-compatible runtime references through the service/security
+owner; no example digest here is an approval. The builder checks Rust 1.85.1 and
+builds `worldwright-server` for `x86_64-unknown-linux-gnu`. The runtime needs glibc,
+libgcc and CA roots, uses UID/GID 65532, and declares SIGTERM. There is no mutable
+apt-index install in the runtime stage.
 
-```text
-docker build --tag worldwright-server:local .
+For an actual reviewed build/push with captured provenance:
+
+```bash
+python scripts/r3-image.py \
+  --output "$R3_IMAGE_EVIDENCE" \
+  --builder-image "$R3_RUST_IMAGE" \
+  --runtime-image "$R3_RUNTIME_IMAGE" \
+  --tag "$R3_REGISTRY_TAG" \
+  --confirm-registry-push
 ```
 
-The runtime image runs as UID/GID 65532, exposes port 8080, uses a read-only
-root filesystem in the chart, and contains no operator credentials.
+The variables are operator-supplied real inputs; the output directory must be
+new, private and outside the checkout. The script records source identity,
+builder/runtime references, buildx metadata, registry manifest digest, allowed
+platform image IDs and non-root read-only `--version` linkage. The image config
+ID is separate and must not substitute for the deployable manifest digest.
+This check is not a running-service, CNI, provider, license or signing approval.
+P1's local container smoke now also requires reviewed repository variables
+`WORLDWRIGHT_RUST_IMAGE` and `WORLDWRIGHT_RUNTIME_IMAGE` containing pinned refs;
+its local tag/linkage result is not R3 registry/staging acceptance.
 
-## Helm
+## Chart values format 2: breaking security tightening
 
-Render with nonsecret synthetic values:
+Old format-1 configurations must be explicitly migrated or rebuilt. There is no
+implicit opt-in to mutable tags, shared DB identities or unrestricted networking.
 
-```text
-helm template ww ./deploy/helm/worldwright \
-  --set-string image.repository=registry.example.invalid/worldwright-server \
-  --set-string image.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-  --set-string publicOrigin=https://world.example.invalid \
-  --set-string ingress.host=world.example.invalid \
-  --set-string ingress.tlsSecretName=world-tls \
-  --set-string postgres.existingSecret=world-postgres
+| Input | Current meaning |
+|---|---|
+| `image.repository`, `image.digest` | Immutable deployable image; `tag` must be empty and `allowMutableTag` false |
+| `postgres.existingSecret`, `postgres.key` | Runtime login URL reference |
+| `postgres.migrationSecret`, `postgres.migrationKey` | Separate migration login URL reference; Secret name must differ |
+| Recovery login | Independently provisioned/reviewed; never mounted in the public runtime pod |
+| `publicOrigin`, ingress host/TLS Secret | Exact HTTPS origin and matching TLS ingress host |
+| `networkPolicy.namespaceSelector`, `podSelector` | Combined ingress-controller namespace AND pod restriction |
+| DNS namespace/pod selectors | Combined scoped DNS peer; verify labels against the actual cluster |
+| `postgresCidr` | Canonical private non-loopback database network; no world-open CIDR |
+| `httpsEgressCidrs` | Explicit bounded HTTPS destinations, required when OIDC is enabled |
+| OIDC fields | Complete issuer/client/callback/Secret refs only when enabled; callback matches public origin |
+
+Selectors are scoped to this release. CIDR policies do not implement dynamic
+FQDN allowlisting: review actual provider endpoints/IP changes. The standard DNS
+label defaults are a configuration starting point, not proof of a cluster's CNI
+or CoreDNS topology. Distinct Secret names do not prove distinct DB logins or
+least privilege; run the live role audit described in the acceptance guide.
+
+To migrate a known format-1 file, supply every newly security-relevant input:
+
+```bash
+python deploy/helm/worldwright/tests/migrate-values.py \
+  --input "$R3_OLD_VALUES" --output "$R3_NEW_VALUES" \
+  --migration-secret "$R3_MIGRATION_SECRET_NAME" \
+  --digest "$R3_MANIFEST_DIGEST" --postgres-cidr "$R3_POSTGRES_CIDR" \
+  --ingress-namespace "$R3_INGRESS_NAMESPACE" --ingress-label "$R3_INGRESS_LABEL" \
+  --dns-namespace "$R3_DNS_NAMESPACE" --dns-label "$R3_DNS_LABEL"
 ```
 
-Install with the same immutable digest and a pre-created Secret containing the
-database URL under the configured `postgres.key`. The init container applies
-and verifies database migrations; it does not seed worlds. Seed the world
-first, then submit/review/activate a matching release. Issue invites after
-seeding and OIDC provider configuration through the approved maintenance
-workflow before expecting readiness. Rotate secrets by updating the external
-Secret and explicitly restarting the Deployment so environment references are
-reloaded. Helm rollback changes manifests only; database writer/release
-recovery remains an operator procedure.
+Labels use `key=value`. Add a repeatable `--https-egress-cidr` for each reviewed
+CIDR when OIDC is enabled. The tool writes a new private file exclusively, leaves
+the old file untouched and validates the resulting complete format-2 values.
+It does not create Secrets, users, certificates, grants or approval.
 
-With OIDC enabled, add:
+## Render and verify, without deploying
 
-```text
---set-string oidc.enabled=true \
---set-string oidc.issuer=https://id.example.invalid \
---set-string oidc.clientId=worldwright \
---set-string oidc.redirectUri=https://world.example.invalid/api/v1/oidc/callback \
---set-string oidc.existingSecret=worldwright-oidc \
---set-string oidc.key=WORLDWRIGHT_OIDC_CLIENT_SECRET
+The repository's acceptance values use synthetic `.invalid` hosts, references
+and digests. They are valid checker fixtures, not usable/approved staging inputs.
+
+```bash
+python -m pip install -r deploy/helm/worldwright/tests/requirements.txt
+python -m pip install -r scripts/r2-requirements.txt
+python deploy/helm/worldwright/tests/test_verify.py
+python scripts/test-r3.py
+python deploy/helm/worldwright/tests/verify.py
+helm template worldwright deploy/helm/worldwright \
+  --values deploy/helm/worldwright/tests/acceptance-values.yaml
 ```
 
-The chart always deploys one replica with Recreate strategy and a single
-writer. Mutable tags require explicit `image.allowMutableTag=true`; immutable
-digests are preferred. OIDC is disabled by default and, when enabled, requires
-an existing Secret for the client secret. The public operator plane is not
-configured.
+The shared verifier checks both games with OIDC off/on, schema/semantic refusals,
+actual Helm lint/render exit codes and parsed security/identity/policy resources.
+Missing Helm is failure, not a passing skip. CI selects Helm v3.19.0 on Ubuntu
+and Windows. Supplemental execution with another Helm 3 version is recorded
+separately and cannot be relabeled as that hosted/pinned run.
 
-Ingress is required and TLS terminates at the ingress. The server runs with
-`--behind-tls-ingress` on the trusted cluster-internal cleartext hop; it does
-not trust Forwarded/X-Forwarded-* headers. This mode is not permission for
-arbitrary public HTTP. No live Docker build,
-Helm cluster install, ingress controller, PostgreSQL
-deployment, or production capacity test is claimed by these files.
+## Actual deployment and recovery boundary
 
-## P0 chart acceptance update — November 9, 2026
+The chart supplies neither PostgreSQL nor seed/release data. An approved
+maintenance workflow must verify migrations, seed the test world, package and
+activate a matching artifact before a coherent public runtime can become ready.
+The init container only applies/verifies migrations with the migration identity;
+it does not seed or grant runtime privileges. The current operational migration
+has an observed fresh-apply syntax defect; do not edit applied SQL/checksums or
+silently bypass the failed R2 prerequisite.
 
-OIDC validation is conditional on explicitly enabled=true; disabled/absent unused
-fields no longer invalidate otherwise complete deployment values. Required image,
-origin, ingress and PostgreSQL settings remain mandatory. Both render wrappers
-now call helm/worldwright/tests/verify.py with complete synthetic values, immediate
-native exit checks and actual YAML secretName/secretKeyRef/security assertions.
-Helm/Python/dependency absence is failure. Install tests/requirements.txt in a venv
-and see ../docs/P0_ACCEPTANCE.md. Local schema/checker tests passed; actual Helm
-and cluster execution remain unobserved. New chart CI jobs do not themselves
-configure branch protection or approve a production tool/image/security policy.
+TLS terminates at the reviewed ingress. The server uses `--behind-tls-ingress`
+only for its trusted internal HTTP hop and does not trust arbitrary forwarded
+headers. The public operator listener/plane is not enabled. Unix SIGTERM/SIGHUP
+and Windows Ctrl+C enter the existing shutdown path; controlled exit and database
+reconstruction still need actual native/staging evidence.
+
+`r3-staging.py` requires an explicit private plan, passed current R0/R2 and image
+inputs, pre-existing marked isolated namespace, credential environment references,
+and `--confirm-staging-mutations`. It performs real readiness, image/role peer,
+WSS/idle/origin, restart/rotation and failed-rollout/Helm-rollback checks. It never
+creates an approved cluster, provider, service owner or credential. Its result is
+`collected_not_closed`; four independently witnessed gates remain required.
+
+Helm rollback changes manifests, not committed SQL, active content, writer
+incarnation, receipt history or game-state encodings. Keep a recovery plan and
+retain failures; an interrupted exercise may leave staging not ready. Recover
+through the reviewed maintenance workflow, not by deleting evidence or assuming
+an old binary can read new schema/content. Follow the detailed R3 guide.

@@ -4,9 +4,9 @@
 
 | Attribute | Value |
 |---|---|
-| Document version | 0.3 — current M4/M5 implementation alignment |
-| Updated | November 9, 2026 — P1/P2 and R0/R1; native/live/manual acceptance pending |
-| Delivery authority | [ROADMAP_v2.md](ROADMAP_v2.md) current priorities/release tracks; [ROAD-MAP.md](ROAD-MAP.md) historical milestones; no R0/R1 closure |
+| Document version | 0.4 — current R2/R3 contracts and evidence boundaries |
+| Updated | November 10, 2026 — R2/R3 source and supplemental checks; native/live/manual acceptance pending |
+| Delivery authority | [ROADMAP_v2.md](ROADMAP_v2.md) current priorities/release tracks; [ROAD-MAP.md](ROAD-MAP.md) historical milestones; no R0/R1/R2/R3 closure |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
 | Audience | Engine and tooling maintainers, game developers, designers, QA, security, and operators |
@@ -177,6 +177,44 @@ provisioned through organizational approval, not inferred from YAML. Details and
 all remaining gates: `docs/R0_R1_ACCEPTANCE.md` and
 `docs/verification/r0-r1-acceptance-ledger.md`. No schema migration, game rule,
 operator exposure, license grant, or R2+ readiness is introduced by these tools.
+
+## R3 deployment and closure contracts
+
+R3 separates a real built/pushed OCI image, restricted chart, live DB identity
+permissions, coherent actual Pod/world observations and service-owner adoption.
+A registry manifest digest is not an image config ID; source/lock inventory and
+approved immutable builder/runtime references accompany the image. Docker's
+runtime stage has no mutable apt-index install and the public pod carries neither
+operator nor recovery credentials. An image/label hash is not copyright, signing,
+service or security approval.
+
+| Format/behavior | Classification | Compatibility and failure behavior |
+|---|---|---|
+| Helm chart 0.2.0, values configVersion 2 | Breaking security/config change | Digest only; separate migrationSecret/migrationKey; required enabled scoped policy. Explicit migrate-values.py writes a new file using operator-chosen identities/peers. |
+| Private staging plan configVersion 1 | New tooling format, independent of chart/application versions | Known bounded fields and actual paths/environment references; unsupported/unknown values fail. |
+| Closure phase inventory | Internal evidence-contract correction | All 13 emitted staging phases are required, including rotated-pod-image and rollback-pod-image; AST regression guards future drift. |
+| Exit evidence | Validation tightening, not a gameplay/wire change | Exact integer zero for normal phases; positive integer nonzero for the deliberate failed rollout. Missing, boolean, string, signal-killed or mismatched declared outcomes fail. |
+| Unix SIGTERM/SIGHUP | Lifecycle integration | Existing drain path is shared with retained Windows Ctrl+C; native controlled-exit results are still required. |
+| Application/protocol/content/SQL identities | Unchanged | No migration rewrite, package bump, new game contract, capacity promise or live-schema downgrade in this correction. |
+
+The staging collector requires an existing approved isolated namespace/context,
+passed current R0/R2, current built image and a quiescent test world. Initial,
+rotated and rolled-back actual Pods must match image identities and runtime DB
+peers, replace their UIDs as expected, and preserve projection/authority without
+rewinding versions. Six scripted cases produce collected_not_closed. Four actual
+independent cases cover CNI controls, controlled termination, old-credential
+revocation and content/schema rollback review. Helm rollback does not rewind DB
+state, receipts, active content or incarnation. A known migration syntax failure
+remains a prerequisite failure; acceptance never edits its checksum to proceed.
+
+Same-source closure validates every phase/log and role proof, hashes contained
+operator evidence, authenticates an independently trusted Ed25519 adoption,
+binds source/image/artifact/namespace/deployment/report identities and reruns
+current R0/R2 checks. Synthetic keys and configured jobs are not adoption.
+Usage and independent case procedures are in docs/R3_ACCEPTANCE.md; current
+observations and unverified units are in docs/verification/r3-acceptance-ledger.md.
+Older proposal/milestone sections below retain their original scope and are not
+the normative R3 chart-values or current acceptance history.
 
 ## Contents
 
@@ -1300,3 +1338,57 @@ migration. This is a failed gate, not permission to alter an applied migration o
 checksum. The repair needs authoritative applied history/baseline approval; the
 ledger records it. No new public/game/config protocol or schema version is implied
 by correcting test fixtures or adding this fail-closed preflight.
+
+## Additional R3 local-audit corrections
+
+The phase collector and closure now share the same observable exit semantics:
+exact integer zero for normal phases and positive integer nonzero for deliberate
+failed rollout. Plan version 1 is an exact integer, not Python's bool/float-equal
+values. Adoption reviewer metadata is printable nonblank bounded text; a valid
+signature alone does not make malformed metadata acceptable. The 13-phase,
+source/image/world/service bindings and independent trust-root requirements are
+unchanged.
+
+The live role audit now checks all prerequisites already granted by its setup
+recipe, not only full-DML tables: schema USAGE, reviewed-table SELECT, audit/outbox
+INSERT, invite UPDATE, required column UPDATE and serial-sequence USAGE. Real
+PostgreSQL fixture regressions exposed false-positive audit results for those
+missing permissions. Setup remains one explicit transaction, and rollback on
+SQL grant failure is tested. No grant-recipe expansion or application migration
+rewrite is used to make the regressions pass.
+
+The fixture suite creates/removes only uniquely named test DBs/roles on an owned
+isolated test cluster, under explicit opt-in. Its actually executed one-file
+permission fixture is a test ROOT, not current app schema/history; it never
+certifies native SQLx, credential delivery, actual staging or service adoption.
+This is validation correction within existing formats, not a package/protocol/
+chart/SQL schema version change. Current results are in the R3 ledger.
+
+Role-proof validation also now requires the real database-role-audit type, full
+identity metadata/current migration count and equality of all three roles/schema
+with collector evidence. A matching hash plus an arbitrary passed status cannot
+substitute a synthetic fixture report. These collector fields are additive
+internal evidence metadata; no actual prior accepted R3 report is promoted or
+silently inferred. Current source must be rebuilt/reverified for real acceptance.
+
+### R3 bounded phase collection and target isolation
+
+Image/staging share `scripts/r3_io.py` instead of unbounded `subprocess.run` capture.
+A four-chunk queue drains a subprocess into a 16 MiB maximum buffer. The deadline
+includes pipe drain and process wait. Timeout/overflow cancels the process group
+(POSIX) or uses Windows tree cleanup; cleanup failure is itself an interruption,
+never success. Partial bytes, actual exit and elapsed time are recorded before
+outcome validation. The closure rejects an interruption even for a positive
+expected failed-rollout exit. Additive phase metadata (`interruption`,
+`elapsed_seconds`) does not change chart/plan/application/SQL versions; old
+uninterrupted records without those optional fields still require all old gates.
+
+Raw bounded stdout remains only in memory when needed to interpret private API
+JSON/registry bytes. Retained logs mask configured credential values/parsed
+passwords or omit private API bodies entirely, remain bounded and are created
+exclusively as 0600. This is best-effort exact-value masking, not permission to
+log arbitrary secrets or a substitute for private evidence handling. Linux
+subprocess/pipe/deadline paths and loopback redirect refusal have real local
+regressions; native Windows taskkill/ACL and actual Worldwright shutdown remain
+separate unverified acceptance. Redirects are rejected at the API transport so
+TLS readiness/login cannot silently switch to a different deployment/origin.

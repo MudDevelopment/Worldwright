@@ -1,0 +1,18 @@
+test_actual_manifest_bytes_not_config_identity (__main__.R3Tests.test_actual_manifest_bytes_not_config_identity) ... ok
+test_full_current_phase_inventory_and_missing_replacement_evidence (__main__.R3Tests.test_full_current_phase_inventory_and_missing_replacement_evidence) ... ok
+test_independent_signature_expiry_and_payload (__main__.R3Tests.test_independent_signature_expiry_and_payload) ... ok
+test_invalid_or_duplicated_phase_records_refused (__main__.R3Tests.test_invalid_or_duplicated_phase_records_refused) ... ok
+test_manual_case_skip_duplicate_and_absence_refused (__main__.R3Tests.test_manual_case_skip_duplicate_and_absence_refused) ... ok
+test_missing_phase_and_changed_phase_log_refused (__main__.R3Tests.test_missing_phase_and_changed_phase_log_refused) ... ok
+test_no_mutable_or_credential_image_reference (__main__.R3Tests.test_no_mutable_or_credential_image_reference) ... ok
+test_required_signal_and_role_source_inventory (__main__.R3Tests.test_required_signal_and_role_source_inventory) ... ok
+test_schema_and_restricted_semantic_matrix (__main__.R3Tests.test_schema_and_restricted_semantic_matrix) ... PASS: 35 JSON Schema cases (not Helm rendering)
+ok
+test_signal_kill_boolean_and_wrong_expected_exit_not_rollout_failure (__main__.R3Tests.test_signal_kill_boolean_and_wrong_expected_exit_not_rollout_failure) ... ok
+test_staging_emitted_phase_inventory_matches_closure (__main__.R3Tests.test_staging_emitted_phase_inventory_matches_closure) ... ok
+test_values_migration_requires_explicit_safe_identity (__main__.R3Tests.test_values_migration_requires_explicit_safe_identity) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.060s
+
+OK

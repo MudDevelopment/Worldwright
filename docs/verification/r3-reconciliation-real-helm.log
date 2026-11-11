@@ -1,0 +1,7 @@
+PASS: 35 JSON Schema cases (not Helm rendering)
+PASS: actual Helm lint/YAML reference/OIDC=False
+PASS: actual Helm lint/YAML reference/OIDC=True
+PASS: actual Helm lint/YAML expedition/OIDC=False
+PASS: actual Helm lint/YAML expedition/OIDC=True
+PASS: 22 actual Helm negative cases
+PASS: required Helm acceptance (not cluster installation or live OIDC)

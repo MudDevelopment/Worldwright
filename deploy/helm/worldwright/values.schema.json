@@ -2,30 +2,25 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["image", "publicOrigin", "ingress", "postgres", "game"],
+  "required": ["configVersion","image","publicOrigin","ingress","postgres","game","networkPolicy"],
+  "definitions": {
+    "selector": {"type":"object","additionalProperties":false,"required":["matchLabels"],"properties":{"matchLabels":{"type":"object","minProperties":1,"additionalProperties":{"type":"string","minLength":1}}}},
+    "cidr": {"type":"string","minLength":4,"pattern":"^[0-9a-fA-F:.]+/([1-9]|[1-9][0-9]|1[01][0-9]|12[0-8])$"}
+  },
   "properties": {
-    "image": {
-      "type": "object", "additionalProperties": false, "required": ["repository", "digest", "tag", "allowMutableTag"],
-      "properties": {
-        "repository": {"type": "string", "minLength": 1},
-        "digest": {"type": "string", "pattern": "^$|^sha256:[0-9a-f]{64}$"},
-        "tag": {"type": "string"},
-        "allowMutableTag": {"type": "boolean"}
-      }
-    },
+    "configVersion": {"const":2},
+    "image": {"type":"object","additionalProperties":false,"required":["repository","digest","tag","allowMutableTag"],"properties":{"repository":{"type":"string","minLength":1},"digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},"tag":{"const":""},"allowMutableTag":{"const":false}}},
     "imagePullSecrets": {"type":"array","items":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}},
-    "publicOrigin": {"type":"string","pattern":"^https://[^/?#]+$"},
+    "publicOrigin": {"type":"string","pattern":"^https://[^/?#@]+$"},
     "game": {"type":"string","enum":["reference","expedition"]},
     "serviceAccount": {"type":"object","additionalProperties":false,"required":["create","name"],"properties":{"create":{"type":"boolean"},"name":{"type":"string"}}},
-    "ingress": {"type":"object","additionalProperties":false,"required":["enabled","className","host","tlsSecretName","annotations"],"properties":{"enabled":{"const":true},"className":{"type":"string"},"host":{"type":"string","minLength":1,"pattern":"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"},"tlsSecretName":{"type":"string","minLength":1},"annotations":{"type":"object"}}},
-    "postgres": {"type":"object","additionalProperties":false,"required":["existingSecret","key"],"properties":{"existingSecret":{"type":"string","minLength":1},"key":{"type":"string","minLength":1}}},
+    "ingress": {"type":"object","additionalProperties":false,"required":["enabled","className","host","tlsSecretName","annotations"],"properties":{"enabled":{"const":true},"className":{"type":"string"},"host":{"type":"string","minLength":1,"pattern":"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"},"tlsSecretName":{"type":"string","minLength":1},"annotations":{"type":"object","additionalProperties":{"type":"string"}}}},
+    "postgres": {"type":"object","additionalProperties":false,"required":["existingSecret","migrationSecret","key","migrationKey"],"properties":{"existingSecret":{"type":"string","minLength":1},"migrationSecret":{"type":"string","minLength":1},"key":{"type":"string","minLength":1},"migrationKey":{"type":"string","minLength":1}}},
     "oidc": {"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"issuer":{"type":"string"},"clientId":{"type":"string"},"redirectUri":{"type":"string"},"existingSecret":{"type":"string"},"key":{"type":"string"}}},
-    "networkPolicy": {"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"namespaceSelector":{"type":"object"},"podSelector":{"type":"object"},"postgresCidr":{"type":"string"}}},
+    "networkPolicy": {"type":"object","additionalProperties":false,"required":["enabled","namespaceSelector","podSelector","postgresCidr","dnsNamespaceSelector","dnsPodSelector","httpsEgressCidrs"],"properties":{"enabled":{"const":true},"namespaceSelector":{"$ref":"#/definitions/selector"},"podSelector":{"$ref":"#/definitions/selector"},"postgresCidr":{"$ref":"#/definitions/cidr"},"dnsNamespaceSelector":{"$ref":"#/definitions/selector"},"dnsPodSelector":{"$ref":"#/definitions/selector"},"httpsEgressCidrs":{"type":"array","uniqueItems":true,"maxItems":32,"items":{"$ref":"#/definitions/cidr"}}}},
     "resources": {"type":"object","additionalProperties":false,"required":["requests","limits"],"properties":{"requests":{"type":"object","additionalProperties":false,"required":["cpu","memory"],"properties":{"cpu":{"type":"string","minLength":1},"memory":{"type":"string","minLength":1}}},"limits":{"type":"object","additionalProperties":false,"required":["cpu","memory"],"properties":{"cpu":{"type":"string","minLength":1},"memory":{"type":"string","minLength":1}}}}}
   },
   "allOf": [
-    {"if":{"properties":{"image":{"properties":{"allowMutableTag":{"const":false}}}}},"then":{"properties":{"image":{"properties":{"digest":{"minLength":71,"pattern":"^sha256:[0-9a-f]{64}$"}}}}}},
-    {"if":{"properties":{"image":{"properties":{"allowMutableTag":{"const":true}}}}},"then":{"properties":{"image":{"properties":{"tag":{"minLength":1}}}}}},
-    {"if":{"required":["oidc"],"properties":{"oidc":{"required":["enabled"],"properties":{"enabled":{"const":true}}}}},"then":{"properties":{"oidc":{"required":["issuer","clientId","redirectUri","existingSecret","key"],"properties":{"issuer":{"minLength":1,"pattern":"^https://[^/?#]+$"},"clientId":{"minLength":1},"redirectUri":{"minLength":1,"pattern":"^https://[^/?#]+/api/v1/oidc/callback$"},"existingSecret":{"minLength":1},"key":{"minLength":1}}}}}}
+    {"if":{"required":["oidc"],"properties":{"oidc":{"required":["enabled"],"properties":{"enabled":{"const":true}}}}},"then":{"properties":{"oidc":{"required":["issuer","clientId","redirectUri","existingSecret","key"],"properties":{"issuer":{"minLength":1,"pattern":"^https://[^/?#@]+$"},"clientId":{"minLength":1},"redirectUri":{"minLength":1,"pattern":"^https://[^/?#@]+/api/v1/oidc/callback$"},"existingSecret":{"minLength":1},"key":{"minLength":1}}},"networkPolicy":{"properties":{"httpsEgressCidrs":{"minItems":1}}}}}}
   ]
 }

@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "local-R3-final-status-revalidation",
+  "scope": "current selected EWW readback snapshots; not complete checkout or native/image/staging/adoption acceptance",
+  "full_r3_closed": false,
+  "fresh_local_results": {
+    "R3_regressions_passed": 12,
+    "local_guard_methods_passed": 9,
+    "chart_checker_methods_passed": 6,
+    "schema_cases_passed": 35,
+    "actual_Helm_profiles_passed": 4,
+    "actual_Helm_negative_cases_passed": 22,
+    "Helm_version": "v3.10.1+g9f88ccb",
+    "not_hosted_Helm_3_19_0_evidence": true
+  },
+  "retained_evidence_revalidation": {
+    "recorded_source_document_hashes_matched": 15,
+    "recorded_before_after_log_hashes_matched": 4,
+    "workflow_hash_matched": true,
+    "hash_scope": "selected LF text readbacks, not complete Git/native source tuple"
+  },
+  "previous_permission_fixture": {
+    "tests_passed": 13,
+    "tested_source_unchanged": true,
+    "not_rerun_in_this_pass": true,
+    "reason": "previous sandbox test cluster expired; prior executed fixture evidence is retained, not promoted to current app/deployed-role audit"
+  },
+  "negative_checks": {
+    "missing_Helm_exit": 1,
+    "missing_role_fixture_optin_exit": 1,
+    "image_prerequisite_exit": 1,
+    "staging_prerequisite_exit": 1,
+    "closure_exit": 1,
+    "meaning": "expected refusal; no real accepted phase, deployment or approval inferred"
+  },
+  "native_availability": {"cargo":false,"rustc":false,"rustfmt":false,"docker":false,"kubectl":false,"postgres":false,"pg_ctl":false},
+  "enumerated_additional_local_units_unverified": 0,
+  "full_release_acceptance_units_unverified": 7,
+  "R3_exit": "NOT CLOSED",
+  "R0_R2_prerequisites": "OPEN",
+  "known_migration_failure": "20261106000100_operational_control.sql:188, unquoted reserved authorization; original source/checksum not rewritten or waived",
+  "unresolved_independent_real_gates": ["CNI positive-control/denial probes","controlled Worldwright termination","old-credential revocation","content/schema rollback review"],
+  "service_adoption": "no actual independently approved service signature/tuple supplied"
+}

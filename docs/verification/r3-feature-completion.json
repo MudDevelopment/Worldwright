@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "kind": "local-R3-feature-verification",
+  "scope": "selected current EWW LF text readbacks; not native/hosted/actual image/staging/adoption acceptance",
+  "full_r3_closed": false,
+  "source_sha256": {
+    "scripts/r3_io.py": "6d0f91a28497df5c119d154fe886790b4f94a1b90c40ae94793d03ff2c3faa7f",
+    "scripts/test-r3-io.py": "75353a47df2572d6853ad033b16715e0acd25916c27864b55452717b504fc8e7",
+    "scripts/r3-image.py": "6f925f78c59262aaaa9faebadbc999206f212be87c23189a6f012b8c30aae264",
+    "scripts/r3-staging.py": "68f20a7626e74fe20892fee0daedf7db8c7db012b4e2983684ef9bf5bf276664",
+    "scripts/r3-close.py": "25b667e73ac4aefb3b10ee72e5e93d3ac87ff589d2b4ac4eb36506e8829f6f4d",
+    ".github/workflows/r3-acceptance.yml": "f11af57477816934a07099977ae2e710a7bfbc9d230f27d90d537549180c6357",
+    "README.md": "b3fb83cbcb0dbe9415e9698099a3e7ca675674fdba5e0fbac44d4ddc87ca422d",
+    "DESIGN.md": "86ffd1327301ccd47c6b7b27c3cf3057eecdf2c51120bdcdcbaea032cc272225",
+    "SECURITY.md": "b71dc0fdaa22603b79866f25551b00928af77901fc540c742b7142311a602f2e",
+    "ROADMAP_v2.md": "c19fb1d2ce0e9416f63bd0ffff0f472ebb98e9a701c440367d9636b30e081db0",
+    "docs/R3_ACCEPTANCE.md": "7bc91967cbfb485db4b9fb257cd1cb4879a14fc80536343e85af7b9a209f6d53",
+    "docs/verification/r3-acceptance-ledger.md": "7438bbdf2156dc13abcb788653b39a67f5475ae169eea188a2f1bc2910f35e7f"
+  },
+  "passed_test_methods": {"io":17,"core":12,"guards":9,"chart_checker":6},
+  "schema_cases":35,
+  "actual_Helm_profiles":4,
+  "actual_Helm_negatives":22,
+  "Helm_version":"v3.10.1+g9f88ccb",
+  "Python_version":"3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "static_checks":"5 Python ASTs; workflow YAML, guarded paired-host/pinned Helm and all Bash bodies",
+  "retained_io_log":{"path":"r3-feature-io.log","sha256":"f1cf2cc7b2d810b3191b79a5b3339e748f1dd0a454bc9af7b68f9a28ed2ee505"},
+  "other_execution_logs":"observed in sandbox/transcript; not copied as consumable release proof",
+  "native_app_passes":false,
+  "permission_fixture_rerun_this_pass":false,
+  "migration_repair":false,
+  "R3_exit":"NOT CLOSED"
+}

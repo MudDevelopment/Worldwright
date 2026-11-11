@@ -36,9 +36,14 @@ jobs:
           persist-credentials: false
       - name: Build development image and verify non-root CLI linkage
         shell: bash
+        env:
+          RUST_IMAGE: ${{ vars.WORLDWRIGHT_RUST_IMAGE }}
+          RUNTIME_IMAGE: ${{ vars.WORLDWRIGHT_RUNTIME_IMAGE }}
         run: |
           set -euo pipefail
-          docker build --tag worldwright-p1-smoke . 2>&1 | tee "$RUNNER_TEMP/worldwright-container-build.log"
+          python3 -c 'import os,re; assert all(re.fullmatch(r"[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}",os.environ.get(k,"")) for k in ("RUST_IMAGE","RUNTIME_IMAGE")), "approved immutable RUST_IMAGE/RUNTIME_IMAGE references required"'
+          source_hash=$(python3 -c 'import importlib.util; s=importlib.util.spec_from_file_location("r0","scripts/r0-verify.py"); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(m.source_identity()["source_sha256"])')
+          docker build --build-arg "RUST_IMAGE=$RUST_IMAGE" --build-arg "RUNTIME_IMAGE=$RUNTIME_IMAGE" --build-arg "SOURCE_REVISION=$(git rev-parse HEAD)" --build-arg "SOURCE_SHA256=$source_hash" --tag worldwright-p1-smoke . 2>&1 | tee "$RUNNER_TEMP/worldwright-container-build.log"
           test "$(docker image inspect --format '{{.Config.User}}' worldwright-p1-smoke)" = '65532:65532'
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges worldwright-p1-smoke --help > "$RUNNER_TEMP/worldwright-container-help.txt"
           docker image inspect --format '{{.Id}}' worldwright-p1-smoke > "$RUNNER_TEMP/worldwright-container-config-id.txt"

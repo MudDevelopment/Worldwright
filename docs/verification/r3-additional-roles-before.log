@@ -1,0 +1,92 @@
+test_fixture_grant_setup_transaction_rolls_back (__main__.RoleFixture.test_fixture_grant_setup_transaction_rolls_back) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_0aa327aebf1a427f
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_0aa327aebf1a427f
+ok
+test_fixture_inherited_password_update_refused (__main__.RoleFixture.test_fixture_inherited_password_update_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_c66160a407874c0e
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_c66160a407874c0e
+ok
+test_fixture_migration_or_recovery_membership_refused (__main__.RoleFixture.test_fixture_migration_or_recovery_membership_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_f10842f2d3844af6
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_f10842f2d3844af6
+ok
+test_fixture_migration_owner_and_checksum_refused (__main__.RoleFixture.test_fixture_migration_owner_and_checksum_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_2052390c668f4011
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_2052390c668f4011
+ok
+test_fixture_missing_artifact_select_refused (__main__.RoleFixture.test_fixture_missing_artifact_select_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_150c8ac597804e63
+FAIL
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_150c8ac597804e63
+test_fixture_missing_audit_insert_refused (__main__.RoleFixture.test_fixture_missing_audit_insert_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_fa28a63bae714eee
+FAIL
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_fa28a63bae714eee
+test_fixture_missing_invite_update_refused (__main__.RoleFixture.test_fixture_missing_invite_update_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_c842ba673afc45d8
+FAIL
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_c842ba673afc45d8
+test_fixture_missing_schema_usage_refused (__main__.RoleFixture.test_fixture_missing_schema_usage_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_5c48a040056a4aeb
+FAIL
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_5c48a040056a4aeb
+test_fixture_missing_sequence_usage_refused (__main__.RoleFixture.test_fixture_missing_sequence_usage_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_f9a42d94d8684226
+FAIL
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_f9a42d94d8684226
+test_fixture_missing_world_column_update_refused (__main__.RoleFixture.test_fixture_missing_world_column_update_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_24744b9bbbfc4c71
+FAIL
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_24744b9bbbfc4c71
+test_fixture_real_runtime_insert_and_denied_writes (__main__.RoleFixture.test_fixture_real_runtime_insert_and_denied_writes) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_166819dd55534ec9
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_166819dd55534ec9
+ok
+test_fixture_role_flags_and_schema_creation_refused (__main__.RoleFixture.test_fixture_role_flags_and_schema_creation_refused) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_211854b1a9734022
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_211854b1a9734022
+ok
+test_fixture_setup_and_readonly_audit (__main__.RoleFixture.test_fixture_setup_and_readonly_audit) ... R3_SYNTHETIC_FIXTURE_CREATED=worldwright_test_r3_fixture_04bc7e232bcf48bc
+R3_SYNTHETIC_FIXTURE_REMOVED=worldwright_test_r3_fixture_04bc7e232bcf48bc
+ok
+
+======================================================================
+FAIL: test_fixture_missing_artifact_select_refused (__main__.RoleFixture.test_fixture_missing_artifact_select_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r3-role-fixture.py", line 89, in test_fixture_missing_artifact_select_refused
+    with self.assertRaises(ValueError): self.inspect()
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_fixture_missing_audit_insert_refused (__main__.RoleFixture.test_fixture_missing_audit_insert_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r3-role-fixture.py", line 92, in test_fixture_missing_audit_insert_refused
+    with self.assertRaises(ValueError): self.inspect()
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_fixture_missing_invite_update_refused (__main__.RoleFixture.test_fixture_missing_invite_update_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r3-role-fixture.py", line 98, in test_fixture_missing_invite_update_refused
+    with self.assertRaises(ValueError): self.inspect()
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_fixture_missing_schema_usage_refused (__main__.RoleFixture.test_fixture_missing_schema_usage_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r3-role-fixture.py", line 86, in test_fixture_missing_schema_usage_refused
+    with self.assertRaises(ValueError): self.inspect()
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_fixture_missing_sequence_usage_refused (__main__.RoleFixture.test_fixture_missing_sequence_usage_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r3-role-fixture.py", line 101, in test_fixture_missing_sequence_usage_refused
+    with self.assertRaises(ValueError): self.inspect()
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_fixture_missing_world_column_update_refused (__main__.RoleFixture.test_fixture_missing_world_column_update_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/worldwright-r2/scripts/test-r3-role-fixture.py", line 95, in test_fixture_missing_world_column_update_refused
+    with self.assertRaises(ValueError): self.inspect()
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 13 tests in 1.824s
+
+FAILED (failures=6)

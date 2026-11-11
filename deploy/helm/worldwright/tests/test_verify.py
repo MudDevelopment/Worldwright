@@ -11,7 +11,9 @@ def resources(game="reference", oidc=False):
     image = "registry.example.invalid/worldwright@sha256:" + "a" * 64
     security = {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}}
     database = {"name": "WORLDWRIGHT_DATABASE_URL", "valueFrom": {"secretKeyRef": {"name": "world-postgres", "key": "WORLDWRIGHT_DATABASE_URL"}}}
-    migration = {"image": image, "env": [copy.deepcopy(database)], "securityContext": copy.deepcopy(security)}
+    migration_database = copy.deepcopy(database)
+    migration_database['valueFrom']['secretKeyRef']['name'] = 'world-postgres-migrate'
+    migration = {"image": image, "env": [migration_database], "securityContext": copy.deepcopy(security)}
     args = ["serve", "--acquire-writer", "--behind-tls-ingress", "--game", game, "--origin", "https://world.example.invalid"]
     env = [copy.deepcopy(database)]
     if oidc:
@@ -28,6 +30,7 @@ def resources(game="reference", oidc=False):
         {"kind": "Service", "metadata": {"name": "test"}, "spec": {"type": "ClusterIP"}},
         {"kind": "ConfigMap", "metadata": {"name": "test"}, "data": {"GAME_PROFILE": game}},
         {"kind": "ServiceAccount", "metadata": {"name": "test"}},
+        {'kind':'NetworkPolicy','metadata':{'name':'test'},'spec':{'podSelector':{'matchLabels':{'app.kubernetes.io/name':'worldwright','app.kubernetes.io/instance':'worldwright'}},'policyTypes':['Ingress','Egress'],'ingress':[{'from':[{'namespaceSelector':{'matchLabels':{'name':'ingress'}},'podSelector':{'matchLabels':{'role':'controller'}}}]}],'egress':[{'to':[{'ipBlock':{'cidr':'10.23.4.5/32'}}],'ports':[{'protocol':'TCP','port':5432}]},{'to':[{'namespaceSelector':{'matchLabels':{'name':'dns'}},'podSelector':{'matchLabels':{'role':'dns'}}}],'ports':[{'protocol':'UDP','port':53}]}]}}, 
     ]
 
 class VerifyTests(unittest.TestCase):
@@ -50,6 +53,14 @@ class VerifyTests(unittest.TestCase):
             if mutation == "secret": docs.append({"kind": "Secret", "metadata": {"name": "leak"}})
             with self.assertRaises(AssertionError):
                 verify.rendered_resources(yaml.safe_dump_all(docs), "reference", False)
+    def test_migration_identity_and_release_policy_are_required(self):
+        for kind in ('shared-secret','cross-release','unscoped-egress','world-cidr'):
+            docs=resources()
+            if kind=='shared-secret': docs[0]['spec']['template']['spec']['initContainers'][0]['env'][0]['valueFrom']['secretKeyRef']['name']='world-postgres'
+            if kind=='cross-release': docs[-1]['spec']['podSelector']['matchLabels'].pop('app.kubernetes.io/instance')
+            if kind=='unscoped-egress': docs[-1]['spec']['egress'].append({'ports':[{'protocol':'TCP','port':443}]})
+            if kind=='world-cidr': docs[-1]['spec']['egress'][0]['to'][0]['ipBlock']['cidr']='0.0.0.0/0'
+            with self.assertRaises(AssertionError): verify.rendered_resources(yaml.safe_dump_all(docs),'reference',False)
     def test_positive_and_negative_native_exits_are_checked(self):
         result = subprocess.CompletedProcess(["helm"], 7, "", "oidc invalid")
         with patch.object(verify.subprocess, "run", return_value=result):

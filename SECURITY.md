@@ -169,7 +169,7 @@ Do not include live tokens, passwords, private keys, full production databases, 
 
 ## Supported Versions
 
-There are **no verified supported security releases**. The supplied `0.1.0-dev.0` snapshot has a tested local in-memory runtime and an authenticated loopback Transport v0.1 development slice, but no durable identity, database, public deployment, or production support commitment. See [server guide](docs/SERVER.md) and [verification limits](docs/VERIFICATION.md).
+There are **no verified supported security releases**. Current `0.1.0-dev.0` source includes local transport, durable PostgreSQL identity/gameplay and restricted staging tooling. Their native/live/adoption evidence is incomplete; there is no accepted public deployment or production security-support commitment. See [server guide](docs/SERVER.md) and [verification limits](docs/VERIFICATION.md).
 
 | Artifact | Security support status |
 |---|---|
@@ -426,6 +426,42 @@ Do not execute imported MUSHcode, MUF, MPI, LPC, or MOO behavior in production s
 
 The project has not yet selected scanning, signing, or attestation tooling. No badge, security audit, or compliance certification is claimed.
 
+## R3 restricted staging security boundary
+
+Chart values format 2 intentionally rejects mutable images, shared migration/
+runtime Secret names and disabled/unscoped NetworkPolicy. The private runtime
+uses non-root UID/GID 65532, read-only root, dropped capabilities, no privilege
+escalation or service-account token, scoped ingress/DNS/DB/HTTPS peers and no
+public operator/recovery identity. Different Secret names do not prove different
+logins: live ownership/grants/current ledger and actual Pod DB peer observations
+are separate required checks. Runtime-grant setup is optional, explicit and
+limited to a reviewed disposable worldwright_test database; it is not automatic
+migration, account creation or recovery-authority adoption.
+
+TLS roots/hostname are verified in live HTTPS/WSS checks; behind-tls-ingress
+only permits the reviewed internal hop and does not grant arbitrary public HTTP
+or forwarded-header trust. CIDRs are not dynamic FQDN policy or proof a CNI
+actually enforces them. Positive controls must distinguish denial from broken
+routing/dead targets. Rotation must separately prove old credentials revoked;
+changing a reference or replacing a Pod is insufficient. Native SIGTERM/drain
+and normal exit remain independent of seeing a replacement Pod become ready.
+
+Build refs are approved immutable digests, not bundled default trust decisions.
+Image config identity cannot substitute for the pushed OCI manifest. Staging
+plans hold credential environment names/private proof paths, never credential
+values or signing keys. Retained logs omit private API bodies and must not expose
+cookies, DB URLs, passwords or tokens. Four independent real operator cases and
+an independently installed Ed25519 service-adoption trust root are mandatory for
+closure; synthetic helper keys grant no authority.
+
+r3-acceptance.yml separates untrusted Ubuntu/Windows helper jobs from explicit
+reviewed default-branch staging. Adopt required environment reviewers, protected
+branch and an isolated ephemeral nonproduction runner before provisioning private
+inputs. The workflow does not configure/adopt those protections or authorize
+third-party testing. Current R0/R2 failures block actual staging; no source change
+here rewrites applied migrations, supplies a service owner, establishes legal
+rights or closes production gates. See docs/R3_ACCEPTANCE.md and its ledger.
+
 ## Deployment and Secrets
 
 - Run with the least required operating-system privileges.
@@ -592,3 +628,32 @@ restart stream. Its seed uses system entropy, entropy failure is explicit, and
 rejected/replayed candidates rewind the checkpoint. Durable receipts/counters
 preserve committed outcomes. No speculative success/cookie may be returned from
 an uncertain COMMIT; reconstruct and inspect before retrying.
+
+### Local R3 audit-regression boundary
+
+The role audit fails on absent schema/read/audit/column/invite/sequence rights,
+not just shared-role membership or missing broad DML. Grant setup remains explicit
+and transactional; real PostgreSQL fixtures test rollback and forbidden inherited
+password/offboarding writes. Those fixtures require an owned disposable cluster
+and explicit `WORLDWRIGHT_R3_ROLE_FIXTURES=1`, and remove their unique DBs/roles.
+They use no actual runtime passwords or approved migration ledger and cannot
+produce an accepted staging role/Secret proof. Do not run them against a shared
+production cluster merely because a URL resolves through loopback.
+
+Collector exit evidence now rejects booleans, floats, strings and signal-killed
+processes consistently with closure. Plan version and reviewer metadata are
+strictly validated; synthetic Ed25519 unit keys still adopt no service. Current
+migration failure, native/image/staging and actual owner/CNI/termination/rotation
+requirements are not waived by this local coverage.
+
+### R3 collector safeguards
+
+R3 phase output is capped at 16 MiB and captured without a shell or interactive
+stdin. Timeout/overflow/cleanup interruption cannot satisfy an expected rollout
+failure. Logs use exclusive 0600 creation and mask configured credential values,
+JSON passwords and URL passwords; private Kubernetes API bodies remain omitted.
+Exact-value masking is not comprehensive data classification: do not provision
+arbitrary secrets into logs/evidence or treat masking as confidentiality approval.
+Staging API redirects are refused; TLS verification is not disabled. Process
+cancellation of test tools is not proof of graceful Worldwright termination.
+Real Windows ACL/tree cleanup, CNI, revocation and service adoption remain open.

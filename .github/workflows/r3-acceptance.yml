@@ -1,0 +1,168 @@
+name: R3 restricted chart and reviewed staging gates
+
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_staging:
+        description: Run actual mutations only on the approved isolated R3 runner
+        type: boolean
+        default: false
+      staging_plan_path:
+        description: Private pre-provisioned plan path on that runner; never credentials in inputs
+        type: string
+      image_report_path:
+        description: Actual same-source built/pushed image report path
+        type: string
+      r2_arguments_path:
+        description: Private JSON of all seven R2 closure argument paths
+        type: string
+      adoption_path:
+        description: Optional independently signed service adoption record after actual manual cases
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  chart-and-helpers:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Test dependencies
+        shell: bash
+        run: python -m pip install -r deploy/helm/worldwright/tests/requirements.txt -r scripts/r2-requirements.txt
+      - name: Required schema, real Helm and R3 helper gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python deploy/helm/worldwright/tests/test_verify.py 2>&1 | tee "$RUNNER_TEMP/r3-chart-helper.log"
+          python scripts/test-r3.py 2>&1 | tee "$RUNNER_TEMP/r3-helper.log"
+          python scripts/test-r3-local.py 2>&1 | tee "$RUNNER_TEMP/r3-local-guard.log"
+          python scripts/test-r3-io.py 2>&1 | tee "$RUNNER_TEMP/r3-io.log"
+          python deploy/helm/worldwright/tests/verify.py 2>&1 | tee "$RUNNER_TEMP/r3-chart-real.log"
+      - name: Retain helper/Helm evidence GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r3-chart-${{ matrix.os }}
+          path: ${{ runner.temp }}/r3-*.log
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain helper/Helm evidence Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r3-chart-${{ matrix.os }}
+          path: ${{ runner.temp }}/r3-*.log
+          retention-days: 14
+          if-no-files-found: error
+
+  isolated-role-fixture:
+    # This disposable CI PostgreSQL service is a synthetic permission fixture,
+    # never the current app-migration/deployed-role/credential/adoption gate.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: worldwright_test_r3_fixture_control
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-r3-fixture-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d worldwright_test_r3_fixture_control"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      WORLDWRIGHT_R3_ROLE_FIXTURES: '1'
+      WORLDWRIGHT_TEST_DATABASE_URL: postgresql://postgres:disposable-r3-fixture-only@127.0.0.1:5432/worldwright_test_r3_fixture_control
+      WORLDWRIGHT_R3_FIXTURE_REPORT: ${{ runner.temp }}/r3-role-fixture.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test-only fixture dependencies
+        shell: bash
+        run: python -m pip install -r scripts/r2-requirements.txt
+      - name: Real PostgreSQL synthetic permission/rollback regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/test-r3-role-fixture.py 2>&1 | tee "$RUNNER_TEMP/r3-role-fixture.log"
+      - name: Retain fixture evidence GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r3-isolated-role-fixture
+          path: ${{ runner.temp }}/r3-role-fixture.*
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain fixture evidence Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r3-isolated-role-fixture
+          path: ${{ runner.temp }}/r3-role-fixture.*
+          retention-days: 14
+          if-no-files-found: error
+
+  reviewed-staging:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_staging && github.ref_name == github.event.repository.default_branch
+    # Adopt REQUIRED REVIEWERS, protected default branch, an ephemeral nonproduction
+    # isolated runner and independently installed approval trust root before use.
+    # This does not authorize/create a runner, cluster, provider or credential.
+    environment: worldwright-r3-staging
+    runs-on: [self-hosted, Linux, X64, worldwright-r3-isolated]
+    timeout-minutes: 30
+    env:
+      R3_PLAN: ${{ inputs.staging_plan_path }}
+      R3_IMAGE: ${{ inputs.image_report_path }}
+      R3_R2_ARGUMENTS: ${{ inputs.r2_arguments_path }}
+      R3_ADOPTION: ${{ inputs.adoption_path }}
+      R3_APPROVAL_KEY: ${{ vars.WORLDWRIGHT_R3_APPROVAL_PUBLIC_KEY_PATH }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Approved runner dependencies
+        shell: bash
+        run: python3 -m pip install -r deploy/helm/worldwright/tests/requirements.txt -r scripts/r2-requirements.txt
+      - name: Actual same-source staging collection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/r3-staging.py --plan "$R3_PLAN" --output "$RUNNER_TEMP/r3-staging" --confirm-staging-mutations
+      - name: Authorized same-tuple closure only when actual adoption supplied
+        if: inputs.adoption_path != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$R3_APPROVAL_KEY"
+          python3 scripts/r3-close.py --collection "$RUNNER_TEMP/r3-staging/staging.json" --image "$R3_IMAGE" --adoption "$R3_ADOPTION" --r2-arguments "$R3_R2_ARGUMENTS" --approval-public-key "$R3_APPROVAL_KEY"
+      - name: Retain private staging evidence GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r3-staging-evidence
+          path: ${{ runner.temp }}/r3-staging/*
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain private staging evidence Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r3-staging-evidence
+          path: ${{ runner.temp }}/r3-staging/*
+          retention-days: 14
+          if-no-files-found: error

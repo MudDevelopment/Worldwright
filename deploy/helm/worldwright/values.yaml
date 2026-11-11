@@ -1,3 +1,5 @@
+# Chart values format 2 is a deliberate fail-closed deployment change.
+configVersion: 2
 image:
   repository: ""
   digest: ""
@@ -17,7 +19,9 @@ ingress:
   annotations: {}
 postgres:
   existingSecret: ""
+  migrationSecret: ""
   key: WORLDWRIGHT_DATABASE_URL
+  migrationKey: WORLDWRIGHT_DATABASE_URL
 oidc:
   enabled: false
   issuer: ""
@@ -26,10 +30,15 @@ oidc:
   existingSecret: ""
   key: WORLDWRIGHT_OIDC_CLIENT_SECRET
 networkPolicy:
-  enabled: false
+  enabled: true
   namespaceSelector: {}
   podSelector: {}
   postgresCidr: ""
+  dnsNamespaceSelector:
+    matchLabels: { kubernetes.io/metadata.name: kube-system }
+  dnsPodSelector:
+    matchLabels: { k8s-app: kube-dns }
+  httpsEgressCidrs: []
 resources:
   requests: { cpu: 500m, memory: 512Mi }
   limits: { cpu: "2", memory: 1Gi }

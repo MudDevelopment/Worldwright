@@ -1,0 +1,22 @@
+test_actual_interrupted_phase_persisted_before_classification (__main__.PhaseIO.test_actual_interrupted_phase_persisted_before_classification) ... ok
+test_actual_phase_log_retention_masking_and_exclusive_write (__main__.PhaseIO.test_actual_phase_log_retention_masking_and_exclusive_write) ... ok
+test_actual_redirect_target_is_never_contacted (__main__.PhaseIO.test_actual_redirect_target_is_never_contacted) ... ok
+test_credential_masking_full_and_partial_at_cap (__main__.PhaseIO.test_credential_masking_full_and_partial_at_cap) ... ok
+test_deadline_also_bounds_closed_stdout_live_process (__main__.PhaseIO.test_deadline_also_bounds_closed_stdout_live_process) ... ok
+test_exact_limit_can_pass (__main__.PhaseIO.test_exact_limit_can_pass) ... ok
+test_exited_parent_with_live_pipe_descendant (__main__.PhaseIO.test_exited_parent_with_live_pipe_descendant) ... ok
+test_interruption_refused_even_for_positive_expected_failure (__main__.PhaseIO.test_interruption_refused_even_for_positive_expected_failure) ... ok
+test_invalid_budgets_and_no_shell_string (__main__.PhaseIO.test_invalid_budgets_and_no_shell_string) ... ok
+test_log_representation_stays_bounded_after_redaction (__main__.PhaseIO.test_log_representation_stays_bounded_after_redaction) ... ok
+test_output_limit_is_bounded_and_cannot_pass (__main__.PhaseIO.test_output_limit_is_bounded_and_cannot_pass) ... ok
+test_positive_failure_is_observed_not_interrupted (__main__.PhaseIO.test_positive_failure_is_observed_not_interrupted) ... ok
+test_private_api_body_omission_preserves_return_bytes (__main__.PhaseIO.test_private_api_body_omission_preserves_return_bytes) ... ok
+test_real_collector_wiring_and_private_logs (__main__.PhaseIO.test_real_collector_wiring_and_private_logs) ... ok
+test_stdin_is_noninteractive (__main__.PhaseIO.test_stdin_is_noninteractive) ... ok
+test_success_exact_stdout_stderr_and_exit (__main__.PhaseIO.test_success_exact_stdout_stderr_and_exit) ... ok
+test_timeout_retains_partial_output_and_reaps_reader (__main__.PhaseIO.test_timeout_retains_partial_output_and_reaps_reader) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 2.627s
+
+OK

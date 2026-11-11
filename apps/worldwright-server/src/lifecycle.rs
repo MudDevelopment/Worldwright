@@ -78,3 +78,36 @@ mod tests {
         assert!(!lifecycle.transition(LifecycleState::Quiescent));
     }
 }
+
+/// Register Unix termination/hangup before opening the serve loop. A platform
+/// registration error is a startup failure, never an unhandled graceful-shutdown
+/// claim. Windows retains Tokio's Ctrl+C handler.
+pub(crate) fn shutdown_signal() -> std::io::Result<impl std::future::Future<Output = ()>> {
+    #[cfg(unix)]
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    #[cfg(unix)]
+    let mut hangup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+    Ok(async move {
+        #[cfg(unix)]
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = terminate.recv() => {},
+            _ = hangup.recv() => {},
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+    })
+}
+
+#[cfg(test)]
+mod r3_signal_tests {
+    #[tokio::test]
+    async fn r3_shutdown_signals_register_before_waiting() {
+        let signal = super::shutdown_signal().expect("shutdown handlers register");
+        assert!(tokio::time::timeout(std::time::Duration::from_millis(10), signal)
+            .await
+            .is_err(), "registration is not itself a shutdown signal");
+    }
+}

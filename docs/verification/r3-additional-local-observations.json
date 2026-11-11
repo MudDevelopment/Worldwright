@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "kind": "local-R3-additional-check-observations",
+  "scope": "selected current EWW text readbacks in sandbox, not complete checkout/native Rust/current hosted/staging/service adoption",
+  "full_r3_closed": false,
+  "counts": {
+    "R3_regressions": 12,
+    "new_local_guards": 9,
+    "real_PostgreSQL_synthetic_role_fixture": 13,
+    "chart_checker": 6,
+    "schema_cases": 35,
+    "Helm_profiles": 4,
+    "Helm_negative_cases": 22,
+    "adjacent_R2_helpers": 12,
+    "adjacent_R2_harness": 8,
+    "python_syntax_subjects": 10,
+    "Rust_grammar_subjects": 2,
+    "static_and_expected_outcome_checks": 67
+  },
+  "helm": {
+    "version": "v3.10.1+g9f88ccb",
+    "package": "helm-binary-linux@3.10.1-1",
+    "binary_sha256": "8c375d1016b2c9754bad8da3ed07ce33c0f9af3bad8890e61737f5137be7396d",
+    "scope": "real supplementary Helm 3 execution, not configured v3.19.0 hosted run"
+  },
+  "dependencies": {"PyYAML":"6.0.2","jsonschema":"4.23.0","psycopg":"3.2.3","PyJWT":"2.10.1","cryptography":"50.0.2","websockets":"15.0.1","playwright":"1.56.0"},
+  "role_fixture": {
+    "schema_version": 1,
+    "kind": "local-R3-SYNTHETIC-role-fixture-tests",
+    "status": "passed",
+    "scope": "actual PostgreSQL privileges/SQL on bounded synthetic schema and one executed fixture migration; NOT current eight-file app migration, deployed role/Secret/SQLx audit or service adoption",
+    "full_r3_closed": false,
+    "tests_run": 13,
+    "passed": 13,
+    "errors": [],
+    "failures": [],
+    "skipped": 0
+  },
+  "role_fixture_cleanup": {"databases_remaining":0,"roles_remaining":0,"test_server_stopped":true},
+  "current_application_migration_gate": {"status":"failed","SQL_tests_run":9,"SQL_cases_passed":8,"errors":1,"migration":"20261106000100_operational_control.sql","line":188,"cause":"unquoted authorization","not_modified_or_waived":true},
+  "blocked": [
+    {"gate":"native-format","reason":"cargo executable unavailable; no native run"},
+    {"gate":"native-check","reason":"cargo executable unavailable; no native run"},
+    {"gate":"native-clippy","reason":"cargo executable unavailable; no native run"},
+    {"gate":"native-tests","reason":"cargo executable unavailable; no native run"}
+  ],
+  "image_staging_closure": "failed prerequisites / NOT CLOSED, zero promoted phases/cases",
+  "subject_sha256": {
+    "scripts/r3-close.py": "a331ed8178c1542f4f99584021134eed2dae601eee5359aeb9b98fd931e96f22",
+    "scripts/r3-staging.py": "4c644dc42f0f304e28923d769bc1b6b48ef0ed9730402bfc35fd131a70fbb2b2",
+    "scripts/r3-image.py": "349bc8c79230a0c39d73dff547d1474d7009b9f4cdd948aa6207bbcd6668ee68",
+    "scripts/r3-roles.py": "ddbbdf97822a437e33103670901edb5e351ab7035bc6f5868165197866490ced",
+    "scripts/test-r3.py": "4300c7aa319962067683dda45073060cf999b30a69f0dceeed06b701bed40064",
+    "scripts/test-r3-local.py": "94787819fdad2ffef0771aa243f7ccacc0ac32a6c44d85d539d61e886221f001",
+    "scripts/test-r3-role-fixture.py": "cbf4ec9d1532c47b4dd6ab213176282db1d15ee70e0e88a4b21589ee78155c81",
+    "deploy/helm/worldwright/tests/verify.py": "a9c25a5793dbb7d28cc4c1e8d967db7b3ee145209388f7412820ae18437828cd",
+    "deploy/helm/worldwright/tests/test_verify.py": "2562b0c821fbc5addba6c35d349a685bada4f7101063c232356b03c0ff797470",
+    "deploy/helm/worldwright/tests/migrate-values.py": "0dfb2bc7629846529caed81075822eb5ee3b7a5674cc34fb32ea8e3dd79e74c8",
+    "docs/R3_ACCEPTANCE.md": "04647ee8d7b199e44c663f1296c2c00d9503a491b04523e7398e76aadc4ae07a",
+    "deploy/README.md": "305ca41bdea54aa609556a182d19cba6378c1b262265f2a95dd4670820c81bf1",
+    "README.md": "fe387d6467d122497c8dcf4eff16a517f76bdee22c2da531de7d04b4bd34cea4",
+    "DESIGN.md": "b71b89bbbfa6911666c950e5db4a40eb7020af005231aa0d52e4e8acd504c701",
+    "SECURITY.md": "f038b6b31c264e692727edb12d0e44a393ba866e21e89bf83f388f7e1cbb8674"
+  },
+  "hash_scope": "LF-normalized selected text readback snapshots; not complete Git/native source tuple",
+  "baseline": {"local_guard_test_methods":8,"failing_subcases":7,"errors":1,"role_test_methods":13,"role_passed":7,"role_failures":6,"meaning":"failures exposed prior validation omissions; no tests or migrations weakened"},
+  "retained_logs": {
+    "local-before": {"path":"r3-additional-local-before.log","sha256":"d8ee350dfb43e77d5318a9b90277f0f64c8da1de615e7660e7fe29c1011e6a75"},
+    "roles-before": {"path":"r3-additional-roles-before.log","sha256":"d7b5a20b8b0cf9576326e5d33d00dee19473f16e660410aa16b15d7b557f25b5"},
+    "local-after": {"path":"r3-additional-local-after.log","sha256":"0ea4166e6bbf172c9523d953a78dcdc61cb8ac7123dc88532ca2a0652db0243c"},
+    "roles-after": {"path":"r3-additional-roles-after.log","sha256":"f8c0095029a28a7312c6e5d66a26c29b998f7683f918d44ed18bda707b6e1442"}
+  },
+  "workflow_sha256": "286479732e0de53739fc1607e67b3cb147896adcebc1a2bf8f913fa0c84cec79"
+}

@@ -10,10 +10,11 @@ Worldwright is **a toolkit for building games, not a single game or setting**. A
 
 > **Project status:** Milestones 1–3 are implemented development slices. **Milestone 4 — Durable Gameplay v0.1**, **Milestone 5 — Content Release and Preview v0.1**, **Milestone 6 — Operational Control v0.1**, and **Milestone 7 — Builder Workflow and Studio v0.1** are implemented awaiting their stated live evidence. M6/M7 are not production ready. See [road map](ROAD-MAP.md), [Studio guide](docs/STUDIO_V1.md), [operations contract](docs/OPERATIONS_V1.md), [release contract](docs/RELEASE_V1.md), and [M7 verification](docs/verification/milestone-7-report.md).
 >
-> **Evidence alignment — November 9, 2026:** Older milestone reports retain
-> their original Windows/Linux scope. Current source includes P0/P1/P2 and R0/R1
-> follow-through; helper checks are not native Rust or desktop acceptance.
-> Current native PostgreSQL, paired-host and hosted/manual evidence remains pending.
+> **Evidence alignment — November 10, 2026:** Older milestone reports retain
+> their original Windows/Linux scope. Current source includes P0/P1/P2 and
+> R0/R1/R2/R3 follow-through. Supplemental SQL/Helm and helper execution are
+> recorded separately from native Rust, paired-host, hosted and manual acceptance.
+> R0/R2 prerequisites and full R3 staging/adoption remain open; see their ledgers.
 >
 > **License status:** MIT OR Apache-2.0 is recommended, pending approval by the authorized copyright owner. This README does not itself grant that license or establish ownership. See [Licensing](#licensing).
 
@@ -47,8 +48,9 @@ permission message instead of being silently chmodded.
 See [P0 acceptance](docs/P0_ACCEPTANCE.md) and the
 [implementation ledger](docs/verification/p0-implementation-ledger.md).
 **All six source tracks are implemented; their full acceptance tracks remain
-open.** Synthetic/schema checks passed; current Cargo/PowerShell/real Studio,
-Helm/PostgreSQL and hosted-CI passes have not been observed here.
+open.** Synthetic/schema checks passed at that increment. Later supplemental SQL and
+Helm execution is scoped in the R2/R3 ledgers; current Cargo/PowerShell/real
+Studio and accepted paired-host/hosted passes remain unobserved.
 
 ## P1 continuation — November 9, 2026
 
@@ -140,13 +142,41 @@ Ubuntu CI is in `r0-r1.yml`. `r0-windows.yml` is explicitly dispatched on the
   configure those protections or establish a hosted pass. No full R0/R1 exit is
   currently closed.
 
+## R3 restricted staging tooling
+
+The current chart is 0.2.0 with **values `configVersion: 2`**, a breaking security
+change: immutable image digest only, distinct migration/runtime Secret refs,
+mandatory release-scoped NetworkPolicy and explicit ingress/DNS/HTTPS destinations.
+Use the explicit values migration in [deployment usage](deploy/README.md); old
+mutable-tag/shared-identity defaults are not carried forward silently. Docker
+builds require approved pinned builder/runtime refs; an unqualified build command
+is no longer sufficient. P1 image smoke needs the reviewed repository variables
+`WORLDWRIGHT_RUST_IMAGE` and `WORLDWRIGHT_RUNTIME_IMAGE`.
+
+[R3 acceptance](docs/R3_ACCEPTANCE.md) documents actual image build/push, live DB
+role audit, private staging-plan format 1, six scripted cases and four independent
+operator cases. `r3-staging.py` checks image/role peers again for the initial,
+rotated and rolled-back Pods and refuses rewound authority/state. `r3-close.py`
+requires all **13 staging phases**, including `rotated-pod-image` and
+`rollback-pod-image`, complete proof hashes, independently signed service adoption
+and current R0/R2 prerequisites. Collection is not closure. Unix SIGTERM/SIGHUP
+now enter the existing shutdown path; native controlled-exit verification remains
+pending. Windows support and Ctrl+C behavior are retained.
+
+The [R3 ledger](docs/verification/r3-acceptance-ledger.md) records actual reruns,
+exact Helm version and blocked native/staging checks. Configured Ubuntu/Windows
+helper CI and the protected staging workflow do not themselves adopt a runner,
+cluster, service owner or approval key. No current R3 release acceptance or
+production readiness is claimed.
+
 ## Current implementation
 
 The workspace contains the current Rust workspace packages. M6 provides scoped operator authorization,
 local MFA credentials/tokens, a loopback operator client, audited release
 control, lifecycle drain, and recovery/takeover tooling. M5 provides deterministic `.wwr`
 packaging, strict inspection, isolated in-memory preview, and offline staging
-publication/activation workflows. PostgreSQL tests remain compile-only evidence.
+publication/activation workflows. The native SQLx suite remains unexecuted here; separately recorded real SQL
+fixture/proxy execution does not close it or the failed full-migration gate.
 Studio adds a local append-only draft workspace, deterministic artifact
 packaging, official preview integration, and authenticated publication
 requests. Preview has no OS sandbox or network egress firewall. Production
@@ -753,3 +783,26 @@ The current full-migration preflight fails at
 `20261106000100_operational_control.sql:188` (unquoted reserved `authorization`).
 The corrected expiry cases pass; fresh-database/R2 acceptance remains blocked.
 See the R2 ledger for exact evidence and the immutable-migration repair boundary.
+
+### Additional local R3 regressions
+
+Run `python scripts/test-r3-local.py` for bounded plan/reviewer/report/OCI/exit
+checks. The collector now enforces exact integer version/exit evidence and the
+same positive-nonzero failed-rollout policy as closure. On an explicitly owned
+isolated PostgreSQL test cluster, opt into `scripts/test-r3-role-fixture.py` with
+`WORLDWRIGHT_R3_ROLE_FIXTURES=1` and `WORLDWRIGHT_TEST_DATABASE_URL`; see the R3
+acceptance guide before use. Its synthetic fixture tests real privilege semantics
+and atomic setup rollback, never current application migrations or deployed
+roles/Secrets. `r3-roles.py` now rejects missing schema, read, insert, column,
+invite and sequence prerequisites from its existing grant recipe. These
+validation fixes do not close R3 or alter application/SQL versions.
+
+### R3 collector feature completion
+
+The actual image/staging collectors now share `scripts/r3_io.py`: bounded 16 MiB
+phase capture, deadline/process-tree cancellation, partial interrupted-phase logs,
+credential-value masking, exclusive 0600 log files and no interactive stdin.
+Staging API checks refuse redirects rather than follow another deployment.
+Run `python scripts/test-r3-io.py` beside the R3 helper/chart gates in
+`docs/R3_ACCEPTANCE.md`. These are implemented collector features, not a passed
+native build, real staging deployment or signed service adoption. R3 remains open.

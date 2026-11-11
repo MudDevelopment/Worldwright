@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "kind": "local-r3-reconciliation-observations",
+  "scope": "selected current EWW text readbacks in sandbox, not complete checkout/native Rust/current hosted/staging/service adoption",
+  "full_r3_closed": false,
+  "helm": {
+    "version": "v3.10.1+g9f88ccb",
+    "package": "helm-binary-linux@3.10.1-1",
+    "binary_sha256": "8c375d1016b2c9754bad8da3ed07ce33c0f9af3bad8890e61737f5137be7396d",
+    "scope": "real supplementary Helm 3 execution, not configured v3.19.0 hosted run"
+  },
+  "dependencies": {
+    "PyYAML": "6.0.2",
+    "jsonschema": "4.23.0",
+    "psycopg": "3.2.3",
+    "PyJWT": "2.10.1",
+    "cryptography": "50.0.2",
+    "websockets": "15.0.1",
+    "playwright": "1.56.0"
+  },
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "subject_sha256": {
+    "scripts/r3-close.py": "00421ea8a8dd4e6e82f5aef4865119650560609cd654a3d278eca5b6f0496304",
+    "scripts/r3-staging.py": "3cf30f8a2bf803b069825270b54b74f6e3b3b76fec097828c474c2f8b70056b9",
+    "scripts/r3-image.py": "349bc8c79230a0c39d73dff547d1474d7009b9f4cdd948aa6207bbcd6668ee68",
+    "scripts/r3-roles.py": "54ac23459f05309085295ea8bcf5bff33a029aec8ac921cd12ff09cf90458d4e",
+    "scripts/test-r3.py": "4300c7aa319962067683dda45073060cf999b30a69f0dceeed06b701bed40064",
+    "deploy/helm/worldwright/tests/verify.py": "a9c25a5793dbb7d28cc4c1e8d967db7b3ee145209388f7412820ae18437828cd",
+    "deploy/helm/worldwright/tests/test_verify.py": "2562b0c821fbc5addba6c35d349a685bada4f7101063c232356b03c0ff797470",
+    "deploy/helm/worldwright/tests/migrate-values.py": "0dfb2bc7629846529caed81075822eb5ee3b7a5674cc34fb32ea8e3dd79e74c8",
+    "docs/R3_ACCEPTANCE.md": "9bb1651d93ba382dda8f691c72942d707c8d097c505d3ee29cb13c29f0a6abb9",
+    "deploy/README.md": "305ca41bdea54aa609556a182d19cba6378c1b262265f2a95dd4670820c81bf1",
+    "README.md": "2b4f40e2cd4ee455f1dfd6d791b324855df03c58ee454cb759fd56deef26de72",
+    "DESIGN.md": "758977667ad36e5bfff784b23b1f5e63c33607ca018069d882d5e20686684d9b",
+    "SECURITY.md": "e51d8fbb70000f65fefca0982ff556bf7a6bfb302c5b6e8fb7862d674047509e"
+  },
+  "hash_scope": "LF-normalized selected text readback snapshots; not complete Git/native source tuple",
+  "configured_python_lint_typecheck": "no root Python lint/typecheck project configuration found in inspected repository listing; no Ruff/mypy pass claimed",
+  "checks": {
+    "R3_helper_tests": 12,
+    "chart_checker_tests": 6,
+    "schema_cases": 35,
+    "real_Helm_profiles": 4,
+    "real_Helm_negative_cases": 22,
+    "adjacent_R2_helper_tests": 12,
+    "adjacent_R2_harness_tests": 8,
+    "browser_resume_adapter": "passed",
+    "python_syntax_files": 8,
+    "Rust_grammar_files": 2,
+    "documentation_workflow_static_checks": "passed",
+    "check_records_passed": 58
+  },
+  "blocked": [
+    {"gate":"native-format","reason":"cargo executable unavailable; no native run"},
+    {"gate":"native-check","reason":"cargo executable unavailable; no native run"},
+    {"gate":"native-clippy","reason":"cargo executable unavailable; no native run"},
+    {"gate":"native-tests","reason":"cargo executable unavailable; no native run"}
+  ],
+  "supplementary_SQL": {
+    "tests_run": 9,
+    "passed": 8,
+    "errors": 1,
+    "skipped": 0,
+    "status": "failed",
+    "database_version": "PostgreSQL 16.11 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+    "gate_failure": "20261106000100_operational_control.sql:188, unquoted authorization; unchanged fresh migration inventory fails",
+    "scope": "actual fixture SQL/real PostgreSQL wire tests; NOT compiled Rust/SQLx/current-owner or approved-provider acceptance",
+    "schema_cleanup": "verified",
+    "test_server_stopped": true
+  },
+  "image_prerequisite": {
+    "schema_version": 1,
+    "track": "R3",
+    "kind": "image-build",
+    "status": "failed",
+    "full_r3_closed": false,
+    "phases": [],
+    "failure": "Docker engine/buildx required; no successful skip"
+  },
+  "staging_prerequisite": {
+    "schema_version": 1,
+    "track": "R3",
+    "kind": "staging-collection",
+    "status": "failed",
+    "full_r3_closed": false,
+    "phases": [],
+    "cases": [],
+    "manual_cases_required": ["content-rollback-schema-review","controlled-termination","networkpolicy-live-positive-negative","secret-rotation-revocation"],
+    "failure": "ValueError: Helm/kubectl/Docker required; missing tools are failure"
+  },
+  "closure": {"exit_code":1,"status":"NOT CLOSED","reason":"actual image/staging/adoption/prerequisite proofs unavailable"},
+  "retained_logs": {
+    "r3-helpers": {"path":"r3-reconciliation-r3-helpers.log","sha256":"01b74eeb4916b302661bb078199ba20018ffdb804aee63dc543efe215f689861"},
+    "real-helm": {"path":"r3-reconciliation-real-helm.log","sha256":"6579a7a2efdc9557215a7a85563bced2c9d6aab9735b25234a22f42f065806a7"},
+    "supplementary-sql": {"path":"r3-reconciliation-supplementary-sql.log","sha256":"57943a0132b7bfb59f128b9fc7dd6594455e873ead69eaf052c7a34c17b12f21"},
+    "closure-refusal": {"path":"r3-reconciliation-closure-refusal.log","sha256":"17cc781ddf0f26d5444f6e3a3a5c1d86c170eec75c96376482a719a5537df813"}
+  }
+}

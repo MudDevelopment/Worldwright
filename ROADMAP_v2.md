@@ -658,3 +658,14 @@ Open reviewable issues for WWV2-001–005 and WWV2-008–009 first. Prepare R2 D
 - `docs/VERIFICATION.md`, `ROAD-MAP.md`, `IMPLEMENTATION.md`, `ARCHITECTURE.md`, `SECURITY.md`, current DESIGN sections.
 
 Historical performance report: 100 actors, 10,000 **sequential in-process** Look commands on the stated earlier Windows release build. Its microsecond-scale timings must not be represented as HTTPS/WebSocket/PostgreSQL capacity or as a fresh result from this review.
+
+## R3 source feature-completion follow-through
+
+The seven R3 tracks have concrete existing Docker/chart/startup/role/network/
+rotation/rollback source, separate from their still-open real acceptance gates.
+A source completion pass additionally closed unbounded collector output and lost
+interrupted-phase evidence, and refused staging API redirects. The shared
+`scripts/r3_io.py` and `test-r3-io.py` are wired into Ubuntu/Windows helper CI.
+See the feature-completion section in `docs/verification/r3-acceptance-ledger.md`.
+No native/hosted/image/cluster proof, applied migration repair or owner approval
+is implied; R0/R2/R3 release acceptance is not closed by this source work.

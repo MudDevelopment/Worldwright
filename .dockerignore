@@ -16,3 +16,10 @@ accounts.local.json
 *.backup
 sdk-bundle-*
 tmp-*
+
+# Generated/load/operator credentials are not image build context.
+**/*credentials*.json
+**/pgpass*
+**/pg_service.conf
+**/secrets/**
+**/.venv/**

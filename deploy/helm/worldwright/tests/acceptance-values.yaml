@@ -1,4 +1,5 @@
-# Synthetic deployment inputs; only secret REFERENCES, never credentials.
+# Synthetic REFERENCES and CIDRs, not actual deployment approval or credentials.
+configVersion: 2
 image:
   repository: registry.example.invalid/worldwright
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -6,8 +7,19 @@ publicOrigin: https://world.example.invalid
 game: reference
 ingress:
   enabled: true
+  className: nginx
   host: world.example.invalid
   tlsSecretName: world-tls
 postgres:
   existingSecret: world-postgres
+  migrationSecret: world-postgres-migrate
   key: WORLDWRIGHT_DATABASE_URL
+  migrationKey: WORLDWRIGHT_DATABASE_URL
+networkPolicy:
+  enabled: true
+  namespaceSelector:
+    matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+  podSelector:
+    matchLabels: { app.kubernetes.io/component: controller }
+  postgresCidr: 10.23.4.5/32
+  httpsEgressCidrs: [198.51.100.10/32]
