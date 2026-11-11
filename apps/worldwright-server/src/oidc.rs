@@ -59,8 +59,11 @@ impl OidcService {
             let certificate = reqwest::Certificate::from_pem(&pem)
                 .map_err(|_| crate::ServerError::startup("test CA invalid"))?;
             http.no_proxy().add_root_certificate(certificate)
-        } else { http };
-        let http = http.build()
+        } else {
+            http
+        };
+        let http = http
+            .build()
             .map_err(|_| crate::ServerError::startup("OIDC HTTP client failed"))?;
         let metadata = CoreProviderMetadata::discover_async(issuer, &http)
             .await
@@ -78,18 +81,28 @@ impl OidcService {
     }
     #[cfg(test)]
     pub(crate) fn for_r2_test(config: OidcConfig, metadata: CoreProviderMetadata) -> Self {
-        Self { config, metadata,
+        Self {
+            config,
+            metadata,
             auth: AuthService::from_records_for_test(vec![], Duration::from_secs(600)),
             pending: Arc::new(Mutex::new(HashMap::new())),
-            http: reqwest::ClientBuilder::new().no_proxy().redirect(reqwest::redirect::Policy::none())
-                .timeout(Duration::from_millis(50)).build().unwrap() }
+            http: reqwest::ClientBuilder::new()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_millis(50))
+                .build()
+                .unwrap(),
+        }
     }
     #[cfg(test)]
     pub(crate) fn assert_r2_pending(&self, state: &str, nonce: &str, challenge: &str) {
         let pending = self.pending.lock().unwrap();
         let record = pending.get(state).unwrap();
         assert_eq!(record.nonce.secret(), nonce);
-        assert_eq!(PkceCodeChallenge::from_code_verifier_sha256(&record.verifier).as_str(), challenge);
+        assert_eq!(
+            PkceCodeChallenge::from_code_verifier_sha256(&record.verifier).as_str(),
+            challenge
+        );
     }
     #[cfg(test)]
     pub(crate) fn expire_r2_pending(&self, state: &str) {

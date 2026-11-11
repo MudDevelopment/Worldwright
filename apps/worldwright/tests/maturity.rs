@@ -39,6 +39,30 @@ fn host_target() -> String {
         .to_owned()
 }
 
+fn workspace_manifest(project: &std::path::Path, manifest: &std::path::Path) -> PathBuf {
+    let output = Command::new(env!("CARGO"))
+        .current_dir(project)
+        .args([
+            "locate-project",
+            "--workspace",
+            "--message-format",
+            "plain",
+            "--manifest-path",
+        ])
+        .arg(manifest)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}: {}",
+        manifest.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
+        .canonicalize()
+        .unwrap()
+}
+
 #[test]
 fn compatibility_and_hundred_client_workload_are_machine_readable() {
     let output = cli().args(["compatibility", "--json"]).output().unwrap();
@@ -61,9 +85,18 @@ fn compatibility_and_hundred_client_workload_are_machine_readable() {
     assert!(output.status.success());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["schema_version"], 2);
-    assert_eq!(value["recipe"], worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE);
-    assert_eq!(value["recipe_version"], worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE_VERSION);
-    assert_eq!(value["percentile_recipe"], worldwright_testkit::benchmark::NEAREST_RANK_RECIPE);
+    assert_eq!(
+        value["recipe"],
+        worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE
+    );
+    assert_eq!(
+        value["recipe_version"],
+        worldwright_testkit::benchmark::RUNTIME_WORKLOAD_RECIPE_VERSION
+    );
+    assert_eq!(
+        value["percentile_recipe"],
+        worldwright_testkit::benchmark::NEAREST_RANK_RECIPE
+    );
     assert_eq!(value["clients"], 100);
     assert_eq!(value["commands"], 200);
     assert!(value["p95_ns"].as_u64().is_some());
@@ -143,12 +176,54 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
         assert!(project.join("content/world.json").is_file());
         assert!(project.join("sdk/bundle-manifest.json").is_file());
         let manifest = fs::read_to_string(project.join("Cargo.toml")).unwrap();
+        assert!(manifest.contains("[workspace]\nmembers = []\nexclude = [\"sdk\"]\n"));
         assert!(manifest.contains("sdk/crates/worldwright-sdk"));
         assert!(!manifest.contains(env!("CARGO_MANIFEST_DIR")));
         // Build only after moving the whole project, including its SDK workspace.
         let relocated = parent.join(format!("relocated-{name}"));
         fs::rename(&project, &relocated).unwrap();
         let project = relocated;
+        assert_eq!(
+            workspace_manifest(&project, &project.join("Cargo.toml")),
+            project.join("Cargo.toml").canonicalize().unwrap()
+        );
+        for crate_name in [
+            "worldwright-core",
+            "worldwright-content",
+            "worldwright-sdk",
+            "worldwright-expedition",
+            "worldwright-testkit",
+        ] {
+            assert_eq!(
+                workspace_manifest(
+                    &project,
+                    &project
+                        .join("sdk/crates")
+                        .join(crate_name)
+                        .join("Cargo.toml")
+                ),
+                project.join("sdk/Cargo.toml").canonicalize().unwrap(),
+                "{template}: {crate_name} must inherit from the bundled SDK workspace"
+            );
+        }
+        let metadata = Command::new(env!("CARGO"))
+            .current_dir(&project)
+            .args([
+                "metadata",
+                "--format-version",
+                "1",
+                "--no-deps",
+                "--offline",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            metadata.status.success(),
+            "{template}: {}",
+            String::from_utf8_lossy(&metadata.stderr)
+        );
+        let metadata: serde_json::Value = serde_json::from_slice(&metadata.stdout).unwrap();
+        assert_eq!(metadata["workspace_members"].as_array().unwrap().len(), 1);
 
         let target = parent.join("target");
         let host = host_target();
@@ -181,12 +256,13 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
                 .stderr(Stdio::piped())
                 .spawn()
                 .unwrap();
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(b"status\nforage\nrest\nrank\nquit\n")
-                .unwrap();
+            let commands: &[u8] = if template == "expedition" {
+                b"status\nforage\nrest\nrank\nquit\n"
+            } else {
+                // Unsupported game-specific commands must not crash the reference host.
+                b"status\nforage\nrest\nrank\nlook\nsay Reference speech check.\nhelp\nquit\n"
+            };
+            child.stdin.take().unwrap().write_all(commands).unwrap();
             let output = child.wait_with_output().unwrap();
             assert!(
                 output.status.success(),
@@ -200,6 +276,13 @@ fn generated_minimal_and_expedition_projects_build_and_test() {
                 assert!(text.contains("Recovery is scheduled"));
             } else {
                 assert!(text.contains("Worldwright Reference"));
+                assert_eq!(
+                    text.matches("Unknown command or invalid arguments.")
+                        .count(),
+                    4
+                );
+                assert!(text.contains("Reference speech check."));
+                assert!(!text.contains("Commands: look (l), status"));
                 assert!(!text.contains("Supplies:"));
             }
             assert!(text.contains("Goodbye."));

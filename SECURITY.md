@@ -657,3 +657,18 @@ arbitrary secrets into logs/evidence or treat masking as confidentiality approva
 Staging API redirects are refused; TLS verification is not disabled. Process
 cancellation of test tools is not proof of graceful Worldwright termination.
 Real Windows ACL/tree cleanup, CNI, revocation and service adoption remain open.
+
+## R4 protected measurement and independent approval
+
+R4 never exposes the operator plane to collect telemetry. Optional chart metrics
+bind loopback only, are disabled by default, and have no Service/Ingress;
+private Pod port-forward/host PID/database access needs reviewed authority.
+Observer PG connections require verify-full TLS and read-only transactions.
+Credentials remain external protected inputs; only bounded nonsecret observations
+and failure logs are retained. Scenario accounts/entitlements are disposable and
+separate from beta accounts. Never erase operational receipts to rerun a fixture.
+Signed performance plans/adoptions use an independently trusted public key;
+the tool creates no reviewer authority, policy, signing private key or approvals.
+Growth limits/retention identity require actual owner adoption; helper results
+cannot certify privacy/retention or operational capacity. Current native Rust,
+Windows ACL and actual controlled deployment/load/soak gates remain unverified.

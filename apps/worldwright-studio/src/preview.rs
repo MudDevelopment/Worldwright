@@ -159,7 +159,10 @@ impl PreviewManager {
         }
         let mut child = Command::new(command);
         #[cfg(unix)]
-        { use std::os::unix::process::CommandExt; child.process_group(0); }
+        {
+            use std::os::unix::process::CommandExt;
+            child.process_group(0);
+        }
         child
             .arg("preview")
             .arg(self.workspace.artifact_path(digest))
@@ -184,18 +187,28 @@ impl PreviewManager {
         if let Some(mut stdin) = child.stdin.take() {
             readers.push(thread::spawn(move || {
                 while let Ok(text) = input_rx.recv() {
-                    if stdin.write_all(text.as_bytes()).and_then(|()| stdin.write_all(b"\n"))
-                        .and_then(|()| stdin.flush()).is_err() { break; }
+                    if stdin
+                        .write_all(text.as_bytes())
+                        .and_then(|()| stdin.write_all(b"\n"))
+                        .and_then(|()| stdin.flush())
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
             }));
         }
         if let Some(mut stdout) = child.stdout.take() {
             let output = Arc::clone(&inner.captured);
-            readers.push(thread::spawn(move || read_output(&mut stdout, &output, false)));
+            readers.push(thread::spawn(move || {
+                read_output(&mut stdout, &output, false)
+            }));
         }
         if let Some(mut stderr) = child.stderr.take() {
             let output = Arc::clone(&inner.captured);
-            readers.push(thread::spawn(move || read_output(&mut stderr, &output, true)));
+            readers.push(thread::spawn(move || {
+                read_output(&mut stderr, &output, true)
+            }));
         }
         inner.running = Some(RunningPreview {
             child,
@@ -230,16 +243,24 @@ impl PreviewManager {
         }
         let inner = self.state.lock().map_err(|_| "preview unavailable")?;
         let run = inner.running.as_ref().ok_or("preview is not running")?;
-        run.input.as_ref().ok_or("preview input closed")?.try_send(text.to_owned()).map_err(|_| "preview input busy or unavailable".to_owned())
+        run.input
+            .as_ref()
+            .ok_or("preview input closed")?
+            .try_send(text.to_owned())
+            .map_err(|_| "preview input busy or unavailable".to_owned())
     }
     pub fn stop(&self) -> Result<PreviewStatus, String> {
         let mut inner = self.state.lock().map_err(|_| "preview unavailable")?;
         if let Some(run) = inner.running.as_mut() {
-            if let Some(input) = &run.input { let _ = input.try_send("quit".to_owned()); }
+            if let Some(input) = &run.input {
+                let _ = input.try_send("quit".to_owned());
+            }
             let deadline = std::time::Instant::now() + Duration::from_secs(2);
             loop {
                 let status = run.child.try_wait();
-                if matches!(status, Ok(Some(_))) { run.input.take(); }
+                if matches!(status, Ok(Some(_))) {
+                    run.input.take();
+                }
                 match status {
                     Ok(Some(_)) if !run.readers.iter().all(JoinHandle::is_finished) => {
                         if std::time::Instant::now() < deadline {
@@ -303,7 +324,9 @@ impl PreviewManager {
             run.input.take();
             // A successful process status alone is not a complete preview receipt.
             // Drain both outputs and release the writer before publication eligibility.
-            if !run.readers.iter().all(JoinHandle::is_finished) { return; }
+            if !run.readers.iter().all(JoinHandle::is_finished) {
+                return;
+            }
             inner.status.exit_code = status.code();
             inner.status.completed_at = Some(now());
             inner.status.state = if status.success()
@@ -361,7 +384,9 @@ impl Drop for PreviewManager {
         }
         if let Ok(mut inner) = self.state.lock() {
             if let Some(run) = inner.running.as_mut() {
-                if let Some(input) = &run.input { let _ = input.try_send("quit".to_owned()); }
+                if let Some(input) = &run.input {
+                    let _ = input.try_send("quit".to_owned());
+                }
                 let _ = terminate_tree(&mut run.child);
             }
             retire_run(&mut inner);
@@ -404,7 +429,13 @@ pub fn resolve_command(explicit: Option<&PathBuf>) -> Result<Option<PathBuf>, St
     }
 }
 fn terminate_tree(child: &mut Child) -> Result<(), String> {
-    if child.try_wait().map_err(|_| "preview status failed")?.is_some() { return Ok(()); }
+    if child
+        .try_wait()
+        .map_err(|_| "preview status failed")?
+        .is_some()
+    {
+        return Ok(());
+    }
     #[cfg(unix)]
     let mut killer = {
         let mut command = Command::new("/bin/kill");
@@ -413,7 +444,8 @@ fn terminate_tree(child: &mut Child) -> Result<(), String> {
     };
     #[cfg(windows)]
     let mut killer = {
-        let root = std::env::var_os("SystemRoot").ok_or("SystemRoot unavailable for preview tree termination")?;
+        let root = std::env::var_os("SystemRoot")
+            .ok_or("SystemRoot unavailable for preview tree termination")?;
         let mut command = Command::new(PathBuf::from(root).join("System32/taskkill.exe"));
         command.args(["/F", "/T", "/PID", &child.id().to_string()]);
         command
@@ -422,18 +454,32 @@ fn terminate_tree(child: &mut Child) -> Result<(), String> {
     return Err("preview tree termination is unsupported on this platform".into());
     #[cfg(any(unix, windows))]
     {
-        let mut killer = killer.env_clear().stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
-            .spawn().map_err(|_| "preview tree termination unavailable")?;
+        let mut killer = killer
+            .env_clear()
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| "preview tree termination unavailable")?;
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         loop {
-            if let Some(status) = killer.try_wait().map_err(|_| "preview tree termination failed")? {
-                if !status.success() && child.try_wait().map_err(|_| "preview status failed")?.is_none() {
+            if let Some(status) = killer
+                .try_wait()
+                .map_err(|_| "preview tree termination failed")?
+            {
+                if !status.success()
+                    && child
+                        .try_wait()
+                        .map_err(|_| "preview status failed")?
+                        .is_none()
+                {
                     return Err("preview tree termination failed".into());
                 }
                 break;
             }
             if std::time::Instant::now() >= deadline {
-                let _ = killer.kill(); let _ = killer.wait();
+                let _ = killer.kill();
+                let _ = killer.wait();
                 return Err("preview tree termination timed out".into());
             }
             thread::sleep(Duration::from_millis(10));
@@ -444,12 +490,18 @@ fn terminate_tree(child: &mut Child) -> Result<(), String> {
 }
 
 fn retire_run(inner: &mut Inner) {
-    if let Some(run) = inner.running.take() { inner.retired_readers.extend(run.readers); }
+    if let Some(run) = inner.running.take() {
+        inner.retired_readers.extend(run.readers);
+    }
 }
 fn reap_readers(inner: &mut Inner) {
     let mut pending = Vec::new();
     for reader in inner.retired_readers.drain(..) {
-        if reader.is_finished() { let _ = reader.join(); } else { pending.push(reader); }
+        if reader.is_finished() {
+            let _ = reader.join();
+        } else {
+            pending.push(reader);
+        }
     }
     inner.retired_readers = pending;
 }
@@ -475,14 +527,18 @@ fn read_output(reader: &mut impl Read, state: &Arc<Mutex<CapturedOutput>>, stder
             let text = String::from_utf8_lossy(&pending[..end]);
             let prefix = if stderr { "[stderr] " } else { "" };
             let value = format!("{prefix}{text}");
-            let Ok(mut captured) = state.lock() else { return; };
+            let Ok(mut captured) = state.lock() else {
+                return;
+            };
             captured.sequence = captured.sequence.saturating_add(1);
             let mut truncated = captured.truncated;
             append_bounded(&mut captured.text, &value, &mut truncated);
             captured.truncated = truncated;
             pending.drain(..end);
         }
-        if n == 0 { return; }
+        if n == 0 {
+            return;
+        }
     }
 }
 fn append_bounded(output: &mut String, value: &str, truncated: &mut bool) {
@@ -526,19 +582,40 @@ mod tests {
 
     #[test]
     fn streaming_output_preserves_split_utf8_and_incomplete_eof() {
-        struct ByteReader { bytes: Vec<u8>, position: usize }
+        struct ByteReader {
+            bytes: Vec<u8>,
+            position: usize,
+        }
         impl Read for ByteReader {
             fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-                if self.position == self.bytes.len() { return Ok(0); }
-                buffer[0] = self.bytes[self.position]; self.position += 1; Ok(1)
+                if self.position == self.bytes.len() {
+                    return Ok(0);
+                }
+                buffer[0] = self.bytes[self.position];
+                self.position += 1;
+                Ok(1)
             }
         }
         let capture = Arc::new(Mutex::new(CapturedOutput::default()));
-        read_output(&mut ByteReader { bytes: "é🙂".as_bytes().to_vec(), position: 0 }, &capture, false);
+        read_output(
+            &mut ByteReader {
+                bytes: "é🙂".as_bytes().to_vec(),
+                position: 0,
+            },
+            &capture,
+            false,
+        );
         assert_eq!(capture.lock().unwrap().text, "é🙂");
         let old = Arc::clone(&capture);
         let replacement = Arc::new(Mutex::new(CapturedOutput::default()));
-        read_output(&mut ByteReader { bytes: vec![0xc3], position: 0 }, &old, false);
+        read_output(
+            &mut ByteReader {
+                bytes: vec![0xc3],
+                position: 0,
+            },
+            &old,
+            false,
+        );
         assert_eq!(replacement.lock().unwrap().sequence, 0);
         assert!(old.lock().unwrap().text.ends_with('\u{fffd}'));
     }

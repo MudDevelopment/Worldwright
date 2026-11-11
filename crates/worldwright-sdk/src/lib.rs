@@ -79,7 +79,10 @@ mod tests {
         assert_eq!(COMPATIBILITY.sdk_current, 1);
         assert_eq!(COMPATIBILITY.sdk_supported, &[1]);
         assert_eq!(COMPATIBILITY.protocol_supported, &[1]);
-        assert_eq!(COMPATIBILITY.content_schema_supported, worldwright_content::SUPPORTED_CONTENT_SCHEMA_VERSIONS);
+        assert_eq!(
+            COMPATIBILITY.content_schema_supported,
+            worldwright_content::SUPPORTED_CONTENT_SCHEMA_VERSIONS
+        );
         assert_eq!(super::SDK_PACKAGE_VERSION, env!("CARGO_PKG_VERSION"));
         assert_eq!(DEPRECATIONS[0].earliest_removal, "0.3");
     }

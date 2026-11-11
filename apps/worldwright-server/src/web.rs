@@ -64,7 +64,10 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/", get(index))
         .route("/app.js", get(app_js))
         .route("/app.css", get(app_css))
-        .route("/api/v1/session", post(login).get(session_status).delete(logout))
+        .route(
+            "/api/v1/session",
+            post(login).get(session_status).delete(logout),
+        )
         .route("/api/v1/oidc/start", post(oidc_start))
         .route("/api/v1/oidc/callback", get(oidc_callback))
         .route("/api/v1/play", get(play))

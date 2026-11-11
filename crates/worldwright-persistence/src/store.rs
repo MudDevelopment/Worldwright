@@ -11,6 +11,7 @@ pub(crate) static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migr
 #[derive(Clone)]
 pub struct PostgresStore {
     pub(crate) pool: PgPool,
+    pub(crate) measurements: std::sync::Arc<crate::measurements::Measurements>,
 }
 
 #[derive(FromRow)]
@@ -47,7 +48,39 @@ struct WriterRow {
 
 impl PostgresStore {
     pub fn from_pool(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            measurements: std::sync::Arc::new(crate::measurements::Measurements::default()),
+        }
+    }
+
+    /// Observational bounded telemetry, never authentication or write authority.
+    pub fn telemetry(&self) -> String {
+        format!(
+            "worldwright_pg_pool_size {}\nworldwright_pg_pool_idle {}\n{}",
+            self.pool.size(),
+            self.pool.num_idle(),
+            self.measurements.render()
+        )
+    }
+
+    pub(crate) async fn measured_begin(
+        &self,
+    ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, PersistenceError> {
+        let _timing = self.measurements.start(0);
+        self.pool.begin().await.map_err(PersistenceError::Database)
+    }
+
+    pub(crate) async fn measured_commit(
+        &self,
+        tx: sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<(), PersistenceError> {
+        let _timing = self.measurements.start(1);
+        tx.commit()
+            .await
+            .map_err(|_| PersistenceError::UnknownOutcome)?;
+        self.measurements.event(6, 1);
+        Ok(())
     }
 
     #[cfg(test)]
@@ -87,7 +120,7 @@ impl PostgresStore {
             })
             .connect_with(options)
             .await?;
-        Ok(Self { pool })
+        Ok(Self::from_pool(pool))
     }
     pub async fn migrate(&self) -> Result<(), PersistenceError> {
         MIGRATOR

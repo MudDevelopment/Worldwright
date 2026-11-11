@@ -88,8 +88,8 @@ jobs or branch-protection adoption. See `docs/P0_ACCEPTANCE.md` and
 - Studio capabilities schema version 1 is additive. Bounds derive from backend
   runtime/content constants; browser UTF-8 hints do not replace validation.
 - Optional `WORLDWRIGHT_TELEMETRY_BIND` is a separate loopback-only listener,
-  disabled by default. Six fixed timing dimensions cover queue, owner, planning,
-  SQL, delivery and idle ticks. They are cumulative observational histograms,
+  disabled by default. Eight fixed timing dimensions cover queue, owner, planning,
+  SQL, delivery, idle ticks, snapshot/export and idle timer lag. They are cumulative observational histograms,
   not business authority or proof of a stage-by-stage database lock profile.
 - New projects carry `sdk/` with relative path dependencies and embedded content.
   Supplied matching bundles are verified and copied under explicit bounds.
@@ -1392,3 +1392,58 @@ subprocess/pipe/deadline paths and loopback redirect refusal have real local
 regressions; native Windows taskkill/ACL and actual Worldwright shutdown remain
 separate unverified acceptance. Redirects are rejected at the API transport so
 TLS readiness/login cannot silently switch to a different deployment/origin.
+
+## Generated consumer versus nested SDK workspace
+
+The native Windows relocation regression exposed Cargo auto-membership of local
+path dependencies: the generated consumer's empty workspace could capture SDK
+crates and could not supply their inherited `workspace.package.edition`.
+The test expresses the intended contract and is retained, not weakened.
+
+Generated consumers use `members = []`, the literal path-prefix exclusion
+`exclude = ["sdk"]`, and resolver 3. The root application is included automatically.
+The first attempted fix, `members = ["."]`, was incorrect: Cargo 1.85.1 checks
+explicit members with path-prefix matching and gives them precedence over
+exclusions, thereby re-enrolling every nested SDK dependency. Its exclusion
+predicate does not expand glob patterns, so `sdk/crates/*` is not needed either.
+This was checked against Cargo commit d73d2caf9, core/workspace.rs:
+`find_members` always visits the root manifest; `is_excluded` returns
+`!explicit_member && excluded`. Each of the five source/bundled SDK
+crate manifests names its root as `package.workspace = "../.."`. Both repository
+and bundle retain the same crates/name directory depth, so the binding remains
+relative and needs no post-copy manifest mutation. Edition, version, minimum
+Rust, dependencies and lints continue to come from the appropriate workspace.
+SDK package/API versions, lockfile policy, license status and SQL are unchanged.
+
+Bundle creation still hashes actual copied bytes. Existing artifacts are not
+rewritten; regenerate obsolete scratch bundles/projects rather than modifying
+integrity-covered manifests while retaining stale bundle hashes. The relocation
+regression invokes Cargo locate-project for consumer/all five crates plus Cargo
+metadata to ensure consumer membership remains one; original offline build,
+locked rebuild and meaningful minimal/expedition runtime assertions remain.
+Source/TOML checks passed locally. Subsequent user-observed Windows verification
+passed the complete maturity suite, including both relocated consumer builds
+and playable runs; this does not imply a complete native/paired-host release gate.
+
+## Shared terminal profile isolation
+
+After the SDK workspace correction, the relocated minimal binary built and
+validated its content but failed at runtime on Rule(MissingRule). Registration
+was correct: ReferenceGame intentionally registers Look/Move/Say, not GameAction.
+The adapter selected reference rules at startup but forgot that selection when
+parsing commands; action_id(forage/rest/etc.) was dispatched in every profile.
+The implementation, not the test's successful-exit requirement, was wrong.
+
+Session now keeps the same expedition flag used for rule registration. Common
+look/l, go, say, help and quit/exit remain available to both profiles; expedition
+counter aliases and actions require expedition mode. Startup/help/unknown-input
+messages share the selected grammar, and errors identify the correct profile.
+Unsupported verbs return before runtime advancement/execution or operation-ID
+allocation. No dummy GameAction rule or general MissingRule suppression is added.
+Reference regressions assert unchanged revision/room/schedule/operation state,
+common commands without randomness, and genuine MissingRule propagation when
+explicitly invoking an unregistered command. The relocated integration retains
+its original unsupported inputs and adds reference speech/help assertions;
+expedition progression/recovery assertions remain unchanged. Subsequent
+user-observed Windows runs passed all seven terminal tests and the complete
+three-test maturity suite, including both relocated playable executables.

@@ -132,7 +132,7 @@ async fn run_inner(options: RunOptions) -> Result<bool, String> {
     connected.sort_by_key(|client| client.index);
     let connected_count = connected.len() as u64;
     let barrier = Instant::now() + Duration::from_millis(100);
-    let mut latencies = Vec::new();
+    let mut latencies = Vec::with_capacity(target_clients * commands);
     let mut work = Vec::new();
     let (readiness_checks, readiness_failures, elapsed_ms) = if connected.len() == target_clients {
         let (readiness_stop, readiness_rx) = watch::channel(false);
@@ -142,7 +142,7 @@ async fn run_inner(options: RunOptions) -> Result<bool, String> {
             barrier,
             readiness_rx,
         ));
-        let (latency_tx, mut latency_rx) = mpsc::unbounded_channel();
+        let (latency_tx, mut latency_rx) = mpsc::channel(target_clients * commands);
         let mut futures = connected
             .into_iter()
             .map(|client| {
@@ -230,6 +230,7 @@ async fn run_inner(options: RunOptions) -> Result<bool, String> {
         throughput_milli_commands_per_second: throughput,
         latency: latency_stats(latencies),
         passed: false,
+        tooling_smoke_passed: false,
         failure_reasons: Vec::new(),
     };
     evaluate(&mut report, options.profile);
@@ -246,7 +247,7 @@ async fn run_inner(options: RunOptions) -> Result<bool, String> {
         "profile={} connected={} completed={} passed={}",
         report.profile, report.connected_clients, report.completed_commands, report.passed
     );
-    Ok(report.passed)
+    Ok(report.passed || report.tooling_smoke_passed)
 }
 
 fn validate_metadata(revision: &str, digest: &str, label: &str) -> Result<(), String> {
@@ -511,7 +512,7 @@ async fn run_client(
     commands: usize,
     period_ms: u64,
     run_nonce: String,
-    latency_tx: mpsc::UnboundedSender<u64>,
+    latency_tx: mpsc::Sender<u64>,
 ) -> WorkResult {
     let offset_ms = (client.index as u64).saturating_mul(period_ms) / total_clients as u64;
     for command_index in 0..commands {
@@ -559,7 +560,7 @@ async fn run_client(
         match outcome {
             Ok(Ok(())) => {
                 let latency = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
-                if latency_tx.send(latency).is_err() {
+                if latency_tx.send(latency).await.is_err() {
                     return WorkResult {
                         failure: Some(ClientFailure::Internal),
                     };

@@ -71,7 +71,9 @@ impl crate::store::PostgresStore {
         }
         // A failed COMMIT acknowledgement is not evidence of rollback. Inspect
         // uncertain invite issuance; do not claim the token was never persisted.
-        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)?;
+        tx.commit()
+            .await
+            .map_err(|_| PersistenceError::UnknownOutcome)?;
         Ok(input.invite)
     }
 
@@ -221,7 +223,9 @@ impl crate::store::PostgresStore {
         .execute(&mut *tx)
         .await?;
         // Never mint a browser cookie from an uncertain durable identity/session commit.
-        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)?;
+        tx.commit()
+            .await
+            .map_err(|_| PersistenceError::UnknownOutcome)?;
         Ok(OidcSession {
             principal: SessionPrincipal {
                 account: account_id(account)?,

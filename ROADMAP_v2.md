@@ -669,3 +669,15 @@ interrupted-phase evidence, and refused staging API redirects. The shared
 See the feature-completion section in `docs/verification/r3-acceptance-ledger.md`.
 No native/hosted/image/cluster proof, applied migration repair or owner approval
 is implied; R0/R2/R3 release acceptance is not closed by this source work.
+
+## R4 implementation follow-through — source, not measured beta closure
+
+R4 now has smoke-specific result handling, bounded fixed-profile latency capture,
+owner snapshot/idle-lag and persistence pool-begin/commit/replacement observations,
+opt-in loopback chart metrics, private read-only PG/CPU/RSS/telemetry sampling,
+seven separate protocol/soak scenarios, source/deployment-bound collection and
+strict signed closure/comparison. The predeclared beta-250-v1 recipe is unchanged.
+Native integrity/R2/R3 gates and reviewer-retention adoption are mandatory;
+actual measurements and any justified optimization remain open. New docs and
+`docs/verification/r4-acceptance-ledger.md` distinguish implemented source,
+local/helper/supplemental checks, configured CI and actual accepted deployment.

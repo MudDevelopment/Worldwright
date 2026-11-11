@@ -112,6 +112,9 @@ def schema_matrix(chart: Path) -> int:
     check(apply(values, {"image.digest": "", "image.allowMutableTag": True, "image.tag": "acceptance"}), False, "format 2 refuses mutable image opt-in")
     for override in ({'postgres.migrationSecret': ''}, {'postgres.migrationSecret': 'world-postgres'}, {'networkPolicy.enabled': False}, {'networkPolicy.postgresCidr': '0.0.0.0/0'}, {'networkPolicy.dnsPodSelector': {}}, {'networkPolicy.namespaceSelector': {}}, {**OIDC, 'networkPolicy.httpsEgressCidrs': []}, {'configVersion': 1}):
         check(apply(values, override), False, 'restricted deployment refusal')
+    check(apply(values, {'telemetry.enabled': True}), True, 'explicit loopback telemetry')
+    legacy=copy.deepcopy(values); legacy.pop('telemetry',None); check(legacy,True,'old format 2 defaults still load')
+    for override in ({'telemetry.enabled':'true'},{'telemetry.port':8080},{'telemetry.port':80},{'telemetry.port':65536},{'telemetry.bind':'0.0.0.0'}): check(apply(values,override),False,'telemetry scope/bounds')
     print(f"PASS: {count} JSON Schema cases (not Helm rendering)")
     return count
 
@@ -140,7 +143,7 @@ def invoke(args: list[str], failure: str | None = None) -> str:
     require(len(result.stdout.encode()) <= 1024 * 1024, "rendered output exceeds acceptance bound")
     return result.stdout
 
-def rendered_resources(text: str, game: str, oidc: bool) -> None:
+def rendered_resources(text: str, game: str, oidc: bool, telemetry: bool = False) -> None:
     docs = [doc for doc in yaml.safe_load_all(text) if isinstance(doc, dict) and doc.get("kind")]
     keys = [(doc["kind"], doc.get("metadata", {}).get("name")) for doc in docs]
     require(len(keys) == len(set(keys)), "duplicate rendered resource identities")
@@ -169,7 +172,9 @@ def rendered_resources(text: str, game: str, oidc: bool) -> None:
         refs = {item["name"]: item.get("valueFrom", {}).get("secretKeyRef") for item in container["env"]}
         expected_secret = 'world-postgres-migrate' if container is migration else 'world-postgres'
         require(refs["WORLDWRIGHT_DATABASE_URL"] == {"name": expected_secret, "key": "WORLDWRIGHT_DATABASE_URL"}, "Postgres secretKeyRef identity separation")
-        require(all("value" not in item for item in container["env"]), "no plaintext environment credentials")
+        require(all("value" not in item or (container is server and item['name']=='WORLDWRIGHT_TELEMETRY_BIND' and item['value']=='127.0.0.1:9090') for item in container["env"]), "no plaintext environment credentials or public telemetry")
+    telemetry_env=[item for item in server['env'] if item['name']=='WORLDWRIGHT_TELEMETRY_BIND']
+    require(telemetry_env==([{'name':'WORLDWRIGHT_TELEMETRY_BIND','value':'127.0.0.1:9090'}] if telemetry else []),'opt-in loopback telemetry only')
     args = server["args"]
     for required in ("serve", "--acquire-writer", "--behind-tls-ingress"):
         require(required in args, f"required public flag {required}")
@@ -218,6 +223,10 @@ def helm_matrix(chart: Path) -> None:
             invoke(helm_command(helm, chart, "lint", overrides))
             rendered_resources(invoke(helm_command(helm, chart, "template", overrides)), game, oidc)
             print(f"PASS: actual Helm lint/YAML {game}/OIDC={oidc}")
+    overrides={'telemetry.enabled':True,'game':'reference','oidc.enabled':False}
+    invoke(helm_command(helm,chart,'lint',overrides))
+    rendered_resources(invoke(helm_command(helm,chart,'template',overrides)),'reference',False,True)
+    print('PASS: actual Helm opt-in loopback telemetry (no public Service/Ingress)')
     negative = [
         ({"image.digest": ""}, "image"),
         ({"image.digest": "sha256:" + "A" * 64}, "image"),
@@ -233,6 +242,7 @@ def helm_matrix(chart: Path) -> None:
     ]
     negative += [({'postgres.migrationSecret': ''},'postgres'), ({'postgres.migrationSecret': 'world-postgres'},'postgres'), ({'networkPolicy.enabled': False},'networkPolicy'), ({'networkPolicy.namespaceSelector': {}},'networkPolicy'), ({**OIDC,'networkPolicy.httpsEgressCidrs': []},'networkPolicy'), ({'configVersion':1},'configVersion')]
     negative += [({**OIDC, f"oidc.{key}": ""}, "oidc") for key in ("issuer", "clientId", "redirectUri", "existingSecret", "key")]
+    negative += [({'telemetry.port':8080},'telemetry'),({'telemetry.port':80},'telemetry'),({'telemetry.port':65536},'telemetry')]
     for overrides, reason in negative:
         invoke(helm_command(helm, chart, "template", overrides), failure=reason)
     print(f"PASS: {len(negative)} actual Helm negative cases")

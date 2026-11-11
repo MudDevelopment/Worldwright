@@ -10,8 +10,7 @@ pub fn nearest_rank_index(sample_count: usize, percent: usize) -> Option<usize> 
     if sample_count == 0 || !(1..=100).contains(&percent) {
         return None;
     }
-    let rank = (sample_count / 100) * percent
-        + ((sample_count % 100) * percent).div_ceil(100);
+    let rank = (sample_count / 100) * percent + ((sample_count % 100) * percent).div_ceil(100);
     Some(rank - 1)
 }
 

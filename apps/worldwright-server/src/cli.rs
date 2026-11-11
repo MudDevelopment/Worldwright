@@ -1198,7 +1198,9 @@ where
                     let shutdown = match crate::lifecycle::shutdown_signal() {
                         Ok(shutdown) => shutdown,
                         Err(error) => {
-                            eprintln!("worldwright-server: shutdown signal registration failed: {error}");
+                            eprintln!(
+                                "worldwright-server: shutdown signal registration failed: {error}"
+                            );
                             return ExitCode::from(1);
                         }
                     };

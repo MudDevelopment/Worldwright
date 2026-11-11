@@ -127,3 +127,15 @@ incarnation, receipt history or game-state encodings. Keep a recovery plan and
 retain failures; an interrupted exercise may leave staging not ready. Recover
 through the reviewed maintenance workflow, not by deleting evidence or assuming
 an old binary can read new schema/content. Follow the detailed R3 guide.
+
+## R4 opt-in private measurements
+
+Chart values format 2 now accepts optional `telemetry: {enabled: true, port: 9090}`.
+This is additive: defaults/absent input remain disabled. Port must be 1024–65535,
+not the public HTTP port 8080. The server binds `127.0.0.1:port` inside the Pod;
+no public metrics Service/Ingress or operator credentials are added. A reviewed
+private Pod port-forward and approved host-visible server PID enable the R4
+observer. Rebuild/redeploy the same-source image and close R2/R3 before measuring.
+See `docs/R4_ACCEPTANCE.md` for signed plan, protected PG TLS observer, native
+fixed-load/supplemental scenario/soak and independent closure. Rendered telemetry
+and configured CI are not running-service/protected-access/capacity evidence.

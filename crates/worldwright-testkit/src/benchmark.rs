@@ -167,7 +167,10 @@ mod tests {
         assert_eq!(percentile(&[], 50), None);
         assert_eq!(percentile(&values, 0), None);
         assert_eq!(RUNTIME_WORKLOAD_RECIPE_VERSION, 2);
-        assert_eq!(NEAREST_RANK_RECIPE, worldwright_core::measurement::NEAREST_RANK_RECIPE);
+        assert_eq!(
+            NEAREST_RANK_RECIPE,
+            worldwright_core::measurement::NEAREST_RANK_RECIPE
+        );
     }
     #[test]
     fn hundred_client_objective_completes_bounded_work() {

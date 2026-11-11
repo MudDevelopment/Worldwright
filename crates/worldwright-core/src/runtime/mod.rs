@@ -200,7 +200,10 @@ impl WorldRuntime {
     }
     /// Trusted host inspection without cloning an administrative world snapshot.
     pub fn room_of(&self, character: CharacterId) -> Option<RoomId> {
-        self.state.characters.get(&character).map(|record| record.room)
+        self.state
+            .characters
+            .get(&character)
+            .map(|record| record.room)
     }
     pub fn attachment(&self, character: CharacterId) -> Option<ActorContext> {
         self.state.attachments.get(&character).copied()

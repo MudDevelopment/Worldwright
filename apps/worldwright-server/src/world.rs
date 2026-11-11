@@ -224,8 +224,18 @@ pub(crate) trait DurableStore: Send + Sync {
 #[async_trait]
 impl DurableStore for PostgresStore {
     async fn commit_tick(&self, input: DurableTickMutation) -> Result<u64, PersistenceError> {
-        self.commit_gameplay_tick(input.lease, input.release, input.game, input.version,
-            worldwright_persistence::GameplayState { runtime: &input.runtime, rooms: &input.rooms, now: input.now }).await
+        self.commit_gameplay_tick(
+            input.lease,
+            input.release,
+            input.game,
+            input.version,
+            worldwright_persistence::GameplayState {
+                runtime: &input.runtime,
+                rooms: &input.rooms,
+                now: input.now,
+            },
+        )
+        .await
     }
     async fn commit_gameplay(
         &self,
@@ -740,8 +750,13 @@ impl WorldHandle {
     }
 
     pub(crate) fn telemetry(&self) -> String {
-        format!("worldwright_ready {}\nworldwright_connected_clients {}\nworldwright_admission_rejections_total {}\n{}",
-            u8::from(self.is_ready()), self.connected_clients(), self.admission_rejections(), self.timings.render())
+        format!(
+            "worldwright_ready {}\nworldwright_connected_clients {}\nworldwright_admission_rejections_total {}\n{}",
+            u8::from(self.is_ready()),
+            self.connected_clients(),
+            self.admission_rejections(),
+            self.timings.render()
+        )
     }
 
     pub(crate) fn is_ready(&self) -> bool {
@@ -785,8 +800,13 @@ impl Owner {
             .as_ref()
             .map(|_| tokio::time::interval(Duration::from_secs(1)));
         loop {
-            if self.control.is_closed() && self.control.is_empty()
-                && self.gameplay.is_closed() && self.gameplay.is_empty() { break; }
+            if self.control.is_closed()
+                && self.control.is_empty()
+                && self.gameplay.is_closed()
+                && self.gameplay.is_empty()
+            {
+                break;
+            }
             tokio::select! {
                 biased;
                 _ = async {
@@ -818,15 +838,31 @@ impl Owner {
             return self.durable_failure(DisconnectReason::Internal);
         };
         let now = Tick::from_millis(elapsed);
-        if !self.runtime.next_scheduled_at().is_some_and(|at| at <= now) { return false; }
-        let checkpoint = self.runtime.snapshot();
+        let Some(at) = self.runtime.next_scheduled_at().filter(|at| *at <= now) else {
+            return false;
+        };
+        self.timings.observe(
+            7,
+            Duration::from_millis(now.as_millis().saturating_sub(at.as_millis())),
+        );
+        let checkpoint = {
+            let _timing = self.timings.start(6);
+            self.runtime.snapshot()
+        };
         let result = match self.runtime.advance(now) {
             Ok(result) => result,
             Err(_) => return self.durable_failure(DisconnectReason::Internal),
         };
-        if result.events.is_empty() { return false; }
-        let Some(context) = self.durable.clone() else { return false; };
-        let snapshot = self.runtime.snapshot();
+        if result.events.is_empty() {
+            return false;
+        }
+        let Some(context) = self.durable.clone() else {
+            return false;
+        };
+        let snapshot = {
+            let _timing = self.timings.start(6);
+            self.runtime.snapshot()
+        };
         let runtime = match snapshot.durable_state() {
             Ok(runtime) => runtime,
             Err(_) => return self.durable_failure(DisconnectReason::Internal),
@@ -834,17 +870,35 @@ impl Owner {
         let mut rooms = Vec::new();
         for character in snapshot.characters() {
             let Some(room_definition) = snapshot.room_of(character).and_then(|room| {
-                self.lookup.room_ids.iter().find_map(|(definition, id)|
-                    (*id == room).then(|| definition.to_string()))
-            }) else { return self.durable_failure(DisconnectReason::Internal); };
-            rooms.push(DurableCharacterRoom { character, room_definition });
+                self.lookup
+                    .room_ids
+                    .iter()
+                    .find_map(|(definition, id)| (*id == room).then(|| definition.to_string()))
+            }) else {
+                return self.durable_failure(DisconnectReason::Internal);
+            };
+            rooms.push(DurableCharacterRoom {
+                character,
+                room_definition,
+            });
         }
-        match context.store.commit_tick(DurableTickMutation {
-            lease: context.lease, release: context.release_digest, game: context.game,
-            version: context.game_state_version, runtime, rooms, now,
-        }).await {
+        match context
+            .store
+            .commit_tick(DurableTickMutation {
+                lease: context.lease,
+                release: context.release_digest,
+                game: context.game,
+                version: context.game_state_version,
+                runtime,
+                rooms,
+                now,
+            })
+            .await
+        {
             Ok(version) => {
-                if let Some(current) = self.durable.as_mut() { current.game_state_version = version; }
+                if let Some(current) = self.durable.as_mut() {
+                    current.game_state_version = version;
+                }
                 false
             }
             Err(error) => {
@@ -853,7 +907,9 @@ impl Owner {
                     DisconnectReason::Protocol(ErrorCode::WriterFenced)
                 } else if matches!(error, PersistenceError::UnknownOutcome) {
                     DisconnectReason::Protocol(ErrorCode::OperationPending)
-                } else { DisconnectReason::Protocol(ErrorCode::TemporarilyUnavailable) };
+                } else {
+                    DisconnectReason::Protocol(ErrorCode::TemporarilyUnavailable)
+                };
                 self.durable_failure(reason)
             }
         }
@@ -1256,7 +1312,10 @@ impl Owner {
             Some(route) if route.actor == request.actor => route.session_token.clone(),
             _ => return DurableCommandStatus::Failed,
         };
-        let checkpoint = self.runtime.snapshot();
+        let checkpoint = {
+            let _timing = self.timings.start(6);
+            self.runtime.snapshot()
+        };
         let random_checkpoint = self.random;
         let kind = match &request.command {
             ClientCommand::Look => worldwright_persistence::GameplayIntentKind::Look,
@@ -1290,7 +1349,11 @@ impl Owner {
             self.send_command_error(request.actor, request.request_id, error);
             return DurableCommandStatus::Failed;
         }
-        let runtime_state = match self.runtime.snapshot().durable_state() {
+        let runtime_state_result = {
+            let _timing = self.timings.start(6);
+            self.runtime.snapshot().durable_state()
+        };
+        let runtime_state = match runtime_state_result {
             Ok(v) => v,
             Err(_) => {
                 let _ = self.runtime.restore_checkpoint(checkpoint);
@@ -1298,7 +1361,10 @@ impl Owner {
                 return DurableCommandStatus::Stop;
             }
         };
-        let snapshot = self.runtime.snapshot();
+        let snapshot = {
+            let _timing = self.timings.start(6);
+            self.runtime.snapshot()
+        };
         let mut rooms = Vec::new();
         for character in snapshot.characters() {
             let Some(room) = snapshot.room_of(character) else {
@@ -1744,9 +1810,7 @@ impl Owner {
         let Some(route) = self.routes.get(&actor.character) else {
             return false;
         };
-        if route.actor != actor
-            || self.runtime.attachment(actor.character) != Some(actor)
-        {
+        if route.actor != actor || self.runtime.attachment(actor.character) != Some(actor) {
             return false;
         }
         if let Some(staged) = self.staged_messages.as_mut() {

@@ -1,5 +1,6 @@
 mod error;
 mod game_state;
+mod measurements;
 mod oidc;
 mod operational;
 mod operational_queries;
@@ -17,8 +18,8 @@ pub use oidc::{
     MAX_ACTIVE_PLAYER_INVITES, MAX_PLAYER_INVITE_TTL_SECONDS, MIN_PLAYER_INVITE_TTL_SECONDS,
     oidc_token_hash,
 };
-pub use store::PostgresStore;
 pub use retention::{EXTERNAL_OUTBOX_DISPATCH_SUPPORTED, MAX_RETENTION_BATCH};
+pub use store::PostgresStore;
 pub use types::{
     ActivationPlan, AuthenticatedActor, BootstrapOperator, DurableCharacterRoom,
     DurableContentReferences, DurableGameSnapshot, GameplayCommit, GameplayIntentKind,
@@ -990,8 +991,12 @@ mod database_tests {
             lease,
             expected_release: digest,
             game: GameContract::Reference,
-            actor: AuthenticatedActor { world: actor.world, account: actor.account,
-                character: actor.character, token_hash: actor.token_hash },
+            actor: AuthenticatedActor {
+                world: actor.world,
+                account: actor.account,
+                character: actor.character,
+                token_hash: actor.token_hash,
+            },
             request_id: "browser-page-a-1",
             operation: OperationId::from_u128(1).unwrap(),
             kind: GameplayIntentKind::Look,
@@ -1012,31 +1017,96 @@ mod database_tests {
         let artifact = release_artifact("p0-gameplay-receipts");
         let digest = Sha256Digest::from_bytes(&artifact);
         let request = PublicationId::from_u128(901).unwrap();
-        db.store.submit_publication(request, world, &artifact, PublicationKind::Activate,
-            DeploymentTarget::Staging, None, "requester").await.unwrap();
-        db.store.review_publication(request, "reviewer", ReviewDecision::Approve, "p0 test").await.unwrap();
-        let activation = db.store.begin_activation(request, ActivationId::from_u128(902).unwrap(),
-            WriterId::from_u128(1).unwrap(), "operator").await.unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .unwrap();
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "p0 test")
+            .await
+            .unwrap();
+        let activation = db
+            .store
+            .begin_activation(
+                request,
+                ActivationId::from_u128(902).unwrap(),
+                WriterId::from_u128(1).unwrap(),
+                "operator",
+            )
+            .await
+            .unwrap();
         db.store.complete_activation(activation).await.unwrap();
-        let lease = db.store.acquire_writer(world, WriterId::from_u128(2).unwrap()).await.unwrap();
+        let lease = db
+            .store
+            .acquire_writer(world, WriterId::from_u128(2).unwrap())
+            .await
+            .unwrap();
         let identities = db.store.identities(world).await.unwrap();
-        let mut rooms: Vec<_> = identities.iter().map(|identity| DurableCharacterRoom {
-            character: identity.character(), room_definition: identity.room_definition().into(),
-        }).collect();
+        let mut rooms: Vec<_> = identities
+            .iter()
+            .map(|identity| DurableCharacterRoom {
+                character: identity.character(),
+                room_definition: identity.room_definition().into(),
+            })
+            .collect();
         rooms.sort_by_key(|room| room.character);
-        let mut runtime = DurableWorldState { world, revision: 0, counters: vec![], scheduled: vec![] };
-        db.store.initialize_game_state(lease, digest, GameContract::Reference,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO }).await.unwrap();
+        let mut runtime = DurableWorldState {
+            world,
+            revision: 0,
+            counters: vec![],
+            scheduled: vec![],
+        };
+        db.store
+            .initialize_game_state(
+                lease,
+                digest,
+                GameContract::Reference,
+                GameplayState {
+                    runtime: &runtime,
+                    rooms: &rooms,
+                    now: Tick::ZERO,
+                },
+            )
+            .await
+            .unwrap();
         let alice = actor(&db.store, 1, 1, "Alice", "p0-alice").await;
         runtime.revision = 1;
-        let first = db.store.commit_gameplay(gameplay_mutation(lease, digest, &alice,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO })).await.unwrap();
+        let first = db
+            .store
+            .commit_gameplay(gameplay_mutation(
+                lease,
+                digest,
+                &alice,
+                GameplayState {
+                    runtime: &runtime,
+                    rooms: &rooms,
+                    now: Tick::ZERO,
+                },
+            ))
+            .await
+            .unwrap();
         assert!(!first.replayed);
         assert_eq!(first.state_version, 2);
         let reconstructed = db.reconnect_store().await;
         let reattached = actor(&reconstructed, 1, 1, "Alice", "p0-alice-new-session").await;
-        let mut retry = gameplay_mutation(lease, digest, &reattached,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+        let mut retry = gameplay_mutation(
+            lease,
+            digest,
+            &reattached,
+            GameplayState {
+                runtime: &runtime,
+                rooms: &rooms,
+                now: Tick::ZERO,
+            },
+        );
         retry.operation = OperationId::from_u128(99).unwrap();
         retry.expected_state_version = 0; // Receipt lookup precedes stale candidate state.
         retry.result = serde_json::json!({"proof": "must not replace original"});
@@ -1044,17 +1114,44 @@ mod database_tests {
         assert!(replay.replayed);
         assert_eq!(replay.operation, first.operation);
         assert_eq!(replay.result, first.result);
-        let mut conflict = gameplay_mutation(lease, digest, &reattached,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+        let mut conflict = gameplay_mutation(
+            lease,
+            digest,
+            &reattached,
+            GameplayState {
+                runtime: &runtime,
+                rooms: &rooms,
+                now: Tick::ZERO,
+            },
+        );
         conflict.kind = GameplayIntentKind::Move;
         conflict.intent = b"move east";
-        assert!(matches!(reconstructed.commit_gameplay(conflict).await, Err(PersistenceError::ReceiptConflict)));
-        assert_eq!(reconstructed.load_game_state(lease, digest, GameContract::Reference).await.unwrap().runtime.revision, 1);
+        assert!(matches!(
+            reconstructed.commit_gameplay(conflict).await,
+            Err(PersistenceError::ReceiptConflict)
+        ));
+        assert_eq!(
+            reconstructed
+                .load_game_state(lease, digest, GameContract::Reference)
+                .await
+                .unwrap()
+                .runtime
+                .revision,
+            1
+        );
         // Fresh page/tab namespaces never accidentally replay the old Look.
         for (revision, id) in [(2, "browser-page-b-1"), (3, "browser-page-c-1")] {
             runtime.revision = revision;
-            let mut next = gameplay_mutation(lease, digest, &reattached,
-                GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+            let mut next = gameplay_mutation(
+                lease,
+                digest,
+                &reattached,
+                GameplayState {
+                    runtime: &runtime,
+                    rooms: &rooms,
+                    now: Tick::ZERO,
+                },
+            );
             next.request_id = id;
             next.operation = OperationId::from_u128(u128::from(revision)).unwrap();
             next.expected_state_version = revision;
@@ -1065,41 +1162,115 @@ mod database_tests {
         }
         let bob = actor(&reconstructed, 2, 2, "Bob", "p0-bob").await;
         runtime.revision = 4;
-        let mut same_id_other_actor = gameplay_mutation(lease, digest, &bob,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::ZERO });
+        let mut same_id_other_actor = gameplay_mutation(
+            lease,
+            digest,
+            &bob,
+            GameplayState {
+                runtime: &runtime,
+                rooms: &rooms,
+                now: Tick::ZERO,
+            },
+        );
         same_id_other_actor.request_id = "browser-page-b-1";
         same_id_other_actor.operation = OperationId::from_u128(4).unwrap();
         same_id_other_actor.expected_state_version = 4;
-        assert!(!reconstructed.commit_gameplay(same_id_other_actor).await.unwrap().replayed);
+        assert!(
+            !reconstructed
+                .commit_gameplay(same_id_other_actor)
+                .await
+                .unwrap()
+                .replayed
+        );
         let (receipts, audit): (i64, i64) = sqlx::query_as(
             "SELECT (SELECT COUNT(*) FROM worldwright_gameplay_receipts WHERE world_id=$1), \
-                    (SELECT COUNT(*) FROM worldwright_gameplay_audit WHERE world_id=$1)")
-            .bind(types::uuid_of(world)).fetch_one(reconstructed.pool_for_test()).await.unwrap();
+                    (SELECT COUNT(*) FROM worldwright_gameplay_audit WHERE world_id=$1)",
+        )
+        .bind(types::uuid_of(world))
+        .fetch_one(reconstructed.pool_for_test())
+        .await
+        .unwrap();
         assert_eq!((receipts, audit), (4, 4));
         reconstructed.close_for_test().await;
         db.finish().await;
     }
 
-    async fn prepared_game_state() -> (TestDb, WriterLease, Sha256Digest, worldwright_core::runtime::DurableWorldState, Vec<DurableCharacterRoom>) {
+    async fn prepared_game_state() -> (
+        TestDb,
+        WriterLease,
+        Sha256Digest,
+        worldwright_core::runtime::DurableWorldState,
+        Vec<DurableCharacterRoom>,
+    ) {
         let db = TestDb::new().await;
         db.store.seed(&seed()).await.unwrap();
         let world = seed().world;
         let artifact = release_artifact("p1-game-state");
         let digest = Sha256Digest::from_bytes(&artifact);
         let request = PublicationId::from_u128(991).unwrap();
-        db.store.submit_publication(request, world, &artifact, PublicationKind::Activate,
-            DeploymentTarget::Staging, None, "requester").await.unwrap();
-        db.store.review_publication(request, "reviewer", ReviewDecision::Approve, "p1 test").await.unwrap();
-        let plan = db.store.begin_activation(request, ActivationId::from_u128(992).unwrap(),
-            WriterId::from_u128(991).unwrap(), "operator").await.unwrap();
+        db.store
+            .submit_publication(
+                request,
+                world,
+                &artifact,
+                PublicationKind::Activate,
+                DeploymentTarget::Staging,
+                None,
+                "requester",
+            )
+            .await
+            .unwrap();
+        db.store
+            .review_publication(request, "reviewer", ReviewDecision::Approve, "p1 test")
+            .await
+            .unwrap();
+        let plan = db
+            .store
+            .begin_activation(
+                request,
+                ActivationId::from_u128(992).unwrap(),
+                WriterId::from_u128(991).unwrap(),
+                "operator",
+            )
+            .await
+            .unwrap();
         db.store.complete_activation(plan).await.unwrap();
-        let lease = db.store.acquire_writer(world, WriterId::from_u128(992).unwrap()).await.unwrap();
-        let mut rooms: Vec<_> = db.store.identities(world).await.unwrap().iter().map(|identity|
-            DurableCharacterRoom { character: identity.character(), room_definition: identity.room_definition().into() }).collect();
+        let lease = db
+            .store
+            .acquire_writer(world, WriterId::from_u128(992).unwrap())
+            .await
+            .unwrap();
+        let mut rooms: Vec<_> = db
+            .store
+            .identities(world)
+            .await
+            .unwrap()
+            .iter()
+            .map(|identity| DurableCharacterRoom {
+                character: identity.character(),
+                room_definition: identity.room_definition().into(),
+            })
+            .collect();
         rooms.sort_by_key(|room| room.character);
-        let runtime = worldwright_core::runtime::DurableWorldState { world, revision: 0, counters: vec![], scheduled: vec![] };
-        db.store.initialize_game_state(lease, digest, GameContract::Reference,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO }).await.unwrap();
+        let runtime = worldwright_core::runtime::DurableWorldState {
+            world,
+            revision: 0,
+            counters: vec![],
+            scheduled: vec![],
+        };
+        db.store
+            .initialize_game_state(
+                lease,
+                digest,
+                GameContract::Reference,
+                GameplayState {
+                    runtime: &runtime,
+                    rooms: &rooms,
+                    now: worldwright_core::time::Tick::ZERO,
+                },
+            )
+            .await
+            .unwrap();
         (db, lease, digest, runtime, rooms)
     }
 
@@ -1109,27 +1280,108 @@ mod database_tests {
         use worldwright_core::time::Tick;
         let (db, lease, digest, mut runtime, rooms) = prepared_game_state().await;
         runtime.revision = 1;
-        assert_eq!(db.store.commit_gameplay_tick(lease, digest, GameContract::Reference, 1,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(1000) }).await.unwrap(), 2);
+        assert_eq!(
+            db.store
+                .commit_gameplay_tick(
+                    lease,
+                    digest,
+                    GameContract::Reference,
+                    1,
+                    GameplayState {
+                        runtime: &runtime,
+                        rooms: &rooms,
+                        now: Tick::from_millis(1000)
+                    }
+                )
+                .await
+                .unwrap(),
+            2
+        );
         let reconstructed = db.reconnect_store().await;
-        assert_eq!(reconstructed.load_game_state(lease, digest, GameContract::Reference).await.unwrap().runtime.revision, 1);
+        assert_eq!(
+            reconstructed
+                .load_game_state(lease, digest, GameContract::Reference)
+                .await
+                .unwrap()
+                .runtime
+                .revision,
+            1
+        );
         runtime.revision = 2;
-        assert!(matches!(reconstructed.commit_gameplay_tick(lease, digest, GameContract::Reference, 1,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(2000) }).await, Err(PersistenceError::StaleGameState)));
+        assert!(matches!(
+            reconstructed
+                .commit_gameplay_tick(
+                    lease,
+                    digest,
+                    GameContract::Reference,
+                    1,
+                    GameplayState {
+                        runtime: &runtime,
+                        rooms: &rooms,
+                        now: Tick::from_millis(2000)
+                    }
+                )
+                .await,
+            Err(PersistenceError::StaleGameState)
+        ));
         // Inject an audit failure AFTER candidate writes; the whole transaction must roll back.
         sqlx::query("ALTER TABLE worldwright_gameplay_timer_audit ADD CONSTRAINT p1_reject_next CHECK (state_version < 3)")
             .execute(reconstructed.pool_for_test()).await.unwrap();
-        assert!(reconstructed.commit_gameplay_tick(lease, digest, GameContract::Reference, 2,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(2000) }).await.is_err());
-        let loaded = reconstructed.load_game_state(lease, digest, GameContract::Reference).await.unwrap();
+        assert!(
+            reconstructed
+                .commit_gameplay_tick(
+                    lease,
+                    digest,
+                    GameContract::Reference,
+                    2,
+                    GameplayState {
+                        runtime: &runtime,
+                        rooms: &rooms,
+                        now: Tick::from_millis(2000)
+                    }
+                )
+                .await
+                .is_err()
+        );
+        let loaded = reconstructed
+            .load_game_state(lease, digest, GameContract::Reference)
+            .await
+            .unwrap();
         assert_eq!((loaded.state_version, loaded.runtime.revision), (2, 1));
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM worldwright_gameplay_timer_audit")
-            .fetch_one(reconstructed.pool_for_test()).await.unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM worldwright_gameplay_timer_audit")
+                .fetch_one(reconstructed.pool_for_test())
+                .await
+                .unwrap();
         assert_eq!(count, 1);
-        let fresh = reconstructed.acquire_writer(lease.world(), WriterId::from_u128(993).unwrap()).await.unwrap();
-        assert!(matches!(reconstructed.commit_gameplay_tick(lease, digest, GameContract::Reference, 2,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: Tick::from_millis(2000) }).await, Err(PersistenceError::StaleWriter)));
-        assert_eq!(reconstructed.load_game_state(fresh, digest, GameContract::Reference).await.unwrap().state_version, 2);
+        let fresh = reconstructed
+            .acquire_writer(lease.world(), WriterId::from_u128(993).unwrap())
+            .await
+            .unwrap();
+        assert!(matches!(
+            reconstructed
+                .commit_gameplay_tick(
+                    lease,
+                    digest,
+                    GameContract::Reference,
+                    2,
+                    GameplayState {
+                        runtime: &runtime,
+                        rooms: &rooms,
+                        now: Tick::from_millis(2000)
+                    }
+                )
+                .await,
+            Err(PersistenceError::StaleWriter)
+        ));
+        assert_eq!(
+            reconstructed
+                .load_game_state(fresh, digest, GameContract::Reference)
+                .await
+                .unwrap()
+                .state_version,
+            2
+        );
         reconstructed.close_for_test().await;
         db.finish().await;
     }
@@ -1142,13 +1394,32 @@ mod database_tests {
         db.store.seed(&seed()).await.unwrap();
         let world = seed().world;
         let invite_hash = oidc_token_hash("p1-invite");
-        db.store.issue_oidc_invite(OidcInviteSpec { invite: InviteId::from_u128(901).unwrap(), world,
-            username: "alice", issuer: "https://identity.example.invalid", token_hash: &invite_hash, ttl_seconds: 300 }).await.unwrap();
+        db.store
+            .issue_oidc_invite(OidcInviteSpec {
+                invite: InviteId::from_u128(901).unwrap(),
+                world,
+                username: "alice",
+                issuer: "https://identity.example.invalid",
+                token_hash: &invite_hash,
+                ttl_seconds: 300,
+            })
+            .await
+            .unwrap();
         let first_hash = session_token_hash("oidc-first");
         let second_hash = session_token_hash("oidc-second");
-        let input = |hash| OidcLoginSpec { world, issuer: "https://identity.example.invalid", subject: "provider-subject",
-            invite_hash: Some(&invite_hash), session_hash: hash, session_ttl_seconds: SESSION_TTL_SECONDS, max_sessions: MAX_DURABLE_SESSIONS };
-        let (first, second) = tokio::join!(db.store.login_oidc(input(&first_hash)), db.store.login_oidc(input(&second_hash)));
+        let input = |hash| OidcLoginSpec {
+            world,
+            issuer: "https://identity.example.invalid",
+            subject: "provider-subject",
+            invite_hash: Some(&invite_hash),
+            session_hash: hash,
+            session_ttl_seconds: SESSION_TTL_SECONDS,
+            max_sessions: MAX_DURABLE_SESSIONS,
+        };
+        let (first, second) = tokio::join!(
+            db.store.login_oidc(input(&first_hash)),
+            db.store.login_oidc(input(&second_hash))
+        );
         // The invite-only contract is authoritative: exactly one invited callback
         // links; an already-linked identity must start a NEW flow without invite.
         let first = match (first, second) {
@@ -1159,23 +1430,54 @@ mod database_tests {
         assert!(first.linked);
         assert_eq!(first.principal.account, AccountId::from_u128(1).unwrap());
         let login_hash = session_token_hash("oidc-explicit-no-invite-login");
-        let second = db.store.login_oidc(OidcLoginSpec { invite_hash:None, ..input(&login_hash) }).await.unwrap();
+        let second = db
+            .store
+            .login_oidc(OidcLoginSpec {
+                invite_hash: None,
+                ..input(&login_hash)
+            })
+            .await
+            .unwrap();
         assert!(!second.linked);
         assert_eq!(first.principal, second.principal);
-        assert!(matches!(db.store.login_oidc(OidcLoginSpec { invite_hash:None, ..input(&login_hash) }).await, Err(PersistenceError::SessionCollision)));
+        assert!(matches!(
+            db.store
+                .login_oidc(OidcLoginSpec {
+                    invite_hash: None,
+                    ..input(&login_hash)
+                })
+                .await,
+            Err(PersistenceError::SessionCollision)
+        ));
         let other_hash = session_token_hash("oidc-other-issuer");
-        let other = OidcLoginSpec { issuer: "https://other.example.invalid", session_hash: &other_hash, ..input(&other_hash) };
+        let other = OidcLoginSpec {
+            issuer: "https://other.example.invalid",
+            session_hash: &other_hash,
+            ..input(&other_hash)
+        };
         assert!(db.store.login_oidc(other).await.is_err());
         let (identities, audits): (i64, i64) = sqlx::query_as("SELECT (SELECT COUNT(*) FROM worldwright_oidc_identities), (SELECT COUNT(*) FROM worldwright_oidc_audit)")
             .fetch_one(db.store.pool_for_test()).await.unwrap();
         assert_eq!((identities, audits), (1, 2));
         let restarted = db.reconnect_store().await;
         let resumed_hash = session_token_hash("oidc-after-restart");
-        let resumed = restarted.login_oidc(OidcLoginSpec { invite_hash: None, ..input(&resumed_hash) }).await.unwrap();
+        let resumed = restarted
+            .login_oidc(OidcLoginSpec {
+                invite_hash: None,
+                ..input(&resumed_hash)
+            })
+            .await
+            .unwrap();
         assert!(!resumed.linked);
         assert_eq!(resumed.principal, first.principal);
         restarted.revoke_session(&resumed_hash).await.unwrap();
-        assert!(restarted.session(world, &resumed_hash).await.unwrap().is_none());
+        assert!(
+            restarted
+                .session(world, &resumed_hash)
+                .await
+                .unwrap()
+                .is_none()
+        );
         restarted.close_for_test().await;
         db.finish().await;
     }
@@ -1187,16 +1489,45 @@ mod database_tests {
         let expired = actor(&db.store, 1, 1, "Alice", "p1-expired").await;
         let active = actor(&db.store, 2, 2, "Bob", "p1-active").await;
         runtime.revision = 1;
-        db.store.commit_gameplay(gameplay_mutation(lease, digest, &expired,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO })).await.unwrap();
+        db.store
+            .commit_gameplay(gameplay_mutation(
+                lease,
+                digest,
+                &expired,
+                GameplayState {
+                    runtime: &runtime,
+                    rooms: &rooms,
+                    now: worldwright_core::time::Tick::ZERO,
+                },
+            ))
+            .await
+            .unwrap();
         sqlx::query("UPDATE worldwright_sessions SET created_at=statement_timestamp()-INTERVAL '2 days', expires_at=statement_timestamp()-INTERVAL '1 day' WHERE token_hash=$1")
             .bind(expired.token_hash.as_slice()).execute(db.store.pool_for_test()).await.unwrap();
         assert_eq!(db.store.prune_expired_player_sessions(1).await.unwrap(), 1);
         assert_eq!(db.store.prune_expired_player_sessions(1).await.unwrap(), 0);
-        assert!(db.store.session(lease.world(), active.token_hash).await.unwrap().is_some());
+        assert!(
+            db.store
+                .session(lease.world(), active.token_hash)
+                .await
+                .unwrap()
+                .is_some()
+        );
         let reattached = actor(&db.store, 1, 1, "Alice", "p1-active-alice").await;
-        let replay = db.store.commit_gameplay(gameplay_mutation(lease, digest, &reattached,
-            GameplayState { runtime: &runtime, rooms: &rooms, now: worldwright_core::time::Tick::ZERO })).await.unwrap();
+        let replay = db
+            .store
+            .commit_gameplay(gameplay_mutation(
+                lease,
+                digest,
+                &reattached,
+                GameplayState {
+                    runtime: &runtime,
+                    rooms: &rooms,
+                    now: worldwright_core::time::Tick::ZERO,
+                },
+            ))
+            .await
+            .unwrap();
         assert!(replay.replayed);
         db.finish().await;
     }

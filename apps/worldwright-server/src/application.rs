@@ -30,6 +30,7 @@ pub struct BoundServer {
     world: crate::world::WorldHandle,
     allowed_origin: String,
     lifecycle: crate::lifecycle::LifecycleController,
+    telemetry_store: Option<worldwright_persistence::PostgresStore>,
 }
 
 impl BoundServer {
@@ -199,6 +200,7 @@ impl BoundServer {
             initial_game,
         )?;
         let lifecycle = crate::lifecycle::LifecycleController::new();
+        let telemetry_store = operator_store.clone();
         let operator = operator_config.map(|config| {
             Arc::new(crate::operator::OperatorService {
                 store: operator_store.expect("operator requires PostgreSQL"),
@@ -236,6 +238,7 @@ impl BoundServer {
             world,
             allowed_origin: config.allowed_origin,
             lifecycle,
+            telemetry_store,
         })
     }
 
@@ -260,15 +263,20 @@ where
 {
     let telemetry = match telemetry_listener().await {
         Ok(listener) => listener,
-        Err(error) => { server.world.shutdown().await; return Err(error); }
+        Err(error) => {
+            server.world.shutdown().await;
+            return Err(error);
+        }
     };
     let (telemetry_stop, telemetry_stopped) = tokio::sync::oneshot::channel::<()>();
     let mut telemetry_task = telemetry.map(|listener| {
-        let router = telemetry_router(server.world.clone());
+        let router = telemetry_router(server.world.clone(), server.telemetry_store.clone());
         tokio::spawn(async move {
-            axum::serve(listener, router).with_graceful_shutdown(async {
-                let _ = telemetry_stopped.await;
-            }).await
+            axum::serve(listener, router)
+                .with_graceful_shutdown(async {
+                    let _ = telemetry_stopped.await;
+                })
+                .await
         })
     });
     let world_for_shutdown = server.world.clone();
@@ -306,25 +314,59 @@ where
 }
 
 fn parse_telemetry_address(value: &str) -> Result<SocketAddr, ServerError> {
-    let address: SocketAddr = value.parse().map_err(|_| ServerError::Configuration("telemetry bind must be an IP socket address"))?;
+    let address: SocketAddr = value
+        .parse()
+        .map_err(|_| ServerError::Configuration("telemetry bind must be an IP socket address"))?;
     if !address.ip().is_loopback() || address.port() == 0 {
-        return Err(ServerError::Configuration("telemetry bind must be loopback with an explicit nonzero port"));
+        return Err(ServerError::Configuration(
+            "telemetry bind must be loopback with an explicit nonzero port",
+        ));
     }
     Ok(address)
 }
 async fn telemetry_listener() -> Result<Option<TcpListener>, ServerError> {
-    let Some(value) = std::env::var_os("WORLDWRIGHT_TELEMETRY_BIND") else { return Ok(None); };
-    let value = value.to_str().ok_or(ServerError::Configuration("invalid telemetry bind"))?;
+    let Some(value) = std::env::var_os("WORLDWRIGHT_TELEMETRY_BIND") else {
+        return Ok(None);
+    };
+    let value = value
+        .to_str()
+        .ok_or(ServerError::Configuration("invalid telemetry bind"))?;
     let address = parse_telemetry_address(value)?;
-    TcpListener::bind(address).await.map(Some).map_err(ServerError::io)
+    TcpListener::bind(address)
+        .await
+        .map(Some)
+        .map_err(ServerError::io)
 }
-fn telemetry_router(world: crate::world::WorldHandle) -> axum::Router {
-    axum::Router::new().route("/metrics", axum::routing::get(
-        |axum::extract::State(world): axum::extract::State<crate::world::WorldHandle>| async move {
-            ([ ("content-type", "text/plain; version=0.0.4; charset=utf-8"),
-               ("cache-control", "no-store"), ("x-content-type-options", "nosniff") ], world.telemetry())
-        }
-    )).with_state(world)
+fn telemetry_router(
+    world: crate::world::WorldHandle,
+    store: Option<worldwright_persistence::PostgresStore>,
+) -> axum::Router {
+    type State = (
+        crate::world::WorldHandle,
+        Option<worldwright_persistence::PostgresStore>,
+    );
+    axum::Router::new()
+        .route(
+            "/metrics",
+            axum::routing::get(
+                |axum::extract::State((world, store)): axum::extract::State<State>| async move {
+                    let output = format!(
+                        "{}{}",
+                        world.telemetry(),
+                        store.map(|store| store.telemetry()).unwrap_or_default()
+                    );
+                    (
+                        [
+                            ("content-type", "text/plain; version=0.0.4; charset=utf-8"),
+                            ("cache-control", "no-store"),
+                            ("x-content-type-options", "nosniff"),
+                        ],
+                        output,
+                    )
+                },
+            ),
+        )
+        .with_state((world, store))
 }
 
 fn complete_graceful_lifecycle(
@@ -352,7 +394,13 @@ mod tests {
     use super::*;
     #[test]
     fn telemetry_cannot_bind_public_or_dynamic_ports() {
-        for value in ["0.0.0.0:9090", "[::]:9090", "192.0.2.1:9090", "127.0.0.1:0", "localhost:9090"] {
+        for value in [
+            "0.0.0.0:9090",
+            "[::]:9090",
+            "192.0.2.1:9090",
+            "127.0.0.1:0",
+            "localhost:9090",
+        ] {
             assert!(parse_telemetry_address(value).is_err(), "{value}");
         }
         assert!(parse_telemetry_address("127.0.0.1:9090").is_ok());

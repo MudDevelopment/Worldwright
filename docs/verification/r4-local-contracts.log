@@ -1,0 +1,22 @@
+test_actual_failed_collection_is_retained_without_mutation (__main__.R4Tests.test_actual_failed_collection_is_retained_without_mutation) ... R4 collection: failed
+ok
+test_actual_protocol_tracker_fixture_and_gap_rejection (__main__.R4Tests.test_actual_protocol_tracker_fixture_and_gap_rejection) ... ok
+test_all_failure_dimensions_and_unknown_inventory (__main__.R4Tests.test_all_failure_dimensions_and_unknown_inventory) ... ok
+test_bounded_files_create_new_duplicate_and_containment (__main__.R4Tests.test_bounded_files_create_new_duplicate_and_containment) ... ok
+test_cli_help_and_failed_closure_are_not_passes (__main__.R4Tests.test_cli_help_and_failed_closure_are_not_passes) ... ok
+test_deployment_replicas_boolean_and_replacement_policy_refused (__main__.R4Tests.test_deployment_replicas_boolean_and_replacement_policy_refused) ... ok
+test_every_fixed_dimension_and_threshold_is_enforced (__main__.R4Tests.test_every_fixed_dimension_and_threshold_is_enforced) ... ok
+test_fixed_boundary_report (__main__.R4Tests.test_fixed_boundary_report) ... ok
+test_independent_signature_tamper_wrong_key_and_expiry (__main__.R4Tests.test_independent_signature_tamper_wrong_key_and_expiry) ... ok
+test_measured_comparison_refuses_incomparable_or_unproven (__main__.R4Tests.test_measured_comparison_refuses_incomparable_or_unproven) ... ok
+test_percentile_order_throughput_and_time (__main__.R4Tests.test_percentile_order_throughput_and_time) ... ok
+test_real_loopback_monitor_transport_and_fixture_authority_drift (__main__.R4Tests.test_real_loopback_monitor_transport_and_fixture_authority_drift) ... ok
+test_smoke_cannot_be_beta (__main__.R4Tests.test_smoke_cannot_be_beta) ... ok
+test_source_wiring_preserves_profile_and_private_monitoring (__main__.R4Tests.test_source_wiring_preserves_profile_and_private_monitoring) ... ok
+test_strict_plan_and_bounds (__main__.R4Tests.test_strict_plan_and_bounds) ... ok
+test_telemetry_fixed_dimensions_and_failures (__main__.R4Tests.test_telemetry_fixed_dimensions_and_failures) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.990s
+
+OK

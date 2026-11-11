@@ -151,8 +151,14 @@ all = "warn"
 "#
     .replace("@PACKAGE_VERSION@", worldwright_sdk::SDK_PACKAGE_VERSION)
     .replace("@MIN_RUST@", worldwright_sdk::COMPATIBILITY.minimum_rust)
-    .replace("@MEMBERS@", &CRATES.iter().map(|name| format!("\"crates/{name}\""))
-        .collect::<Vec<_>>().join(","))
+    .replace(
+        "@MEMBERS@",
+        &CRATES
+            .iter()
+            .map(|name| format!("\"crates/{name}\""))
+            .collect::<Vec<_>>()
+            .join(","),
+    )
 }
 fn private_readme() -> String {
     "# Private SDK bundle\n\nInternal source delivery; no registry publication or license grant is inferred.\n\nCargo.lock is the reduced buildable SDK workspace lock. SOURCE-Cargo.lock records the full source workspace lock for provenance. Both are included in the manifest.\n\nSDK package @PACKAGE_VERSION@; Rust @MIN_RUST@; policy: @POLICY@. Only actually implemented API versions are advertised; no previous minor is invented.\n\nIncluded crates: @CRATES@.\n\nBuild: `cargo check --workspace --all-targets --locked --offline`\nTest: `cargo test --workspace --locked --offline`\n"
@@ -436,11 +442,20 @@ mod tests {
     fn generated_metadata_uses_sdk_authority() {
         let cargo = generated_cargo();
         assert!(!cargo.contains('@'));
-        assert!(cargo.contains(&format!("version = \"{}\"", worldwright_sdk::SDK_PACKAGE_VERSION)));
-        assert!(cargo.contains(&format!("rust-version = \"{}\"", worldwright_sdk::COMPATIBILITY.minimum_rust)));
+        assert!(cargo.contains(&format!(
+            "version = \"{}\"",
+            worldwright_sdk::SDK_PACKAGE_VERSION
+        )));
+        assert!(cargo.contains(&format!(
+            "rust-version = \"{}\"",
+            worldwright_sdk::COMPATIBILITY.minimum_rust
+        )));
         for name in CRATES {
             assert!(cargo.contains(&format!("\"crates/{name}\"")));
-            assert!(cargo.contains(&format!("{name} = {{ path = \"crates/{name}\", version = \"={}\" }}", worldwright_sdk::SDK_PACKAGE_VERSION)));
+            assert!(cargo.contains(&format!(
+                "{name} = {{ path = \"crates/{name}\", version = \"={}\" }}",
+                worldwright_sdk::SDK_PACKAGE_VERSION
+            )));
         }
         let readme = private_readme();
         assert!(!readme.contains('@'));
@@ -456,6 +471,11 @@ mod tests {
         bundle_result(&b).unwrap();
         verify_result(&a).unwrap();
         verify_result(&b).unwrap();
+        for name in CRATES {
+            let manifest =
+                fs::read_to_string(a.join("crates").join(name).join("Cargo.toml")).unwrap();
+            assert!(manifest.contains("workspace = \"../..\""), "{name}");
+        }
         fn files(root: &Path) -> Vec<(String, Vec<u8>)> {
             let mut out = Vec::new();
             fn walk(p: &Path, b: &Path, o: &mut Vec<(String, Vec<u8>)>) {

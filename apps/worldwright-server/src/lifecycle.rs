@@ -106,8 +106,11 @@ mod r3_signal_tests {
     #[tokio::test]
     async fn r3_shutdown_signals_register_before_waiting() {
         let signal = super::shutdown_signal().expect("shutdown handlers register");
-        assert!(tokio::time::timeout(std::time::Duration::from_millis(10), signal)
-            .await
-            .is_err(), "registration is not itself a shutdown signal");
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(10), signal)
+                .await
+                .is_err(),
+            "registration is not itself a shutdown signal"
+        );
     }
 }

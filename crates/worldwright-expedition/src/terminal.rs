@@ -20,6 +20,7 @@ use worldwright_sdk::{
 };
 
 pub const HELP: &str = "Commands: look (l), status, supplies, threat, victories, rank, go <exit>, say <text>, forage, encounter, strike, rest, help, quit (exit)";
+const REFERENCE_HELP: &str = "Commands: look (l), go <exit>, say <text>, help, quit (exit)";
 const MAX_LINE_BYTES: usize = PlayerText::MAX_BYTES + 4;
 
 struct SystemRandom;
@@ -51,13 +52,24 @@ pub fn run_content(content: &ValidatedWorldContent, digest: Option<&str>) -> Exi
 pub fn run_reference(bytes: &[u8]) -> ExitCode {
     match load_bytes("embedded reference content", bytes, Default::default()) {
         Ok(content) => run_profile(&content, None, false),
-        Err(report) => { eprintln!("{report}"); ExitCode::from(1) }
+        Err(report) => {
+            eprintln!("{report}");
+            ExitCode::from(1)
+        }
     }
 }
 
-fn run_profile(content: &ValidatedWorldContent, digest: Option<&str>, expedition: bool) -> ExitCode {
+fn run_profile(
+    content: &ValidatedWorldContent,
+    digest: Option<&str>,
+    expedition: bool,
+) -> ExitCode {
     let result = (|| -> Result<(), Box<dyn Error>> {
-        let mut session = if expedition { Session::new(content)? } else { Session::new_profile(content, false)? };
+        let mut session = if expedition {
+            Session::new(content)?
+        } else {
+            Session::new_profile(content, false)?
+        };
         let stdin = io::stdin();
         let stdout = io::stdout();
         let prompt = stdin.is_terminal() && stdout.is_terminal();
@@ -74,10 +86,14 @@ fn run_profile(content: &ValidatedWorldContent, digest: Option<&str>, expedition
                 writeln!(
                     output,
                     "Worldwright {} — one local player; no login, network, or persistence.",
-                    if expedition { "Expedition" } else { "Reference" }
+                    if expedition {
+                        "Expedition"
+                    } else {
+                        "Reference"
+                    }
                 )?;
             }
-            writeln!(output, "{}", if expedition { HELP } else { "Commands: look (l), go <exit>, say <text>, help, quit (exit)" })?;
+            writeln!(output, "{}", session.help())?;
             session.apply("look", Tick::ZERO, &mut SystemRandom, &mut output)?;
             let started = Instant::now();
             loop {
@@ -119,7 +135,12 @@ fn run_profile(content: &ValidatedWorldContent, digest: Option<&str>, expedition
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!(
-                "worldwright expedition: {}",
+                "worldwright {}: {}",
+                if expedition {
+                    "expedition"
+                } else {
+                    "reference"
+                },
                 worldwright_sdk::content::terminal_safe(&error.to_string())
             );
             ExitCode::from(1)
@@ -133,12 +154,16 @@ struct Session {
     actor: ActorContext,
     world: WorldId,
     next_operation: u128,
+    expedition: bool,
 }
 impl Session {
     fn new(content: &ValidatedWorldContent) -> Result<Self, Box<dyn Error>> {
         Self::new_profile(content, true)
     }
-    fn new_profile(content: &ValidatedWorldContent, expedition: bool) -> Result<Self, Box<dyn Error>> {
+    fn new_profile(
+        content: &ValidatedWorldContent,
+        expedition: bool,
+    ) -> Result<Self, Box<dyn Error>> {
         let world = WorldId::from_u128(1)?;
         let account = AccountId::from_u128(1)?;
         let character = CharacterId::from_u128(1)?;
@@ -159,7 +184,15 @@ impl Session {
             actor,
             world,
             next_operation: 1,
+            expedition,
         })
+    }
+    fn help(&self) -> &'static str {
+        if self.expedition {
+            HELP
+        } else {
+            REFERENCE_HELP
+        }
     }
     fn execute(
         &mut self,
@@ -242,17 +275,22 @@ impl Session {
             return Ok(true);
         }
         if verb == "help" && payload.is_empty() {
-            writeln!(output, "{HELP}")?;
+            writeln!(output, "{}", self.help())?;
             return Ok(false);
         }
         let mut refresh = false;
-        let intent = if matches!(
-            verb,
-            "look" | "l" | "status" | "supplies" | "threat" | "victories" | "rank"
-        ) && payload.is_empty()
+        let intent = if (matches!(verb, "look" | "l")
+            || (self.expedition
+                && matches!(
+                    verb,
+                    "status" | "supplies" | "threat" | "victories" | "rank"
+                )))
+            && payload.is_empty()
         {
             CommandIntent::Look
-        } else if let Some(action) = action_id(verb).filter(|_| payload.is_empty()) {
+        } else if let Some(action) =
+            action_id(verb).filter(|_| self.expedition && payload.is_empty())
+        {
             refresh = true;
             CommandIntent::GameAction {
                 action: DefinitionId::parse(action)?,
@@ -291,7 +329,11 @@ impl Session {
                 }
             }
         } else {
-            writeln!(output, "Unknown command or invalid arguments. {HELP}")?;
+            writeln!(
+                output,
+                "Unknown command or invalid arguments. {}",
+                self.help()
+            )?;
             return Ok(false);
         };
         self.runtime.advance(now)?;
@@ -313,10 +355,17 @@ impl Session {
                     Some(WorldError::Rule(RuleError::Rejected))
                 ) =>
             {
-                writeln!(
-                    output,
-                    "Action rejected by expedition rules; the command made no changes. Due scheduled recovery may still have applied. Use status to inspect supplies and threat."
-                )?;
+                if self.expedition {
+                    writeln!(
+                        output,
+                        "Action rejected by expedition rules; the command made no changes. Due scheduled recovery may still have applied. Use status to inspect supplies and threat."
+                    )?;
+                } else {
+                    writeln!(
+                        output,
+                        "Action rejected by reference rules; the command made no changes."
+                    )?;
+                }
             }
             Err(error) => return Err(error),
         }
@@ -391,6 +440,121 @@ mod tests {
         )
         .unwrap();
         Session::new(&content).unwrap()
+    }
+    fn reference_fixture() -> Session {
+        let content = load_bytes(
+            "reference test",
+            include_bytes!("../../../examples/two-room/world.json"),
+            Default::default(),
+        )
+        .unwrap();
+        Session::new_profile(&content, false).unwrap()
+    }
+    struct NoRandom;
+    impl RandomSource for NoRandom {
+        fn next_u64(&mut self) -> Result<u64, RandomExhausted> {
+            Err(RandomExhausted)
+        }
+    }
+    #[test]
+    fn reference_profile_rejects_expedition_verbs_without_runtime_work() {
+        let mut session = reference_fixture();
+        let before = session.runtime.snapshot();
+        let operation = session.next_operation;
+        let mut output = Vec::new();
+        for command in [
+            "status",
+            "supplies",
+            "threat",
+            "victories",
+            "rank",
+            "forage",
+            "encounter",
+            "strike",
+            "rest",
+        ] {
+            assert!(
+                !session
+                    .apply(command, Tick::from_millis(1), &mut NoRandom, &mut output)
+                    .unwrap()
+            );
+        }
+        assert_eq!(session.next_operation, operation);
+        assert_eq!(session.runtime.snapshot().revision(), before.revision());
+        assert_eq!(session.runtime.snapshot().scheduled_actions(), 0);
+        assert_eq!(
+            session.runtime.snapshot().room_of(session.actor.character),
+            before.room_of(session.actor.character)
+        );
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(
+            text.matches("Unknown command or invalid arguments.")
+                .count(),
+            9
+        );
+        assert!(text.contains(REFERENCE_HELP));
+        assert!(!text.contains(HELP));
+        assert!(!text.contains("Supplies:"));
+    }
+    #[test]
+    fn reference_profile_look_move_say_help_and_quit_remain_playable() {
+        let mut session = reference_fixture();
+        let (label, destination) = session.lookup.named_exits[&session.lookup.entry_room]
+            .iter()
+            .next()
+            .map(|(label, room)| (label.clone(), *room))
+            .unwrap();
+        let mut output = Vec::new();
+        for command in ["look", "l", "help", "say Reference speech check."] {
+            assert!(
+                !session
+                    .apply(command, Tick::ZERO, &mut NoRandom, &mut output)
+                    .unwrap()
+            );
+        }
+        session
+            .apply(
+                &format!("go {label}"),
+                Tick::from_millis(1),
+                &mut NoRandom,
+                &mut output,
+            )
+            .unwrap();
+        assert_eq!(
+            session.runtime.snapshot().room_of(session.actor.character),
+            Some(destination)
+        );
+        assert!(
+            session
+                .apply("quit", Tick::from_millis(2), &mut NoRandom, &mut output)
+                .unwrap()
+        );
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.contains("Exits:"));
+        assert!(text.contains("You move to the next room."));
+        assert!(text.contains("Reference speech check."));
+        assert!(text.contains(REFERENCE_HELP));
+        assert!(!text.contains(HELP));
+        assert!(!text.contains("Supplies:"));
+    }
+    #[test]
+    fn reference_profile_does_not_hide_missing_rule_configuration_errors() {
+        let mut session = reference_fixture();
+        let error = session
+            .execute(
+                CommandIntent::GameAction {
+                    action: DefinitionId::parse(crate::FORAGE_ACTION).unwrap(),
+                    argument: None,
+                },
+                Tick::ZERO,
+                &mut NoRandom,
+                &mut Vec::new(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<WorldError>(),
+            Some(WorldError::Rule(RuleError::MissingRule))
+        ));
     }
     #[test]
     fn playable_host_runs_encounter_strikes_and_recovery() {

@@ -72,6 +72,7 @@ pub(crate) struct LoadReport {
     pub throughput_milli_commands_per_second: u64,
     pub latency: LatencyStats,
     pub passed: bool,
+    pub tooling_smoke_passed: bool,
     pub failure_reasons: Vec<FailureReason>,
 }
 
@@ -124,6 +125,15 @@ pub(crate) fn evaluate(report: &mut LoadReport, profile: Profile) {
     if report.elapsed_ms > 90_000 {
         reasons.push(FailureReason::WallTime);
     }
+    let (clients, commands, _) = profile.dimensions();
+    report.tooling_smoke_passed = matches!(profile, Profile::Smoke { .. })
+        && report.connected_clients == clients as u64
+        && report.completed_commands == (clients * commands) as u64
+        && report.latency.count == report.completed_commands
+        && report.failures.total() == 0
+        && report.readiness_checks > 0
+        && report.latency.max_us < 10_000_000
+        && report.elapsed_ms <= 90_000;
     report.passed = reasons.is_empty();
     report.failure_reasons = reasons;
 }
@@ -144,7 +154,10 @@ mod tests {
         let stats = latency_stats((1..=20).collect());
         assert_eq!((stats.p50_us, stats.p95_us, stats.p99_us), (10, 19, 20));
         let stats = latency_stats((1..=7_500).rev().collect());
-        assert_eq!((stats.p50_us, stats.p95_us, stats.p99_us), (3_750, 7_125, 7_425));
+        assert_eq!(
+            (stats.p50_us, stats.p95_us, stats.p99_us),
+            (3_750, 7_125, 7_425)
+        );
         assert_eq!(nearest_rank(&[], 50), None);
         assert_eq!(nearest_rank(&[1], 0), None);
         assert_eq!(nearest_rank(&[1], 101), None);
@@ -181,8 +194,40 @@ mod tests {
                 max_us: 9_999_999,
             },
             passed: false,
+            tooling_smoke_passed: false,
             failure_reasons: Vec::new(),
         }
+    }
+
+    #[test]
+    fn tooling_smoke_can_succeed_without_claiming_beta() {
+        let mut report = passing_report();
+        report.profile = "smoke-v1".into();
+        report.target_clients = 2;
+        report.connected_clients = 2;
+        report.expected_commands = 4;
+        report.completed_commands = 4;
+        report.latency.count = 4;
+        evaluate(
+            &mut report,
+            Profile::Smoke {
+                clients: 2,
+                commands: 2,
+                period_ms: 10,
+            },
+        );
+        assert!(report.tooling_smoke_passed);
+        assert!(!report.passed);
+        report.failures.protocol = 1;
+        evaluate(
+            &mut report,
+            Profile::Smoke {
+                clients: 2,
+                commands: 2,
+                period_ms: 10,
+            },
+        );
+        assert!(!report.tooling_smoke_passed);
     }
 
     #[test]

@@ -42,7 +42,7 @@ impl crate::store::PostgresStore {
         game: GameContract,
     ) -> Result<DurableGameSnapshot, PersistenceError> {
         let world = lease.world();
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.measured_begin().await?;
         let locked = lock_game_world(&mut tx, lease).await?;
         validate_locked_world(&locked, expected_release, game, None)?;
         let state_version = locked.5;
@@ -159,6 +159,21 @@ impl crate::store::PostgresStore {
         Ok(snapshot)
     }
 
+    async fn measured_replace(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        world: WorldId,
+        state: GameplayState<'_>,
+        observed_at: Instant,
+    ) -> Result<(), PersistenceError> {
+        let _timing = self.measurements.start(2);
+        self.measurements
+            .event(7, state.runtime.counters.len() as u64);
+        self.measurements
+            .event(8, state.runtime.scheduled.len() as u64);
+        replace_game_state(tx, world, state, observed_at).await
+    }
+
     pub async fn initialize_game_state(
         &self,
         lease: WriterLease,
@@ -168,7 +183,7 @@ impl crate::store::PostgresStore {
     ) -> Result<u64, PersistenceError> {
         let observed_at = Instant::now();
         validate_gameplay_state(lease.world(), state)?;
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.measured_begin().await?;
         let locked = lock_game_world(&mut tx, lease).await?;
         validate_locked_world(&locked, expected_release, game, Some(0))?;
         lock_exact_characters(&mut tx, lease.world(), state.rooms).await?;
@@ -184,7 +199,8 @@ impl crate::store::PostgresStore {
         if counter_count != 0 || schedule_count != 0 {
             return Err(PersistenceError::InvalidData);
         }
-        replace_game_state(&mut tx, lease.world(), state, observed_at).await?;
+        self.measured_replace(&mut tx, lease.world(), state, observed_at)
+            .await?;
         let changed = sqlx::query(
             "UPDATE worldwright_worlds SET game_state_version = 1, runtime_revision = $2, \
              updated_at = clock_timestamp() WHERE world_id = $1 AND game_state_version = 0",
@@ -196,9 +212,7 @@ impl crate::store::PostgresStore {
         if changed.rows_affected() != 1 {
             return Err(PersistenceError::InvalidData);
         }
-        tx.commit()
-            .await
-            .map_err(|_| PersistenceError::UnknownOutcome)?;
+        self.measured_commit(tx).await?;
         Ok(1)
     }
 
@@ -215,12 +229,21 @@ impl crate::store::PostgresStore {
     ) -> Result<u64, PersistenceError> {
         let observed_at = Instant::now();
         validate_gameplay_state(lease.world(), state)?;
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.measured_begin().await?;
         let locked = lock_game_world(&mut tx, lease).await?;
-        validate_locked_world(&locked, expected_release, game, Some(expected_state_version))?;
+        validate_locked_world(
+            &locked,
+            expected_release,
+            game,
+            Some(expected_state_version),
+        )?;
         lock_exact_characters(&mut tx, lease.world(), state.rooms).await?;
-        let next = expected_state_version.checked_add(1).ok_or(PersistenceError::CounterExhausted)?;
-        replace_game_state(&mut tx, lease.world(), state, observed_at).await?;
+        let next = expected_state_version
+            .checked_add(1)
+            .ok_or(PersistenceError::CounterExhausted)?;
+        self.measurements.event(4, 1);
+        self.measured_replace(&mut tx, lease.world(), state, observed_at)
+            .await?;
         let changed = sqlx::query(
             "UPDATE worldwright_worlds SET game_state_version=$3, runtime_revision=$4, \
              updated_at=clock_timestamp() WHERE world_id=$1 AND game_state_version=$2",
@@ -229,8 +252,11 @@ impl crate::store::PostgresStore {
         .bind(i64_from_u64(expected_state_version, false)?)
         .bind(i64_from_u64(next, true)?)
         .bind(i64_from_u64(state.runtime.revision, false)?)
-        .execute(&mut *tx).await?;
-        if changed.rows_affected() != 1 { return Err(PersistenceError::StaleGameState); }
+        .execute(&mut *tx)
+        .await?;
+        if changed.rows_affected() != 1 {
+            return Err(PersistenceError::StaleGameState);
+        }
         sqlx::query(
             "INSERT INTO worldwright_gameplay_timer_audit \
              (world_id,state_version,runtime_revision,writer_id,writer_epoch,authority_incarnation) \
@@ -243,7 +269,7 @@ impl crate::store::PostgresStore {
         .bind(i64_from_u64(lease.epoch(), true)?)
         .bind(uuid_of(lease.incarnation()))
         .execute(&mut *tx).await?;
-        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)?;
+        self.measured_commit(tx).await?;
         Ok(next)
     }
 
@@ -261,9 +287,18 @@ impl crate::store::PostgresStore {
         }
         validate_gameplay_state(input.actor.world, input.state)?;
         validate_result(&input.result)?;
+        self.measurements.event(
+            match input.kind {
+                GameplayIntentKind::Look => 0,
+                GameplayIntentKind::Move => 1,
+                GameplayIntentKind::Say => 2,
+                GameplayIntentKind::GameAction => 3,
+            },
+            1,
+        );
         let kind = input.kind.as_str();
         let fingerprint = fingerprint(&[b"gameplay", kind.as_bytes(), input.intent]);
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.measured_begin().await?;
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
             .bind(gameplay_advisory_key(&input.actor, input.request_id))
             .execute(&mut *tx)
@@ -284,6 +319,7 @@ impl crate::store::PostgresStore {
         .fetch_optional(&mut *tx)
         .await?;
         if let Some(receipt) = receipt {
+            self.measurements.event(5, 1);
             return replay_gameplay(receipt, kind, fingerprint);
         }
         if u64_from_i64(locked.5, false)? != input.expected_state_version {
@@ -294,7 +330,8 @@ impl crate::store::PostgresStore {
             .expected_state_version
             .checked_add(1)
             .ok_or(PersistenceError::CounterExhausted)?;
-        replace_game_state(&mut tx, input.actor.world, input.state, observed_at).await?;
+        self.measured_replace(&mut tx, input.actor.world, input.state, observed_at)
+            .await?;
         let changed = sqlx::query(
             "UPDATE worldwright_worlds SET game_state_version = $3, runtime_revision = $4, \
              updated_at = clock_timestamp() WHERE world_id = $1 AND game_state_version = $2",
@@ -345,9 +382,7 @@ impl crate::store::PostgresStore {
         .bind(summary)
         .execute(&mut *tx)
         .await?;
-        tx.commit()
-            .await
-            .map_err(|_| PersistenceError::UnknownOutcome)?;
+        self.measured_commit(tx).await?;
         Ok(GameplayCommit {
             operation: input.operation,
             state_version: next_version,
@@ -453,12 +488,14 @@ async fn replace_game_state(
 ) -> Result<(), PersistenceError> {
     // One database-wall-clock anchor for all deadlines. Subtract time spent in
     // validation/pool/locks so persistence latency does not extend recovery.
-    let (sampled_wall_ms,): (i64,) = sqlx::query_as(
-        "SELECT FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT",
-    ).fetch_one(&mut **tx).await?;
+    let (sampled_wall_ms,): (i64,) =
+        sqlx::query_as("SELECT FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT")
+            .fetch_one(&mut **tx)
+            .await?;
     let elapsed_ms = i64::try_from(observed_at.elapsed().as_millis())
         .map_err(|_| PersistenceError::CounterExhausted)?;
-    let anchor_ms = sampled_wall_ms.checked_sub(elapsed_ms)
+    let anchor_ms = sampled_wall_ms
+        .checked_sub(elapsed_ms)
         .ok_or(PersistenceError::CounterExhausted)?;
     for room in state.rooms {
         sqlx::query(
@@ -496,7 +533,8 @@ async fn replace_game_state(
         let offset_ms = i64_from_u64(scheduled.at.as_millis(), false)?
             .checked_sub(i64_from_u64(state.now.as_millis(), false)?)
             .ok_or(PersistenceError::CounterExhausted)?;
-        let due_ms = anchor_ms.checked_add(offset_ms)
+        let due_ms = anchor_ms
+            .checked_add(offset_ms)
             .ok_or(PersistenceError::CounterExhausted)?;
         sqlx::query(
             "INSERT INTO worldwright_scheduled_counter_adjustments \

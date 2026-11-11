@@ -39,6 +39,10 @@ networkPolicy:
   dnsPodSelector:
     matchLabels: { k8s-app: kube-dns }
   httpsEgressCidrs: []
+# Opt-in loopback-only metrics. Use an approved private Pod port-forward; no Service/Ingress.
+telemetry:
+  enabled: false
+  port: 9090
 resources:
   requests: { cpu: 500m, memory: 512Mi }
   limits: { cpu: "2", memory: 1Gi }

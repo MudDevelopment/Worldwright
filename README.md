@@ -806,3 +806,42 @@ Staging API checks refuse redirects rather than follow another deployment.
 Run `python scripts/test-r3-io.py` beside the R3 helper/chart gates in
 `docs/R3_ACCEPTANCE.md`. These are implemented collector features, not a passed
 native build, real staging deployment or signed service adoption. R3 remains open.
+
+## R4 fixed-load and measurement tooling
+
+See `docs/R4_ACCEPTANCE.md` and `docs/verification/r4-acceptance-ledger.md`.
+The fixed Rust beta recipe is unchanged. Tooling smoke now reports its own
+success without claiming beta acceptance. R4 adds protected persistence/owner
+measurements, read-only PG/CPU/RSS/metrics sampling, separate protocol/soak
+scenarios, source/deployment-bound collection and independently signed closure.
+Run `python scripts/test-r4.py` locally. `r4-verify.py collect/close/compare`
+requires approved current R2/R3 evidence and protected inputs; no synthetic
+helper result is load capacity. Enable optional chart `telemetry.enabled=true`
+(port 9090 default), use a reviewed private loopback Pod port-forward; no public
+metrics or operator service is created. No measured bottleneck/optimization,
+retention adoption, native Rust pass, full R4 exit or wider capacity is implied.
+
+### Generated-project SDK workspace boundary
+
+New generated consumers declare `members = []` and `exclude = ["sdk"]` in their
+own workspace. Cargo automatically includes the root application; do not add
+`members = ["."]`, which overrides descendant exclusions in Cargo 1.85.1.
+The five bundled crates carry `package.workspace = "../.."`,
+which selects the repository root in the source tree and `sdk/Cargo.toml` in a
+relocated generated project. This prevents inheriting edition/dependency/lint
+settings from the consumer's unrelated workspace. Regenerate failed scratch
+projects/private bundles with the updated CLI/source; do not patch integrity-
+covered SDK manifests in place and present their old hashes as still valid.
+The existing `cargo test -p worldwright --test maturity` integration suite now checks
+workspace resolution before the unchanged relocated builds and playable runs.
+
+### Generated reference versus expedition commands
+
+The shared terminal adapter now retains the selected game profile for parsing,
+help and diagnostics. Minimal/reference games accept look/l, go, say, help and
+quit/exit; expedition verbs and status/counter aliases are reported as unknown
+without dispatching an unsupported GameAction or terminating the session.
+Expedition gameplay/recovery commands are unchanged. Genuine missing-rule and
+other unexpected runtime failures are not suppressed. Fast regressions live in
+`worldwright-expedition` terminal tests; the relocated maturity executable test
+also sends unsupported commands to reference and then verifies normal speech/quit.

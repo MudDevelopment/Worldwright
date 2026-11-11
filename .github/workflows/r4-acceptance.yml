@@ -1,0 +1,91 @@
+name: R4 fixed load contracts and approved measured run
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_r4:
+        description: Execute fixed beta and separate soak on the approved isolated runner
+        type: boolean
+        default: false
+      plan_path:
+        description: Pre-provisioned independently signed private plan path
+        type: string
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install test-only Python packages
+        shell: bash
+        run: python -m pip install -r scripts/r2-requirements.txt
+      - name: Required R4 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/test-r4.py 2>&1 | tee "$RUNNER_TEMP/r4-contracts.log"
+      - name: Retain contracts GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r4-contracts-${{ matrix.os }}
+          path: ${{ runner.temp }}/r4-contracts.log
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain contracts Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r4-contracts-${{ matrix.os }}
+          path: ${{ runner.temp }}/r4-contracts.log
+          retention-days: 14
+          if-no-files-found: error
+  measured-run:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_r4 && github.ref_name == github.event.repository.default_branch
+    runs-on: [self-hosted, linux, x64, worldwright-r4-acceptance]
+    environment: worldwright-r4-acceptance
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Approved current source load and soak
+        shell: bash
+        env:
+          PLAN: ${{ inputs.plan_path }}
+          PUBLIC_KEY: ${{ vars.WORLDWRIGHT_R4_APPROVAL_PUBLIC_KEY_PATH }}
+        run: |
+          set -euo pipefail
+          test -n "$PLAN" && test -n "$PUBLIC_KEY"
+          python scripts/r4-verify.py collect --plan "$PLAN" --approval-public-key "$PUBLIC_KEY" --output "$RUNNER_TEMP/r4-evidence" --confirm-load
+      - name: Retain private evidence GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r4-private-evidence
+          path: |
+            ${{ runner.temp }}/r4-evidence/*.json
+            ${{ runner.temp }}/r4-evidence/*.jsonl
+            ${{ runner.temp }}/r4-evidence/*.log
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain private evidence Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r4-private-evidence
+          path: |
+            ${{ runner.temp }}/r4-evidence/*.json
+            ${{ runner.temp }}/r4-evidence/*.jsonl
+            ${{ runner.temp }}/r4-evidence/*.log
+          retention-days: 14
+          if-no-files-found: error

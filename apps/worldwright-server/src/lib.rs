@@ -5,14 +5,14 @@ mod lifecycle;
 mod metrics;
 mod oidc;
 mod operator;
+#[cfg(test)]
+mod r2_live_tests;
+#[cfg(test)]
+mod r2_oidc_tests;
 mod release_cli;
 mod release_runtime;
 mod web;
 mod world;
-#[cfg(test)]
-mod r2_oidc_tests;
-#[cfg(test)]
-mod r2_live_tests;
 
 use std::{error::Error, fmt, future::Future, net::SocketAddr, path::PathBuf, process::ExitCode};
 use worldwright_operations::Environment;

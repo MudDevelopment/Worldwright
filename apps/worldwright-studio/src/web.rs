@@ -101,8 +101,8 @@ async fn shutdown_signal() -> Result<(), String> {
         use tokio::signal::unix::{SignalKind, signal};
         let mut terminate = signal(SignalKind::terminate())
             .map_err(|_| "Studio shutdown signal failed".to_owned())?;
-        let mut hangup = signal(SignalKind::hangup())
-            .map_err(|_| "Studio shutdown signal failed".to_owned())?;
+        let mut hangup =
+            signal(SignalKind::hangup()).map_err(|_| "Studio shutdown signal failed".to_owned())?;
         tokio::select! {
             result = tokio::signal::ctrl_c() => {
                 result.map_err(|_| "Studio shutdown signal failed".to_owned())
@@ -724,18 +724,35 @@ mod tests {
     #[tokio::test]
     async fn http_capabilities_use_authoritative_bounds() {
         let (state, root) = state();
-        let response = router(state).oneshot(axum::http::Request::builder()
-            .uri("/api/v1/capabilities").header("host", "127.0.0.1:3010")
-            .body(Body::empty()).unwrap()).await.unwrap();
+        let response = router(state)
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/capabilities")
+                    .header("host", "127.0.0.1:3010")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()["cache-control"], "no-store");
-        let value: serde_json::Value = serde_json::from_slice(
-            &response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
         assert_eq!(value["schema_version"], 1);
         assert_eq!(value["max_rooms"], worldwright_core::runtime::MAX_ROOMS);
-        assert_eq!(value["max_exits_per_room"], worldwright_core::runtime::MAX_EXITS_PER_ROOM);
-        assert_eq!(value["max_text_bytes"], worldwright_core::command::PlayerText::MAX_BYTES);
-        assert_eq!(value["max_input_bytes"], worldwright_content::MAX_INPUT_BYTES);
+        assert_eq!(
+            value["max_exits_per_room"],
+            worldwright_core::runtime::MAX_EXITS_PER_ROOM
+        );
+        assert_eq!(
+            value["max_text_bytes"],
+            worldwright_core::command::PlayerText::MAX_BYTES
+        );
+        assert_eq!(
+            value["max_input_bytes"],
+            worldwright_content::MAX_INPUT_BYTES
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -746,30 +763,67 @@ mod tests {
         let snapshot = state.workspace.latest().unwrap();
         for (game, expected) in [
             (None, worldwright_release::GameContract::Reference),
-            (Some("reference"), worldwright_release::GameContract::Reference),
-            (Some("expedition"), worldwright_release::GameContract::Expedition),
+            (
+                Some("reference"),
+                worldwright_release::GameContract::Reference,
+            ),
+            (
+                Some("expedition"),
+                worldwright_release::GameContract::Expedition,
+            ),
         ] {
             let mut body = json!({"revision": snapshot.revision,
                 "snapshot_sha256": snapshot.snapshot_sha256,
                 "release_id": format!("http-{expected}"), "builder_identity": "p0-test"});
-            if let Some(game) = game { body["game"] = json!(game); }
-            let response = app.clone().oneshot(axum::http::Request::builder()
-                .method("POST").uri("/api/v1/package")
-                .header("host", "127.0.0.1:3010").header("origin", "http://127.0.0.1:3010")
-                .header("content-type", "application/json")
-                .body(Body::from(body.to_string())).unwrap()).await.unwrap();
+            if let Some(game) = game {
+                body["game"] = json!(game);
+            }
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/package")
+                        .header("host", "127.0.0.1:3010")
+                        .header("origin", "http://127.0.0.1:3010")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
             assert_eq!(response.status(), StatusCode::OK);
-            let record: crate::artifact::ArtifactRecord = serde_json::from_slice(
-                &response.into_body().collect().await.unwrap().to_bytes()).unwrap();
-            let bytes = state.workspace.artifact_bytes(&record.artifact_digest).unwrap();
-            assert_eq!(worldwright_release::verify_bytes("HTTP", &bytes, None).unwrap().manifest().game_contract(), expected);
+            let record: crate::artifact::ArtifactRecord =
+                serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                    .unwrap();
+            let bytes = state
+                .workspace
+                .artifact_bytes(&record.artifact_digest)
+                .unwrap();
+            assert_eq!(
+                worldwright_release::verify_bytes("HTTP", &bytes, None)
+                    .unwrap()
+                    .manifest()
+                    .game_contract(),
+                expected
+            );
         }
         let before = state.workspace.artifacts().unwrap().len();
         let body = json!({"revision": snapshot.revision, "snapshot_sha256": snapshot.snapshot_sha256,
             "release_id": "invalid-game", "builder_identity": "p0-test", "game": "unknown"});
-        let response = app.oneshot(axum::http::Request::builder().method("POST").uri("/api/v1/package")
-            .header("host", "127.0.0.1:3010").header("origin", "http://127.0.0.1:3010")
-            .header("content-type", "application/json").body(Body::from(body.to_string())).unwrap()).await.unwrap();
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/package")
+                    .header("host", "127.0.0.1:3010")
+                    .header("origin", "http://127.0.0.1:3010")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(state.workspace.artifacts().unwrap().len(), before);
         std::fs::remove_dir_all(root).unwrap();

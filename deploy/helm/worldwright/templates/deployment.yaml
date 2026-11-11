@@ -39,6 +39,10 @@ spec:
           args: ["serve","--database-url-env","WORLDWRIGHT_DATABASE_URL","--acquire-writer","--origin",{{ .Values.publicOrigin | quote }},"--game",{{ .Values.game | quote }},"--bind","0.0.0.0:8080","--behind-tls-ingress"{{ if .Values.oidc.enabled }},"--oidc-issuer",{{ .Values.oidc.issuer | quote }},"--oidc-client-id",{{ .Values.oidc.clientId | quote }},"--oidc-client-secret-env","WORLDWRIGHT_OIDC_CLIENT_SECRET","--oidc-redirect-uri",{{ .Values.oidc.redirectUri | quote }}{{ end }}]
           ports: [{ name: http, containerPort: 8080 }]
           env:
+            {{- if .Values.telemetry.enabled }}
+            - name: WORLDWRIGHT_TELEMETRY_BIND
+              value: {{ printf "127.0.0.1:%v" .Values.telemetry.port | quote }}
+            {{- end }}
             - name: WORLDWRIGHT_DATABASE_URL
               valueFrom: { secretKeyRef: { name: {{ .Values.postgres.existingSecret | quote }}, key: {{ .Values.postgres.key | quote }} } }
             {{- if .Values.oidc.enabled }}
