@@ -681,3 +681,22 @@ Native integrity/R2/R3 gates and reviewer-retention adoption are mandatory;
 actual measurements and any justified optimization remain open. New docs and
 `docs/verification/r4-acceptance-ledger.md` distinguish implemented source,
 local/helper/supplemental checks, configured CI and actual accepted deployment.
+
+## R5 continuation — workspace and R4 gates remain open
+
+Studio now adds edit-generation/async-result isolation, bounded UI network waits,
+verified artifact-game identity, optional server-side token-file renewal and
+explicit local publication replacement recovery. Existing persisted workspace
+formats and game-neutral drafts remain unchanged. Node timing fixtures and real
+Chromium/loopback fixture checks are separate from native Studio/PG/operator and
+manual acceptance. Continuation adds known-ID authorized status reconciliation,
+a nonqueueing publication gate, cooperative serve exclusion with manual crash
+sentinel recovery, total five-second network deadline and journal/credential-read
+hardening. No automatic resubmission, review or activation is introduced.
+See docs/R5_ACCEPTANCE.md, docs/R5_CHECK_PLAN.md and the R5 implementation ledger.
+The retained local record covers 18 Node cases, five Chromium fixture groups and
+ten Rust grammar subjects only; current native/live/independent gates are open.
+Previously observed Windows SDK/terminal successes are retained, not promoted
+into complete workspace or R5 closure. R1/R2, remaining native workspace checks,
+all R4 deployment/load/soak/adoption, real reviewed publication and manual
+accessibility/independent-builder gates stay OPEN.

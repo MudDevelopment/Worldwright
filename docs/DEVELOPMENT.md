@@ -69,17 +69,26 @@ Cargo now defaults to the native host target; the old unconditional Windows MSVC
 
 ## Check Sequence
 
-The full workflow runs:
+For the current R5 handoff use [R5_CHECK_PLAN.md](R5_CHECK_PLAN.md): it supplies
+copy-and-paste PowerShell/Ubuntu commands, the known native-cache continuation,
+focused Studio/SDK discovery and the full A–Q acceptance inventory. Reuse the
+known cache for development; `check-native` and formal R0 require fresh outputs.
+Do not confuse ignored DB compilation or browser fixtures with live acceptance.
+
+The full `check`/`check-native` workflow runs:
 
 ```bash
 cargo fmt --all -- --check
 cargo check --workspace --all-targets --locked --offline
 cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings
 cargo test --workspace --locked --offline
-cargo test -p worldwright-persistence --no-run --locked --offline -- --ignored
 cargo build --workspace --locked --offline
 cargo doc --workspace --no-deps --locked --offline
 ```
+
+Ignored persistence tests compile as part of ordinary test builds but are not
+executed. Discover/run them explicitly only against the approved disposable DB,
+as described in R2_ACCEPTANCE.md; the known full-migration blocker remains open.
 
 For the final command, the scripts add `-D warnings` to `RUSTDOCFLAGS` and preserve the caller's original value. This is a debug/development build; release performance and production deployment are not tested here.
 

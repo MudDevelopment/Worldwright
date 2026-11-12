@@ -4,9 +4,9 @@
 
 | Attribute | Value |
 |---|---|
-| Document version | 0.3 — current M4/M5 implementation alignment |
-| Updated | November 6, 2026 |
-| Delivery authority | [ROAD-MAP.md](ROAD-MAP.md): M4/M5 awaiting PostgreSQL verification; M6 implemented awaiting PostgreSQL/recovery execution |
+| Document version | 0.4 — R5 Studio process and recovery alignment |
+| Updated | November 11, 2026 |
+| Delivery authority | [ROADMAP_v2.md](ROADMAP_v2.md); historical milestones in ROAD-MAP.md; native/live/independent release gates remain open |
 | Prepared | October 20, 2026 |
 | Architecture style | Modular monolith; one authoritative world per server process initially |
 | Implementation status | M4 durable gameplay and M5 release/preview are implemented awaiting live PostgreSQL verification; no public deployment |
@@ -28,7 +28,7 @@ The server release CLI requests/reviews/activates staging artifacts offline;
 begin/complete/fail/recover are fenced transactions with audit. Durable server
 startup loads only the active artifact, validates durable references, and holds
 release read guards across in-memory commands. Preview is in-memory
-ReferenceGame execution with bounded ownership-safe temporary slots.
+selected reference/expedition game execution with bounded ownership-safe temporary slots.
 
 Trust boundaries remain explicit: artifact digests provide integrity, not
 authorship; auth-v1 tokens plus current database grants provide operator
@@ -612,6 +612,22 @@ remains unverified; automated evidence covers process crash, timeout, quota
 refusal, and ownership-safe cleanup.
 
 ### Studio placement
+
+Current R5 responsibilities are concrete: `web.rs` acquires the `session.rs`
+cooperative serve sentinel before listener bind and owns the shared nonqueueing
+publication-operation gate. `workspace.rs` owns revision/file checks and validated
+local journal recovery; `artifact.rs` verifies immutable game identity;
+`publication.rs` performs scoped loopback submission/status with per-operation
+token-file reads and one five-second network deadline. Browser generations/tickets
+prevent stale asynchronous responses from replacing current edits or identities.
+
+Known-ID reconciliation uses the existing authorized server status GET, validates
+local artifact/original preview evidence and updates local history only. It is
+not discovery or remote mutation. Session exclusion does not cover older/direct
+writers; crash/uncertain cleanup requires operator recovery. This is not certified
+power-loss handling. See docs/R5_ACCEPTANCE.md for procedures and
+[the complete check plan](docs/R5_CHECK_PLAN.md) for native/manual/live boundaries.
+
 
 M7 adds editing, schema-aware assistance, and workflow clients; M5 owns preview/release mechanisms and M6 owns operational capability/audit controls. Studio must not reimplement either.
 

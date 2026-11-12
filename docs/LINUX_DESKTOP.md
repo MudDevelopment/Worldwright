@@ -124,6 +124,21 @@ linker/toolchain; a Windows MSVC target is not made runnable on Ubuntu merely by
 installing it with rustup. Prefer the retained native Windows CI/job for Windows
 verification. The desktop launcher itself intentionally targets Linux only.
 
+## Interrupted Studio workspace recovery
+
+Updated Studio creates `.worldwright-studio-session` before binding its listener
+and refuses a second updated serve process for the same workspace. Normal clean
+return removes its matching sentinel. A crash, panic or uncertain preview cleanup
+may retain it. Launcher session cleanup does not automatically reclaim the file.
+Confirm all Studio/preview writers have stopped, preserve a private copy including
+journals, then follow [R5 recovery](R5_ACCEPTANCE.md) before restarting. Never
+remove a sentinel from a possibly live writer or delete `.worldwright-studio`.
+The guard is cooperative, not a lock against older binaries or hostile code.
+
+The R1 automation's crash case uses a fresh XDG workspace afterward, so it does
+not establish crashed-workspace recovery. The separate native/manual session and
+journal matrix in [R5_CHECK_PLAN.md](R5_CHECK_PLAN.md) remains required.
+
 ## Acceptance gates still required
 
 ```bash

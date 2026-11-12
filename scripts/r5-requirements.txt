@@ -1,0 +1,2 @@
+# Test-only browser fixture; use an approved existing Chromium installation/cache.
+playwright==1.56.0

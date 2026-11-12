@@ -4,8 +4,8 @@
 
 | Attribute | Value |
 |---|---|
-| Document version | 0.4 — current R2/R3 contracts and evidence boundaries |
-| Updated | November 10, 2026 — R2/R3 source and supplemental checks; native/live/manual acceptance pending |
+| Document version | 0.5 — R5 Studio recovery and check-plan alignment |
+| Updated | November 11, 2026 — R5 continuation; native/live/manual acceptance pending |
 | Delivery authority | [ROADMAP_v2.md](ROADMAP_v2.md) current priorities/release tracks; [ROAD-MAP.md](ROAD-MAP.md) historical milestones; no R0/R1/R2/R3 closure |
 | Prepared | October 20, 2026 |
 | Product | Rust development suite for MUDs: multi-user domains |
@@ -17,7 +17,7 @@
 >
 > **Synchronization basis:** Current source, migrations, release contract, and verification report are authoritative for implemented behavior. Historical planning sections remain labeled as such.
 >
-> **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROAD-MAP owns milestone scope, dependency order, blocking decisions, and exit evidence. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
+> **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROADMAP_v2 owns current priorities, release-track dependency order, blocking decisions and exit evidence; ROAD-MAP retains historical milestone scope. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
 
 ## Playable second-game integration — November 9, 2026
 
@@ -1447,3 +1447,71 @@ its original unsupported inputs and adds reference speech/help assertions;
 expedition progression/recovery assertions remain unchanged. Subsequent
 user-observed Windows runs passed all seven terminal tests and the complete
 three-test maturity suite, including both relocated playable executables.
+
+## R5 Studio workflow batch — asynchronous state and recovery
+
+Drafts remain game-neutral. New artifact-identity read models derive the game
+from verified immutable bytes; existing artifact-list/package DTOs and persisted
+sidecars are not extended or rewritten. The page retains a selected packaging
+game across asynchronous saves but does not silently invent persisted preferences.
+HTTP additions and the optional token-file CLI argument are additive; workspace,
+revision, sidecar and publication schemas remain v1 with no migration required.
+
+The browser tracks edit/snapshot generations and operation tickets. Late saves
+advance the acknowledged base but preserve later unsaved edits/selected room;
+late imports/reloads/validation results cannot overwrite or validate new edits.
+Preview polls are single-flight and invalidated by controls. Responses and waits
+are bounded; timeouts never imply rollback, cancellation or an automatic replay.
+Publication previews match artifact/payload/revision together, and unsaved edits
+are explicitly stale. No token, environment name or credential file path is
+returned by the publication-configuration read model.
+
+An optional absolute token file supplies fresh scoped bearer material per
+explicit server-side operation; environment tokens retain startup-only behavior.
+File checks reject invalid size/encoding, symlinks/reparse points and nonprivate
+Unix files. Windows DACLs, hostile filesystem races and credential delivery remain
+open security gates. No issuer key, browser credential form or auto-submit retry
+is introduced. A token-file read failure is denial, not fallback to a stale token.
+
+Local publication recovery validates current/.next/.previous identity and
+allowed forward status before mutation. Ambiguous/corrupt/regressive/unsafe
+candidates remain evidence. Unix directory synchronization follows each
+recoverable replacement layout; failed rename/sync preserves synced next data.
+Actual reads are capped; dangling journal links are not treated as absent.
+An unchanged status cannot bypass pending local recovery.
+
+Known-request reconciliation is a separate POST route ending in `/reconcile`.
+It uses the existing authorized remote status GET and verifies exact local
+artifact/release/revision/payload and original successful preview time. It
+inserts or updates local history only; it does not discover an unknown ID,
+repeat a submission, approve or activate. Existing local identities and allowed
+transitions must match. The builder obtains an unknown initial request ID through
+the authorized operator workflow. Corrupt initial records require forensic repair,
+not overwrite. Submit/refresh/reconcile/recover share a nonqueueing process gate;
+ordinary file operations retain the workspace mutex.
+
+`session.rs` supplies cooperative serve exclusion through create-new
+`.worldwright-studio-session` before listener bind. This is a new v1 operational
+sentinel, not a rewrite of workspace marker or content schemas. Crash/panic/
+uncertain cleanup leaves explicit operator recovery; PID age/absence never grants
+reclamation. Only updated serve processes cooperate, not older binaries or direct
+library writers. Simultaneous initialization, hostile path races, network
+filesystems, Windows DACLs and power-loss remain separate review/test boundaries.
+
+The publication client applies one five-second network deadline across connect,
+write and read, capped at 64 KiB response bytes. Credential-file access precedes
+that deadline. Windows bounded token reads reject a final reparse component and
+restrict sharing; Unix opened identity/mode/link/owner checks repeat. None of
+these mechanisms proves deployment security or certified crash durability.
+See docs/R5_ACCEPTANCE.md for operator procedures and docs/R5_CHECK_PLAN.md for
+the complete native, fixture, desktop, live and independent acceptance matrix.
+The read-only `scripts/verify-r5-evidence.py` compares selected UTF-8/LF-text
+hashes and an exact-byte log against the existing unsigned R5 observation. It
+never generates new expected hashes, executes recorded commands, or closes gates.
+A source-formatting change invalidates that historical subject hash; a CRLF-only
+log change still fails its raw-byte hash. Neither matching hashes nor this new
+verifier's own synthetic tests authenticate the report or a native executable.
+
+R5 native tests and actual builder/operator/R1/R2/manual acceptance remain open.
+Node and Chromium fixture execution is separately recorded in the R5 ledger;
+prior user-observed SDK relocation/terminal passes keep their narrower scope.

@@ -35,7 +35,31 @@ pub struct ArtifactRecord {
     pub created_at: u64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct ArtifactIdentity {
+    pub schema_version: u32,
+    pub artifact_digest: String,
+    pub payload_digest: String,
+    pub draft_revision: u64,
+    pub game: String,
+}
+
 impl Workspace {
+    /// Read-only projection of verified immutable bytes; no sidecar migration.
+    pub fn artifact_identity(&self, digest: &str) -> Result<ArtifactIdentity, WorkspaceError> {
+        let record = self.artifact(digest)?;
+        let bytes = self.artifact_bytes(digest)?;
+        let verified = verify_bytes("Studio artifact identity", &bytes, None)
+            .map_err(|_| WorkspaceError::InvalidWorkspace("artifact identity invalid"))?;
+        Ok(ArtifactIdentity {
+            schema_version: 1,
+            artifact_digest: record.artifact_digest,
+            payload_digest: record.payload_digest,
+            draft_revision: record.draft_revision,
+            game: verified.manifest().game_contract().to_string(),
+        })
+    }
+
     pub fn package(&self, request: PackageRequest) -> Result<ArtifactRecord, WorkspaceError> {
         let game: GameContract = request
             .game

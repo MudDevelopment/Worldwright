@@ -26,7 +26,7 @@ function element(id) {
 const caps={schema_version:1,max_rooms:1024,max_exits_per_room:64,max_text_bytes:4096,
   max_definition_bytes:256,max_exit_label_bytes:64,max_input_bytes:1048576};
 let reply=caps;
-const context=vm.createContext({TextEncoder,console,
+const context=vm.createContext({TextEncoder,TextDecoder,AbortController,setTimeout,clearTimeout,console,
   document:{getElementById:element,querySelectorAll:()=>[],createElement:()=>new Element()},
   window:{addEventListener(){},setTimeout:fn=>fn(),setInterval:()=>1,clearInterval(){}},
   fetch:async()=>({ok:true,status:200,json:async()=>reply}),

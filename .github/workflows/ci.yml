@@ -66,6 +66,7 @@ jobs:
           node --check apps/worldwright-studio/assets/app.js
           node scripts/test-expedition-browser.cjs
           node scripts/test-studio-capabilities.cjs
+          node scripts/test-studio-workflow.cjs
       - name: Real Ubuntu Studio first-run and game contract smoke
         if: runner.os != 'Windows'
         shell: bash

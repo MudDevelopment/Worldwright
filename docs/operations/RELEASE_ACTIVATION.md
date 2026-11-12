@@ -189,3 +189,24 @@ Recovery acquires a new writer, reloads the exact pending artifact, reruns
 compatibility and Look -> Move -> Look smoke, and completes or fails the
 activation. If commit outcome is uncertain, retain maintenance and investigate
 before retrying. Never claim success from a command that returned an error.
+
+## R5 Studio status and recovery handoff
+
+Studio remains a request/status client, not a review or activation console.
+Its known-ID reconciliation control only fetches an existing authorized request
+and validates the local immutable artifact/revision/original preview context.
+Obtain the exact request ID through the approved operator/audit workflow after
+a lost response; never submit a duplicate because Studio timed out. Unknown IDs
+cannot be discovered by this control. Corrupt local records require evidence
+preservation and authorized repair, not status editing.
+
+A locally recovered or remotely listed `activated` request does not establish
+which release currently runs. Continue this runbook's active-state/readiness,
+expected-current, independent reviewer and rollback checks. No Studio recovery
+bypasses current grants, maintenance, database fences or migration compatibility.
+
+For crashed Studio sessions, use [R5 recovery](../R5_ACCEPTANCE.md) before
+restarting the same workspace. Keep the permanent marker and journals intact;
+only the operational session sentinel may be removed after all writers are
+confirmed stopped and evidence preserved. Full execution matrix:
+[R5_CHECK_PLAN.md](../R5_CHECK_PLAN.md). Native/live/independent gates remain open.

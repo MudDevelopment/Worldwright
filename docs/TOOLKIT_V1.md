@@ -165,3 +165,20 @@ published registry packages. Protocol v1's additive command does not create a
 general compatibility promise beyond the documented matrix. No Linux/hosted
 CI, public deployment, live PostgreSQL, or production capacity claim is part
 of this M8 evidence.
+
+## Current R5 downstream execution handoff
+
+Use [R5_CHECK_PLAN.md](R5_CHECK_PLAN.md), especially D and P, for current paired-host
+maturity/retained-consumer checks and independent use outside the original
+checkout. The focused user-observed Windows terminal (7) and maturity (3) passes
+retain their original source scope; they do not verify later Studio changes or
+close the complete workspace/Ubuntu/installed-tool acceptance.
+
+Generated consumers keep `members = []`, `exclude = ["sdk"]`; bundled crates bind
+`package.workspace = "../.."`. Regenerate failed scratch projects/bundles from
+current source rather than modifying integrity-covered copies and retaining old
+hash claims. Verify both reference and expedition actually run their rules,
+locked rebuilds preserve manifest/lock integrity, and metadata cannot resolve
+back into the original checkout. SDK API/package/protocol/content versions remain
+separate, with actual retained API-v1 evidence rather than an invented prior
+minor/ABI guarantee. Licensing and supported redistribution remain unapproved.

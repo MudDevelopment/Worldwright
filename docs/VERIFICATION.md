@@ -1,6 +1,18 @@
 # Verification
 
-## Current M8 Toolkit Maturity evidence
+## Current R5 continuation — scoped local evidence only
+
+See [R5 ledger](verification/r5-implementation-ledger.md),
+[complete check plan](R5_CHECK_PLAN.md), and [recovery guide](R5_ACCEPTANCE.md).
+Fresh selected-source checks passed 18 Node workflow cases, capability bounds,
+five Chromium fixture groups, ten Rust grammar subjects and Python syntax.
+The retained `verification/r5-local-observations.json` binds 17 selected LF-text
+subjects and `r5-local-contracts.log`; it is not complete checkout provenance.
+Native Rust/PowerShell, full workspace, real Studio/PG/operator/desktop/security,
+R1/R2/R3/R4 and independent R5 adoption remain open. Historical counts below do
+not describe current R5 source. Do not promote them or add fixture totals to them.
+
+## Historical M8 Toolkit Maturity evidence
 
 Windows Rust/Cargo 1.85.1 full check passed: **263 test-binary tests passed,
 0 failed, 19 PostgreSQL tests ignored/compile-checked, plus 2 doctests passed**.
@@ -10,7 +22,7 @@ reproducible 100-client development objective. Durable expedition state,
 broader network/database capacity, Linux/hosted CI, deployment, and production
 readiness remain open.
 
-## Current M7 evidence taxonomy
+## Historical M7 evidence taxonomy
 
 The Windows pinned/offline M7 close-out gate passed formatting, all-target
 checks, Clippy with warnings denied, workspace tests, build, rustdoc, metadata,

@@ -190,3 +190,14 @@ tests/build/rustdoc; post-fix full Clippy and paired-host/operational acceptance
 are not inferred. R4 deployment/load/soak/adoption and full R5 acceptance stay
 open. R5 implementation can proceed in parallel; no further targeted repair is
 indicated by this output. Historical source hashes remain historical.
+
+## R5 documentation/check-plan handoff — November 11, 2026
+
+Current cross-track execution order is indexed in `../R5_CHECK_PLAN.md`.
+R5 Studio implementation and local Node/Chromium/readback checks DO NOT close
+any R4 gate. Existing R4 observation hashes remain historical after subsequent
+source/format/documentation changes; they were not rebaselined here. Actual
+same-source R2/R3 prerequisites, deployment identity, unchanged beta-250-v1,
+separate scenarios/1800–3000-second soak, private measurement, retention and
+independent signed performance adoption remain OPEN. No load or native run
+was performed as part of this documentation update.

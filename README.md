@@ -8,7 +8,7 @@ The effort brings together an authoritative game engine, reusable Rust libraries
 
 Worldwright is **a toolkit for building games, not a single game or setting**. A science-fiction frontier, a fantasy realm, and a roleplay-focused social world should be able to share the same technical foundation while retaining their own rules, content, and identity.
 
-> **Project status:** Milestones 1–3 are implemented development slices. **Milestone 4 — Durable Gameplay v0.1**, **Milestone 5 — Content Release and Preview v0.1**, **Milestone 6 — Operational Control v0.1**, and **Milestone 7 — Builder Workflow and Studio v0.1** are implemented awaiting their stated live evidence. M6/M7 are not production ready. See [road map](ROAD-MAP.md), [Studio guide](docs/STUDIO_V1.md), [operations contract](docs/OPERATIONS_V1.md), [release contract](docs/RELEASE_V1.md), and [M7 verification](docs/verification/milestone-7-report.md).
+> **Project status:** Milestones 1–3 are implemented development slices. **Milestone 4 — Durable Gameplay v0.1**, **Milestone 5 — Content Release and Preview v0.1**, **Milestone 6 — Operational Control v0.1**, and **Milestone 7 — Builder Workflow and Studio v0.1** are implemented awaiting their stated live evidence. M6/M7 are not production ready. See [current road map](ROADMAP_v2.md), [historical milestones](ROAD-MAP.md), [Studio guide](docs/STUDIO_V1.md), [operations contract](docs/OPERATIONS_V1.md), [release contract](docs/RELEASE_V1.md), and [M7 verification](docs/verification/milestone-7-report.md).
 >
 > **Evidence alignment — November 10, 2026:** Older milestone reports retain
 > their original Windows/Linux scope. Current source includes P0/P1/P2 and
@@ -390,7 +390,8 @@ worldwright/
 ├── rust-toolchain.toml
 ├── .cargo/config.toml
 ├── README.md
-├── ROAD-MAP.md                 # Milestones, dependencies, decisions and exit gates
+├── ROADMAP_v2.md               # Current priorities and release-track acceptance
+├── ROAD-MAP.md                 # Historical milestone plan
 ├── IMPLEMENTATION.md           # Latest implementation, next work and historical evidence
 ├── DESIGN.md
 ├── ARCHITECTURE.md
@@ -658,7 +659,8 @@ contacts.
 | Document or area | Intended purpose |
 |---|---|
 | [README.md](README.md) | Project overview, current local build/run commands, limitations and concise delivery summary |
-| [ROAD-MAP.md](ROAD-MAP.md) | Eight milestones, detailed work packages, dependencies, owner decisions, failure scenarios and exit gates |
+| [ROADMAP_v2.md](ROADMAP_v2.md) | Current priorities, release-track dependencies, owner decisions and acceptance gates |
+| [ROAD-MAP.md](ROAD-MAP.md) | Historical eight-milestone work packages and evidence scope |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Latest implemented increment, next planned work, concrete handoff and scoped historical evidence |
 | [DESIGN.md](DESIGN.md) | Behavioral decisions, invariants, state ownership, durable/release contracts, compatibility and decision crosswalks |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Component ownership, crate dependencies, runtime/data/control flows, milestone boundaries and lifecycle |
@@ -845,3 +847,45 @@ Expedition gameplay/recovery commands are unchanged. Genuine missing-rule and
 other unexpected runtime failures are not suppressed. Fast regressions live in
 `worldwright-expedition` terminal tests; the relocated maturity executable test
 also sends unsupported commands to reference and then verifies normal speech/quit.
+
+## R5 builder workflow implementation
+
+R5 Studio source now includes stale-result/edit-generation guards, bounded UI
+requests, verified artifact game identity, server-side token-file renewal,
+explicit local journal recovery and known-request reconciliation. Reconciliation
+reads authorized server status and requires the matching local artifact and
+original successful preview; it never submits again, reviews or activates.
+Use `--operator-token-file ABSOLUTE_PRIVATE_FILE` with the existing loopback
+`--release-endpoint`, instead of (not together with) `--operator-token-env`.
+The backend network exchange has one five-second connect/write/read deadline.
+
+**Startup tightening:** updated Studio refuses a second serve process for the
+same workspace. Crash/uncertain cleanup can leave `.worldwright-studio-session`;
+never remove it while any writer may remain. Confirm all writers stopped and
+preserve the workspace before operator recovery. Persisted draft/revision/
+artifact schemas are unchanged, but this new operational sentinel changes crash
+restart behavior. See [recovery instructions](docs/R5_ACCEPTANCE.md), the
+[complete check plan](docs/R5_CHECK_PLAN.md), and
+[implementation ledger](docs/verification/r5-implementation-ledger.md).
+
+Before formatting/building, run `python scripts/verify-r5-evidence.py --root .`
+for read-only comparison with the retained selected-source report (not a native
+or release pass); `python scripts/test-r5-evidence.py` tests that verifier.
+Detailed native execution/logging steps are in `docs/R5_CHECK_PLAN.md`.
+Run `node scripts/test-studio-workflow.cjs` for deterministic races and
+`python scripts/test-studio-browser.py` with approved Playwright/Chromium for
+real DOM + loopback fixture checks. These do not execute the Rust/PG/operator
+workflow. Remaining workspace/native checks and all outstanding R4 gates stay
+open; R1/R2 plus independent review/activation/manual builder evidence are still
+required before R5 acceptance. Studio does not become an approval/signing console.
+
+### One-command Windows Studio development launch
+
+Run `& 'E:\Hold\Worldwright\scripts\start-studio-local.ps1'` in PowerShell,
+copying only the command, not prompt/error/transcript text. The launcher derives
+the checkout from its script location, checks native Rust/Cargo 1.85.1, performs
+a targeted locked/offline incremental build in the known cache, then starts a
+new bundled-sample workspace. The `-Workspace` argument reopens an existing
+workspace without importing content; session sentinels are never auto-removed.
+It does not weaken execution policy or constitute native/release acceptance.
+See docs/R5_CHECK_PLAN.md section 4 for instructions and recovery boundaries.

@@ -17,6 +17,7 @@ pub struct ServeOptions {
     pub preview_command: Option<PathBuf>,
     pub release_endpoint: Option<String>,
     pub operator_token_env: Option<String>,
+    pub operator_token_file: Option<PathBuf>,
 }
 
 pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
@@ -42,6 +43,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
     let mut preview = None;
     let mut endpoint = None;
     let mut token = None;
+    let mut token_file = None;
     let mut i = 1;
     while i < args.len() {
         let key = args[i].to_str().ok_or("option must be UTF-8")?;
@@ -95,12 +97,24 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
                 validate_env(&v)?;
                 token = Some(v);
             }
+            "--operator-token-file" => {
+                if token_file.is_some() {
+                    return Err("duplicate --operator-token-file".into());
+                }
+                let path = PathBuf::from(value(&args[i + 1], key)?);
+                if !path.is_absolute() {
+                    return Err("operator token file must be absolute".into());
+                }
+                token_file = Some(path);
+            }
             _ => return Err("unknown or cross-command option".into()),
         }
         i += 2
     }
-    if endpoint.is_some() != token.is_some() {
-        return Err("release endpoint/token env must be supplied together".into());
+    if (token.is_some() && token_file.is_some())
+        || endpoint.is_some() != (token.is_some() || token_file.is_some())
+    {
+        return Err("release endpoint requires exactly one token env or token file".into());
     }
     Ok(Command::Serve(ServeOptions {
         workspace: workspace.ok_or("--workspace is required")?,
@@ -109,6 +123,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         preview_command: preview,
         release_endpoint: endpoint,
         operator_token_env: token,
+        operator_token_file: token_file,
     }))
 }
 fn value(v: &OsString, k: &str) -> Result<String, String> {

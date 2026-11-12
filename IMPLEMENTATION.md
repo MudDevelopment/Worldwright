@@ -1,11 +1,27 @@
 # Implementation handoff
 
-**Updated:** November 6, 2026 — Milestones 4 and 5 implementation/evidence synchronization.
+**Updated:** November 11, 2026 — R5 Studio continuation and execution handoff.
+
+## Current handoff — R5 source installed, acceptance open
+
+Current delivery authority is [ROADMAP_v2.md](ROADMAP_v2.md). Studio source now
+includes async identity guards, token-file renewal, local journal recovery,
+known-ID authorized status reconciliation, cooperative session exclusion and
+bounded publication I/O. It remains a loopback browser tool, not an approval or
+activation console. Crash restart can require manual session-sentinel recovery.
+
+Run [R5_CHECK_PLAN.md](docs/R5_CHECK_PLAN.md) A–F first, with the known Windows
+cache for the development pass; stop on the first real failure. Formal paired
+R0 and live/independent gates require their own fresh, approved evidence. Recovery
+instructions are in [R5_ACCEPTANCE.md](docs/R5_ACCEPTANCE.md); current state and
+retained local results are in the [R5 ledger](docs/verification/r5-implementation-ledger.md).
+Documentation/readback/fixture checks do not close native, R1/R2/R4 or R5 gates.
+The milestone sections below are historical implementation/evidence records.
 
 This file records the latest reported implementation, the next implementation priority, and historical increment notes. The roadmap owns detailed scope and acceptance criteria; this handoff does not duplicate its implementation examples or invent new source interfaces.
 
-> **Evidence boundary:** M4-M6 are implemented awaiting live PostgreSQL and
-> recovery execution. Current Windows evidence is recorded in
+> **Historical evidence boundary:** M4-M6 were implemented awaiting live PostgreSQL and
+> recovery execution. The earlier Windows evidence is recorded in
 > [milestone-6-report.md](docs/verification/milestone-6-report.md): 206
 > test-binary tests passed, 0 failed, 18 ignored, and 2 doctests passed
 > separately. Ignored PostgreSQL tests were compiled, not executed.
@@ -27,7 +43,7 @@ Design and fixture work may overlap milestones, but later activation must respec
 
 <a id="current-increment-multiplayer-transport-v01"></a>
 
-## Latest implemented increment: Milestone 3 — Multiplayer Transport v0.1
+## Historical implemented increment: Milestone 3 — Multiplayer Transport v0.1
 
 Implemented `worldwright-server` on top of the validated content loader and core runtime. The server includes strict account-registry loading, fixed-profile Argon2id login, process-local sessions, exact-Origin loopback HTTP/WebSocket routes, one owner task with bounded channels and cancellation, takeover-safe attachments, and a CSP-compatible browser client. `worldwright-protocol` contains the validated v1 DTO/envelope contract.
 

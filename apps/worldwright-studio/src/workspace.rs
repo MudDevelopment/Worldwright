@@ -106,7 +106,11 @@ impl Workspace {
             .lock
             .lock()
             .map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
-        if self.publication_records_unlocked()?.len() >= 100 {
+        let records = self.publication_records_unlocked()?;
+        if let Some(existing) = records.iter().find(|record| record.request_id == view.request_id) {
+            return if existing == view { Ok(()) } else { Err(WorkspaceError::Conflict { current_revision: 0 }) };
+        }
+        if records.len() >= 100 {
             return Err(WorkspaceError::Capacity);
         }
         let path = self.publication_record_path(&view.request_id)?;
@@ -119,6 +123,7 @@ impl Workspace {
                     let _ = fs::remove_file(&path);
                     return Err(WorkspaceError::Io(error));
                 }
+                self.sync_publication_directory()?;
                 Ok(())
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -154,16 +159,15 @@ impl Workspace {
                 current_revision: 0,
             });
         }
-        if previous == *next {
-            return Ok(());
-        }
-
         let next_path = path.with_extension("json.next");
         let previous_path = path.with_extension("json.previous");
-        if next_path.exists() || previous_path.exists() {
+        if entry_exists(&next_path)? || entry_exists(&previous_path)? {
             return Err(WorkspaceError::InvalidWorkspace(
                 "publication update recovery is required",
             ));
+        }
+        if previous == *next {
+            return Ok(());
         }
         let bytes = serde_json::to_vec(next).map_err(|_| {
             WorkspaceError::InvalidWorkspace("publication record serialization failed")
@@ -176,13 +180,15 @@ impl Workspace {
             let _ = fs::remove_file(&next_path);
             return Err(WorkspaceError::Io(error));
         }
+        // Persist each recoverable layout in order. On any uncertain rename or
+        // sync failure preserve the journal; never discard a synced next record.
+        self.sync_publication_directory()?;
         fs::rename(&path, &previous_path)?;
-        if let Err(error) = fs::rename(&next_path, &path) {
-            let _ = fs::rename(&previous_path, &path);
-            let _ = fs::remove_file(&next_path);
-            return Err(WorkspaceError::Io(error));
-        }
+        self.sync_publication_directory()?;
+        fs::rename(&next_path, &path)?;
+        self.sync_publication_directory()?;
         fs::remove_file(previous_path)?;
+        self.sync_publication_directory()?;
         Ok(())
     }
 
@@ -190,11 +196,17 @@ impl Workspace {
         &self,
         request: &str,
     ) -> Result<PublicationView, WorkspaceError> {
+        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let path = self.publication_record_path(request)?;
-        self.read_publication_record_path(&path)
+        let view = self.read_publication_record_path(&path)?;
+        if view.request_id != request {
+            return Err(WorkspaceError::InvalidWorkspace("publication record identity mismatch"));
+        }
+        Ok(view)
     }
 
     pub(crate) fn publication_records(&self) -> Result<Vec<PublicationView>, WorkspaceError> {
+        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let mut records = self.publication_records_unlocked()?;
         records.sort_by(|left, right| left.request_id.cmp(&right.request_id));
         Ok(records)
@@ -263,13 +275,136 @@ impl Workspace {
                 "publication record invalid",
             ));
         }
-        let bytes = fs::read(path)?;
+        reject_unsafe_record_metadata(&metadata)?;
+        let file = fs::File::open(path)?;
+        let opened = file.metadata()?;
+        reject_unsafe_record_metadata(&opened)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if metadata.dev() != opened.dev() || metadata.ino() != opened.ino() {
+                return Err(WorkspaceError::InvalidWorkspace("publication record changed during open"));
+            }
+        }
+        let mut bytes = Vec::new();
+        file.take(65_537).read_to_end(&mut bytes)?;
+        if bytes.len() > 65_536 || bytes.len() as u64 != opened.len() {
+            return Err(WorkspaceError::InvalidWorkspace("publication record exceeds bounds or changed"));
+        }
         let view: PublicationView = serde_json::from_slice(&bytes)
             .map_err(|_| WorkspaceError::InvalidWorkspace("publication record invalid"))?;
         validate_publication_view(&view)
             .map_err(|_| WorkspaceError::InvalidWorkspace("publication record invalid"))?;
         Ok(view)
     }
+    /// List bounded recovery identities without trusting partial JSON records.
+    pub(crate) fn publication_recovery(&self) -> Result<Vec<String>, WorkspaceError> {
+        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
+        let mut all = std::collections::BTreeSet::new();
+        let mut pending = std::collections::BTreeSet::new();
+        for (index, entry) in fs::read_dir(self.publication_records_dir())?.enumerate() {
+            if index >= 300 { return Err(WorkspaceError::Capacity); }
+            let entry = entry?;
+            let metadata = entry.path().symlink_metadata()?;
+            if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 65_536 {
+                return Err(WorkspaceError::InvalidWorkspace("publication recovery entry invalid"));
+            }
+            reject_unsafe_record_metadata(&metadata)?;
+            let name = entry.file_name().into_string().map_err(|_| WorkspaceError::InvalidWorkspace("publication filename invalid"))?;
+            let (id, recovery) = if let Some(id) = name.strip_suffix(".json.next") {
+                (id, true)
+            } else if let Some(id) = name.strip_suffix(".json.previous") {
+                (id, true)
+            } else if let Some(id) = name.strip_suffix(".json") {
+                (id, false)
+            } else {
+                return Err(WorkspaceError::InvalidWorkspace("unexpected publication recovery file"));
+            };
+            self.publication_record_path(id)?;
+            all.insert(id.to_owned());
+            if all.len() > 100 { return Err(WorkspaceError::Capacity); }
+            if recovery { pending.insert(id.to_owned()); }
+        }
+        Ok(pending.into_iter().collect())
+    }
+
+    /// Explicit local crash recovery only. Never contact the operator service,
+    /// invent an approval, or retry an initial submission with unknown outcome.
+    pub(crate) fn recover_publication_record(&self, request: &str) -> Result<PublicationView, WorkspaceError> {
+        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
+        let path = self.publication_record_path(request)?;
+        let next_path = path.with_extension("json.next");
+        let previous_path = path.with_extension("json.previous");
+        let read = |file: &Path| -> Result<Option<PublicationView>, WorkspaceError> {
+            match file.symlink_metadata() {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(WorkspaceError::Io(error)),
+                Ok(_) => {
+                    let view = self.read_publication_record_path(file)?;
+                    if view.request_id != request {
+                        return Err(WorkspaceError::InvalidWorkspace("recovery request identity mismatch"));
+                    }
+                    Ok(Some(view))
+                }
+            }
+        };
+        let current = read(&path)?;
+        let next = read(&next_path)?;
+        let previous = read(&previous_path)?;
+        let valid = |before: &PublicationView, after: &PublicationView| -> Result<(), WorkspaceError> {
+            if !same_publication_identity(before, after) || !valid_status_transition(before.status, after.status) {
+                return Err(WorkspaceError::InvalidWorkspace("publication recovery identity or transition conflict"));
+            }
+            Ok(())
+        };
+        // Validate all available evidence before mutating files. Ambiguous or
+        // incomplete JSON is preserved for explicit operator diagnosis.
+        let recovered = match (current, previous, next) {
+            (Some(current), None, None) => current,
+            (Some(current), None, Some(next)) => {
+                valid(&current, &next)?;
+                self.sync_publication_directory()?;
+                fs::rename(&path, &previous_path)?;
+                self.sync_publication_directory()?;
+                fs::rename(&next_path, &path)?;
+                self.sync_publication_directory()?;
+                fs::remove_file(&previous_path)?;
+                next
+            }
+            (None, Some(previous), Some(next)) => {
+                valid(&previous, &next)?;
+                self.sync_publication_directory()?;
+                fs::rename(&next_path, &path)?;
+                self.sync_publication_directory()?;
+                fs::remove_file(&previous_path)?;
+                next
+            }
+            (Some(current), Some(previous), None) => {
+                valid(&previous, &current)?;
+                self.sync_publication_directory()?;
+                fs::remove_file(&previous_path)?;
+                current
+            }
+            (None, Some(previous), None) => {
+                fs::rename(&previous_path, &path)?;
+                previous
+            }
+            _ => return Err(WorkspaceError::InvalidWorkspace("ambiguous publication recovery; files preserved")),
+        };
+        self.sync_publication_directory()?;
+        Ok(recovered)
+    }
+
+    fn sync_publication_directory(&self) -> Result<(), WorkspaceError> {
+        #[cfg(unix)]
+        fs::File::open(self.publication_records_dir())?.sync_all()?;
+        Ok(())
+    }
+
+    pub(crate) fn session_path(&self) -> PathBuf {
+        self.root.join(".worldwright-studio-session")
+    }
+
     pub fn open_or_create(root: &Path, initial: Option<&Path>) -> Result<Self, WorkspaceError> {
         let existing_empty = if root.exists() {
             let metadata = root.symlink_metadata()?;
@@ -534,6 +669,35 @@ impl Workspace {
         }
         Ok(())
     }
+}
+
+fn entry_exists(path: &Path) -> Result<bool, std::io::Error> {
+    match path.symlink_metadata() {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn reject_unsafe_record_metadata(metadata: &fs::Metadata) -> Result<(), WorkspaceError> {
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 65_536 {
+        return Err(WorkspaceError::InvalidWorkspace("publication record invalid"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() != 1 {
+            return Err(WorkspaceError::InvalidWorkspace("publication record has multiple links"));
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err(WorkspaceError::InvalidWorkspace("publication record is a reparse point"));
+        }
+    }
+    Ok(())
 }
 
 fn same_publication_identity(previous: &PublicationView, next: &PublicationView) -> bool {

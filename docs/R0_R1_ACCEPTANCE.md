@@ -184,3 +184,17 @@ not adopted by merely creating YAML. Existing ci.yml Windows regressions remain.
 Hosted execution, protected settings and engine access must be observed/adopted;
 workflow presence is not a pass. Native Windows and actual Ubuntu desktop
 execution remain outside this Linux file-operation sandbox.
+
+## R5 session-sentinel follow-through
+
+Updated Studio acquires cooperative workspace serve exclusion. After a real
+crash/uncertain cleanup, `.worldwright-studio-session` can remain; launcher process
+cleanup does not reclaim it. Follow [R5 recovery](R5_ACCEPTANCE.md), confirming all
+writers stopped and preserving evidence before removing only that sentinel.
+Normal graceful close/reopen must remove it without manual intervention.
+
+The existing automated R1 crash case checks session cleanup and subsequently
+launches a different fresh XDG workspace. It does not exercise recovery/reopen
+of the crashed workspace. The new native child-kill test and separate manual
+matrix in [R5_CHECK_PLAN.md](R5_CHECK_PLAN.md) K remain required. Do not count a
+fresh-XDG pass as that proof or modify a retained old package to include new code.

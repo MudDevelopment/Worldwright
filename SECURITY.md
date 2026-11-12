@@ -672,3 +672,46 @@ the tool creates no reviewer authority, policy, signing private key or approvals
 Growth limits/retention identity require actual owner adoption; helper results
 cannot certify privacy/retention or operational capacity. Current native Rust,
 Windows ACL and actual controlled deployment/load/soak gates remain unverified.
+
+## R5 Studio credential renewal and local recovery
+
+The new optional operator-token-file mode keeps scoped bearer material entirely
+server-side, reads it per explicit operation, and never falls back to an old token
+when a file is missing/invalid. The browser sees only configuration/renewal mode,
+not file paths, environment names, tokens or signing keys. No automatic submission
+retry follows expiry, denial or timeout. Existing exact Host/Origin/media-type
+checks also protect the new recovery route; no public operator API is added.
+
+Use an absolute file in an owned private parent and an approved update mechanism.
+Bounds, symlink/reparse refusal, Unix private mode/single-link and Linux owner
+checks do not constitute Windows DACL or adversarial race certification. Those
+remain open. The UI network timeout does not cancel or roll back backend work.
+
+Local journal recovery validates complete identities and allowed forward status
+before mutation; invalid/ambiguous evidence is preserved. Known-ID reconciliation
+is separate: an authorized status GET must match the exact local artifact and
+original successful preview. It is not request discovery, resubmission, review,
+activation or proof of who originally submitted through a browser. New records
+adopt only the currently authorized server view; existing identity fields cannot
+be rewritten. Both routes retain exact Host/Origin/media-type/body limits.
+
+Updated serve processes use a create-new cooperative session sentinel and a
+nonqueueing publication-operation gate. Crash or uncertain cleanup can retain
+`.worldwright-studio-session`; no PID/age-based reclamation exists. An operator
+must establish that all writers are stopped, preserve a private workspace copy,
+and remove only that sentinel before restarting. Never delete the permanent
+`.worldwright-studio` marker or edit journal status to obtain approval. Older
+binaries/direct file writers do not cooperate; this is not hostile-user locking.
+
+Network connect/write/read share a five-second deadline with a 64 KiB response
+cap. File access precedes this deadline, so local filesystem stalls are a separate
+risk. Windows token opens reject final reparse points and disallow concurrent
+write/delete sharing during reads; Unix opened-file checks repeat private mode,
+single-link and identity/owner checks. Windows DACL/ancestor races, multi-user
+exclusion, network filesystems and actual power-loss remain unverified. Unix
+journal directory sync ordering is implementation, not storage certification.
+
+Recovery instructions: docs/R5_ACCEPTANCE.md. Full positive/negative native and
+independent security matrix: docs/R5_CHECK_PLAN.md. R1/R2/full workspace/R4/R5
+and broader R6 security/adoption gates remain open; Node/Chromium fixtures do not
+close them. No issuer key, production credential, approval or license is granted.

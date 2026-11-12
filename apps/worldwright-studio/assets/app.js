@@ -21,6 +21,8 @@ async function loadCapabilities() {
     ["namespace", value.max_definition_bytes], ["new-room-id", value.max_definition_bytes],
     ["room-title", value.max_text_bytes], ["new-room-title", value.max_text_bytes],
     ["room-description", value.max_text_bytes],
+    ["builder-identity", 128], ["publication-reason", 512], ["change-summary", 1024],
+    ["preview-input", 1024],
   ]) {
     const input = element(id);
     input.maxLength = limit;
@@ -43,7 +45,47 @@ const state = {
   publications: [],
   pendingPublication: null,
   previewPoll: null,
+  editEpoch: 0,
+  snapshotEpoch: 0,
+  tickets: new Map(),
+  busy: new Set(),
+  previewReading: false,
+  artifactIdentity: null,
+  publicationAuth: null,
+  publicationNotice: null,
+  recovery: [],
 };
+
+function issue(name) {
+  const value = (state.tickets.get(name) || 0) + 1;
+  state.tickets.set(name, value);
+  return value;
+}
+function currentTicket(name, ticket) { return state.tickets.get(name) === ticket; }
+function stamp() {
+  return { edit: state.editEpoch, snapshot: state.snapshotEpoch,
+    revision: state.snapshot?.revision, digest: state.snapshot?.snapshot_sha256 };
+}
+function sameStamp(value) {
+  const now = stamp();
+  return Object.keys(now).every(key => now[key] === value[key]);
+}
+function beginOperation(name) {
+  if (state.busy.has(name)) return false;
+  state.busy.add(name);
+  renderWorkflowAvailability();
+  return true;
+}
+function endOperation(name) {
+  state.busy.delete(name);
+  renderWorkflowAvailability();
+}
+function validSnapshot(value) {
+  return value && Number.isSafeInteger(value.revision) && value.revision > 0 &&
+    /^[0-9a-f]{64}$/.test(value.snapshot_sha256) && value.draft &&
+    Array.isArray(value.draft.rooms) && value.draft.rooms.length <= MAX_ROOMS;
+}
+
 
 const element = (id) => document.getElementById(id);
 
@@ -60,30 +102,46 @@ class ApiError extends Error {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    method: options.method || "GET",
-    headers: options.headers || {},
-    body: options.body,
-    credentials: "same-origin",
-  });
-  if (response.status === 204) {
-    if (!response.ok) {
-      throw new ApiError(response.status, {});
-    }
-    return null;
-  }
-  let payload = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new ApiError(502, { message: "The server returned an invalid response." });
+    const response = await fetch(path, {
+      method: options.method || "GET", headers: options.headers || {}, body: options.body,
+      credentials: "same-origin", redirect: "error", signal: controller.signal,
+    });
+    if (response.status === 204 && response.ok) return null;
+    const maximum = path === "/api/v1/workspace" || path === "/api/v1/draft" || path === "/api/v1/import"
+      ? (capabilities?.max_input_bytes || 32 * 1024 * 1024) + 65536 : 1024 * 1024;
+    let payload = null;
+    try {
+      if (response.body?.getReader) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8", { fatal: true });
+        let total = 0; let text = "";
+        for (;;) {
+          const part = await reader.read();
+          if (part.done) break;
+          total += part.value.byteLength;
+          if (total > maximum) { await reader.cancel(); throw new Error("Response exceeds bounds"); }
+          text += decoder.decode(part.value, { stream: true });
+        }
+        text += decoder.decode(); payload = JSON.parse(text);
+      } else {
+        payload = await response.json();
+        if (utf8Bytes(JSON.stringify(payload)) > maximum) throw new Error("Response exceeds bounds");
+      }
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      if (response.ok) throw new ApiError(502, { message: "Invalid or oversized server response." });
     }
-  }
-  if (!response.ok) {
-    throw new ApiError(response.status, payload);
-  }
-  return payload;
+    if (!response.ok) throw new ApiError(response.status, payload);
+    return payload;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError(408, { message: "Request timed out. The operation may have completed; refresh or reconcile before retrying." });
+    }
+    throw error;
+  } finally { clearTimeout(timer); }
 }
 
 function jsonRequest(path, method, value) {
@@ -94,11 +152,13 @@ function jsonRequest(path, method, value) {
   });
 }
 
+let announcement = 0;
 function announce(message) {
+  const ticket = ++announcement;
   const safe = String(message).slice(0, 300);
   element("live-status").textContent = "";
   window.setTimeout(() => {
-    element("live-status").textContent = safe;
+    if (ticket === announcement) element("live-status").textContent = safe;
   }, 20);
 }
 
@@ -119,6 +179,7 @@ function selectedArtifact() {
 }
 
 function markDirty(message = "Unsaved draft changes") {
+  state.editEpoch += 1;
   state.dirty = true;
   renderStatus();
   renderWorkflowAvailability();
@@ -142,8 +203,15 @@ function previewMatchesArtifact(artifact) {
   return Boolean(
     artifact &&
       state.preview?.state === "succeeded" &&
-      state.preview.artifact_digest === artifact.artifact_digest,
+      state.preview.artifact_digest === artifact.artifact_digest &&
+      state.preview.draft_revision === artifact.draft_revision &&
+      state.preview.snapshot_sha256 === artifact.payload_digest,
   );
+}
+
+function previewIsStale() {
+  return Boolean(state.preview?.artifact_digest && (state.preview.stale || state.dirty ||
+    state.preview.draft_revision !== state.snapshot?.revision || state.preview.snapshot_sha256 !== state.snapshot?.snapshot_sha256));
 }
 
 function renderStatus() {
@@ -163,7 +231,7 @@ function renderStatus() {
     element("validation-status").textContent = "✓ Snapshot valid";
   }
   const previewState = state.preview?.state || "idle";
-  const stale = state.preview?.stale ? " · STALE" : "";
+  const stale = previewIsStale() ? " · STALE" : "";
   element("preview-chip").textContent = `□ Preview ${previewState}${stale}`;
 }
 
@@ -406,11 +474,12 @@ function renderArtifacts() {
     }
   }
   const artifact = selectedArtifact();
+  const identity = state.artifactIdentity?.artifact_digest === artifact?.artifact_digest ? state.artifactIdentity : null;
   element("artifact-identity").textContent = artifact
-    ? `Artifact ${artifact.artifact_digest} · pinned revision ${artifact.draft_revision}`
+    ? `Artifact ${artifact.artifact_digest} · pinned revision ${artifact.draft_revision} · game ${identity?.game || "not yet verified"}`
     : "No artifact selected";
   element("publish-artifact").textContent = artifact
-    ? `Exact artifact ${shortDigest(artifact.artifact_digest)}, revision ${artifact.draft_revision}.`
+    ? `Exact artifact ${shortDigest(artifact.artifact_digest)}, revision ${artifact.draft_revision}, game ${identity?.game || "not yet verified"}.`
     : "A successful preview of the selected artifact is required.";
   renderWorkflowAvailability();
 }
@@ -428,7 +497,7 @@ function renderPreview() {
     ? `${shortDigest(preview.artifact_digest)} · revision ${preview.draft_revision}`
     : "No artifact is running.";
   element("preview-pinned").textContent =
-    `${identity} · ${preview.state}${preview.stale ? " · STALE SNAPSHOT" : ""}` +
+    `${identity} · ${preview.state}${previewIsStale() ? " · STALE SNAPSHOT" : ""}` +
     `${preview.truncated ? " · output truncated" : ""}`;
   renderStatus();
   renderWorkflowAvailability();
@@ -473,70 +542,164 @@ function renderPublications() {
 }
 
 function renderWorkflowAvailability() {
-  const cleanValidation = validationIsCurrent();
-  element("package-artifact").disabled = !cleanValidation;
+  const cleanValidation = validationIsCurrent() && !state.busy.has("draft");
+  element("package-artifact").disabled = !cleanValidation || state.busy.has("package");
   element("package-note").textContent = cleanValidation
     ? `Validated revision ${state.validation.revision} is ready to package.`
     : "Packaging requires a clean, valid saved revision.";
   const artifact = selectedArtifact();
-  element("preview-start").disabled = !artifact || state.preview?.state === "running";
-  element("preview-stop").disabled = state.preview?.state !== "running";
-  element("preview-send").disabled = state.preview?.state !== "running";
-  const canPublish = previewMatchesArtifact(artifact);
+  const confirmed = artifact && state.artifactIdentity?.artifact_digest === artifact.artifact_digest;
+  element("preview-start").disabled = !confirmed || state.preview?.state === "running" || state.busy.has("preview");
+  element("preview-stop").disabled = state.preview?.state !== "running" || state.busy.has("preview");
+  element("preview-send").disabled = state.preview?.state !== "running" || state.busy.has("preview") || state.busy.has("preview-input");
+  const canPublish = confirmed && previewMatchesArtifact(artifact) &&
+    state.publicationAuth?.configured === true && !state.busy.has("publication");
   element("submit-publication").disabled = !canPublish;
-  element("publication-note").textContent = canPublish
+  element("reconcile-publication").disabled = state.publicationAuth?.configured !== true || state.busy.has("publication");
+  element("reconcile-form").setAttribute("aria-busy", String(state.busy.has("publication")));
+  element("validate-draft").disabled = state.busy.has("validation") || state.busy.has("draft") || !state.snapshot || state.dirty;
+  element("reload-draft").disabled = state.busy.has("draft");
+  element("import-file").disabled = state.busy.has("draft");
+  for (const [id, operation] of [["world-form", "draft"], ["package-form", "package"], ["publish-form", "publication"], ["preview-input-form", "preview-input"]]) {
+    element(id).setAttribute("aria-busy", String(state.busy.has(operation)));
+  }
+  element("publication-note").textContent = state.publicationNotice || (canPublish
     ? "Ready to submit a review request. Submission is not activation."
-    : "Preview the selected artifact successfully before requesting publication.";
+    : state.publicationAuth?.configured === false ? "Publication is not configured in this Studio process."
+    : "Verify and preview the selected artifact successfully before requesting publication.");
 }
 
 async function loadWorkspace({ discard = false } = {}) {
-  const snapshot = await api("/api/v1/workspace");
-  if (!snapshot?.draft || !Array.isArray(snapshot.draft.rooms)) {
-    throw new Error("Workspace response is invalid.");
-  }
-  state.snapshot = snapshot;
-  state.selectedRoomId =
-    snapshot.draft.rooms.find((room) => room.id === state.selectedRoomId)?.id ||
-    snapshot.draft.entry_room ||
-    snapshot.draft.rooms[0]?.id ||
-    null;
-  state.dirty = false;
-  state.validation = null;
-  element("conflict-panel").hidden = true;
-  renderDiagnostics();
-  renderEditor();
-  if (discard) announce(`Reloaded saved revision ${snapshot.revision}`);
+  if (!beginOperation("draft")) return;
+  const before = stamp();
+  try {
+    const snapshot = await api("/api/v1/workspace");
+    if (!validSnapshot(snapshot)) throw new Error("Workspace response is invalid.");
+    if (!sameStamp(before)) { announce("Reload ignored because you edited while it was loading."); return; }
+    state.snapshot = snapshot;
+    state.snapshotEpoch += 1;
+    state.selectedRoomId = snapshot.draft.rooms.find(room => room.id === state.selectedRoomId)?.id || snapshot.draft.entry_room || snapshot.draft.rooms[0]?.id || null;
+    state.dirty = false; state.validation = null;
+    element("conflict-panel").hidden = true;
+    renderDiagnostics(); renderEditor();
+    if (discard) announce(`Reloaded saved revision ${snapshot.revision}`);
+  } finally { endOperation("draft"); }
 }
 
 async function loadArtifacts() {
+  const ticket = issue("artifacts");
   try {
     const records = await api("/api/v1/artifacts");
-    state.artifacts = Array.isArray(records)
-      ? records.slice(0, MAX_RECORDS).sort((a, b) => b.created_at - a.created_at)
-      : [];
-    renderArtifacts();
-  } catch (error) {
-    announce(error.message);
-  }
+    if (!currentTicket("artifacts", ticket)) return;
+    if (!Array.isArray(records) || records.length > MAX_RECORDS) throw new Error("Artifact list is invalid or oversized.");
+    state.artifacts = records.sort((a, b) => b.created_at - a.created_at);
+    renderArtifacts(); await loadArtifactIdentity();
+  } catch (error) { if (currentTicket("artifacts", ticket)) announce(error.message); }
+}
+
+async function loadArtifactIdentity() {
+  const ticket = issue("artifact-identity");
+  const artifact = selectedArtifact();
+  state.artifactIdentity = null; renderArtifacts();
+  if (!artifact) return;
+  try {
+    const identity = await api(`/api/v1/artifacts/${encodeURIComponent(artifact.artifact_digest)}/identity`);
+    if (!currentTicket("artifact-identity", ticket) || state.selectedArtifact !== artifact.artifact_digest) return;
+    if (identity?.schema_version !== 1 || !["reference", "expedition"].includes(identity.game) ||
+        identity.artifact_digest !== artifact.artifact_digest || identity.payload_digest !== artifact.payload_digest || identity.draft_revision !== artifact.draft_revision) {
+      throw new Error("Artifact game identity does not match the immutable record.");
+    }
+    state.artifactIdentity = identity; renderArtifacts();
+  } catch (error) { if (currentTicket("artifact-identity", ticket)) announce(error.message); }
 }
 
 async function loadPreview() {
+  if (state.previewReading || state.busy.has("preview")) return;
+  state.previewReading = true;
+  const ticket = issue("preview");
   try {
-    state.preview = await api("/api/v1/preview");
-    renderPreview();
-  } catch (error) {
-    announce(error.message);
-  }
+    const preview = await api("/api/v1/preview");
+    if (!currentTicket("preview", ticket)) return;
+    state.preview = preview; renderPreview();
+  } catch (error) { if (currentTicket("preview", ticket)) announce(error.message); }
+  finally { state.previewReading = false; }
 }
 
 async function loadPublications() {
+  const ticket = issue("publications");
   try {
     const records = await api("/api/v1/publications");
-    state.publications = Array.isArray(records) ? records.slice(0, MAX_RECORDS) : [];
-    renderPublications();
-  } catch (error) {
-    announce(error.message);
+    if (!currentTicket("publications", ticket)) return;
+    if (!Array.isArray(records) || records.length > MAX_RECORDS) throw new Error("Publication list is invalid or oversized.");
+    state.publications = records; renderPublications();
+  } catch (error) { if (currentTicket("publications", ticket)) announce(error.message); }
+}
+
+async function loadPublicationSupport() {
+  const ticket = issue("publication-support");
+  try {
+    const auth = await api("/api/v1/publication-auth");
+    if (!currentTicket("publication-support", ticket)) return;
+    if (auth?.schema_version !== 1 || typeof auth.configured !== "boolean" || auth.automatic_retry !== false || !["token_file", "restart_with_token_env", "disabled"].includes(auth.renewal)) throw new Error("Invalid publication configuration response.");
+    state.publicationAuth = auth;
+    element("publication-auth-note").textContent = auth.renewal === "token_file"
+      ? "Token-file renewal is configured. An authorized operator replaces the private file; each explicit request reads it afresh. Authorization is checked by the server."
+      : auth.configured ? "Token comes from the startup environment. Renew it and restart Studio if it expires. The browser never receives credentials."
+      : "Publication is disabled; configure the trusted loopback endpoint and a server-side token source.";
+    const recovery = await api("/api/v1/publication-recovery");
+    if (!currentTicket("publication-support", ticket)) return;
+    if (!Array.isArray(recovery) || recovery.length > MAX_RECORDS || recovery.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) throw new Error("Invalid publication recovery inventory.");
+    state.recovery = recovery;
+    const list = element("publication-recovery-list"); list.replaceChildren();
+    for (const id of recovery) {
+      const item = document.createElement("li"); const button = document.createElement("button");
+      button.type = "button"; button.textContent = `Recover local record ${id}`;
+      button.addEventListener("click", () => void recoverPublication(id));
+      item.append(button); list.append(item);
+    }
+  } catch (error) { if (currentTicket("publication-support", ticket)) announce(error.message); }
+  finally { renderWorkflowAvailability(); }
+}
+
+async function recoverPublication(id) {
+  if (!beginOperation("publication")) return;
+  issue("publications");
+  try {
+    await jsonRequest(`/api/v1/publications/${encodeURIComponent(id)}/recover`, "POST", {});
+    state.publicationNotice = "Local record recovered. This does not submit, approve or activate anything.";
+    await Promise.all([loadPublications(), loadPublicationSupport()]);
+  } catch (error) { state.publicationNotice = `${error.message} Recovery did not complete; preserve the workspace and inspect its state before retrying.`; }
+  finally { endOperation("publication"); }
+}
+
+async function reconcilePublication() {
+  const id = element("reconcile-request").value.trim();
+  if (!/^[0-9a-f]{32}$/.test(id) || /^0+$/.test(id)) {
+    announce("Enter the canonical request ID confirmed by an authorized operator."); return;
   }
+  if (state.publicationAuth?.configured !== true || !beginOperation("publication")) return;
+  issue("publications");
+  try {
+    const view = await jsonRequest(`/api/v1/publications/${encodeURIComponent(id)}/reconcile`, "POST", {});
+    if (view?.request_id !== id) throw new Error("Reconciled request identity mismatch.");
+    issue("publications");
+    state.publications = [view, ...state.publications.filter(record => record.request_id !== id)].slice(0, MAX_RECORDS);
+    renderPublications();
+    state.publicationNotice = `Existing request reconciled: ${statusLabel(view.status)}. No submission, review or activation was performed.`;
+    if (element("reconcile-request").value.trim() === id) element("reconcile-request").value = "";
+    announce(state.publicationNotice);
+  } catch (error) {
+    state.publicationNotice = publicationFailure(error); announce(state.publicationNotice);
+  } finally { endOperation("publication"); }
+}
+
+function publicationFailure(error) {
+  if (error.status === 401 || error.status === 403) {
+    return state.publicationAuth?.renewal === "token_file"
+      ? "Publication credentials expired or permission was denied. Have an authorized operator renew the private token file or grants, then explicitly retry the desired operation."
+      : "Publication credentials expired or permission was denied. Renew server-side credentials/grants and restart Studio if using a token environment. No automatic retry occurred.";
+  }
+  return `${error.message || "Publication failed."} If submission outcome is uncertain, reconcile with the operator before resubmitting.`;
 }
 
 function openDialog(dialog, initialFocus, opener) {
@@ -625,22 +788,28 @@ function openDeleteDialog() {
 }
 
 async function submitPublication(data) {
+  if (!data || !beginOperation("publication")) return;
+  issue("publications");
+  state.publicationNotice = null;
   try {
     element("submit-publication").disabled = true;
     const view = await jsonRequest("/api/v1/publications", "POST", data);
+    issue("publications");
     state.publications = [
       view,
       ...state.publications.filter((item) => item.request_id !== view.request_id),
     ].slice(0, MAX_RECORDS);
     renderPublications();
-    element("publication-note").textContent = "Requested — not yet approved or activated.";
+    state.publicationNotice = "Requested — not yet approved or activated.";
+    element("publication-note").textContent = state.publicationNotice;
     announce("Publication review requested; activation has not occurred.");
   } catch (error) {
-    element("publication-note").textContent = error.message;
-    announce(error.message);
+    state.publicationNotice = publicationFailure(error);
+    element("publication-note").textContent = state.publicationNotice;
+    announce(state.publicationNotice);
   } finally {
     state.pendingPublication = null;
-    renderWorkflowAvailability();
+    endOperation("publication");
   }
 }
 
@@ -666,6 +835,8 @@ function continuePublication() {
 }
 
 async function refreshPublication(requestId, button) {
+  if (!beginOperation("publication")) return;
+  issue("publications");
   button.disabled = true;
   try {
     const view = await jsonRequest(
@@ -673,15 +844,19 @@ async function refreshPublication(requestId, button) {
       "POST",
       {},
     );
+    issue("publications");
     state.publications = state.publications.map((record) =>
       record.request_id === view.request_id ? view : record,
     );
     renderPublications();
-    announce(statusLabel(view.status));
+    state.publicationNotice = statusLabel(view.status);
+    announce(state.publicationNotice);
   } catch (error) {
-    announce(error.message);
+    state.publicationNotice = publicationFailure(error);
+    announce(state.publicationNotice);
   } finally {
     button.disabled = false;
+    endOperation("publication");
   }
 }
 
@@ -700,11 +875,13 @@ function stopPreviewPolling() {
 element("room-search").addEventListener("input", renderRoomList);
 
 element("namespace").addEventListener("input", () => {
+  if (!state.snapshot) return;
   state.snapshot.draft.namespace = element("namespace").value;
   markDirty();
 });
 
 element("entry-room").addEventListener("change", () => {
+  if (!state.snapshot) return;
   state.snapshot.draft.entry_room = element("entry-room").value;
   markDirty();
 });
@@ -760,6 +937,7 @@ element("add-room").addEventListener("click", () => {
 
 element("add-room-form").addEventListener("submit", (event) => {
   event.preventDefault();
+  if (!state.snapshot || !capabilities) { announce("Wait for the workspace to load."); return; }
   const id = element("new-room-id").value.trim();
   const title = element("new-room-title").value.trim();
   if (!capabilities || !id || !title || utf8Bytes(id) > capabilities.max_definition_bytes || utf8Bytes(title) > capabilities.max_text_bytes) {
@@ -823,15 +1001,22 @@ element("delete-room-form").addEventListener("submit", (event) => {
 });
 
 for (const cancel of document.querySelectorAll("[data-dialog-cancel]")) {
-  cancel.addEventListener("click", () => element(cancel.dataset.dialogCancel).close());
+  cancel.addEventListener("click", () => {
+    if (["stale-artifact-dialog", "production-dialog"].includes(cancel.dataset.dialogCancel)) state.pendingPublication = null;
+    element(cancel.dataset.dialogCancel).close();
+  });
 }
 for (const dialog of document.querySelectorAll("dialog")) {
   dialog.addEventListener("close", () => restoreDialogFocus(dialog));
+  dialog.addEventListener("cancel", () => {
+    if (["stale-artifact-dialog", "production-dialog"].includes(dialog.id)) state.pendingPublication = null;
+  });
 }
 
 element("world-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!state.snapshot || !event.currentTarget.reportValidity()) return;
+  if (!state.snapshot || !event.currentTarget.reportValidity() || !beginOperation("draft")) return;
+  const before = stamp();
   try {
     const saved = await api("/api/v1/draft", {
       method: "PUT",
@@ -841,19 +1026,22 @@ element("world-form").addEventListener("submit", async (event) => {
       },
       body: JSON.stringify(state.snapshot.draft),
     });
+    if (!validSnapshot(saved) || saved.revision <= before.revision) throw new Error("Invalid save acknowledgement; reconcile the saved revision.");
+    const editedWhileSaving = !sameStamp(before);
     const selected = state.selectedRoomId;
-    state.snapshot = saved;
+    state.snapshot = editedWhileSaving ? { ...saved, draft: state.snapshot.draft } : saved;
+    state.snapshotEpoch += 1;
     state.selectedRoomId =
-      saved.draft.rooms.find((room) => room.id === selected)?.id ||
-      saved.draft.entry_room ||
-      saved.draft.rooms[0]?.id ||
+      state.snapshot.draft.rooms.find((room) => room.id === selected)?.id ||
+      state.snapshot.draft.entry_room ||
+      state.snapshot.draft.rooms[0]?.id ||
       null;
-    state.dirty = false;
+    state.dirty = editedWhileSaving;
     state.validation = null;
     element("conflict-panel").hidden = true;
     renderDiagnostics();
-    renderEditor();
-    announce(`Saved revision ${saved.revision}`);
+    if (!editedWhileSaving) renderEditor(); else renderStatus();
+    announce(editedWhileSaving ? `Saved revision ${saved.revision}; newer local edits were preserved and still need saving.` : `Saved revision ${saved.revision}`);
   } catch (error) {
     if (error.status === 409) {
       element("conflict-panel").hidden = false;
@@ -862,16 +1050,18 @@ element("world-form").addEventListener("submit", async (event) => {
       element("conflict-panel").scrollIntoView({ block: "nearest" });
     }
     announce(error.message);
-  }
+  } finally { endOperation("draft"); }
 });
 
 element("reload-draft").addEventListener("click", () => {
-  void loadWorkspace({ discard: true });
+  void loadWorkspace({ discard: true }).catch(error => announce(error.message));
 });
 
 element("import-file").addEventListener("change", async () => {
   const file = element("import-file").files?.[0];
-  if (!file) return;
+  if (!file || !state.snapshot) return;
+  if (!beginOperation("draft")) { element("import-file").value = ""; return; }
+  const before = stamp();
   try {
     if (!capabilities || file.size > capabilities.max_input_bytes) throw new Error("Import exceeds the input byte limit.");
     const text = await file.text();
@@ -880,6 +1070,8 @@ element("import-file").addEventListener("change", async () => {
       headers: { "Content-Type": "application/vnd.worldwright.world+json" },
       body: text,
     });
+    if (!sameStamp(before)) { announce("Import ignored because you edited while it was loading."); return; }
+    if (!result?.draft || !Array.isArray(result.draft.rooms) || result.draft.rooms.length > MAX_ROOMS) throw new Error("Invalid import response.");
     state.snapshot.draft = result.draft;
     state.selectedRoomId =
       result.draft.entry_room || result.draft.rooms[0]?.id || null;
@@ -891,6 +1083,7 @@ element("import-file").addEventListener("change", async () => {
     announce(error.message);
   } finally {
     element("import-file").value = "";
+    endOperation("draft");
   }
 });
 
@@ -901,98 +1094,113 @@ element("export-draft").addEventListener("click", () => {
 });
 
 element("validate-draft").addEventListener("click", async () => {
+  if (!state.snapshot || state.dirty || state.busy.has("draft") || !beginOperation("validation")) return;
+  const before = stamp();
   try {
     const result = await jsonRequest(
       `/api/v1/revisions/${state.snapshot.revision}/validate`,
       "POST",
       {},
     );
-    state.validation = {
-      ...result,
-      revision: state.snapshot.revision,
-    };
+    if (!sameStamp(before)) { announce("Validation result is stale; save and validate your current edits."); return; }
+    if (result.snapshot_sha256 !== before.digest) throw new Error("Validation snapshot mismatch.");
+    state.validation = { ...result, revision: before.revision };
     renderDiagnostics(state.validation);
     renderStatus();
     renderWorkflowAvailability();
     announce(result.valid ? "Saved snapshot is valid." : "Validation found errors.");
   } catch (error) {
     announce(error.message);
-  }
+  } finally { endOperation("validation"); }
 });
 
 element("package-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!validationIsCurrent() || !event.currentTarget.reportValidity()) return;
+  if (!validationIsCurrent() || state.busy.has("draft") || !event.currentTarget.reportValidity() || !beginOperation("package")) return;
+  const before = stamp();
+  const requestedGame = element("package-game").value;
+  issue("artifacts");
   try {
     const record = await jsonRequest("/api/v1/package", "POST", {
       revision: state.snapshot.revision,
       snapshot_sha256: state.snapshot.snapshot_sha256,
       release_id: element("release-id").value,
       builder_identity: element("builder-identity").value,
-      game: element("package-game").value,
+      game: requestedGame,
     });
+    if (record.draft_revision !== before.revision || record.payload_digest !== before.digest) throw new Error("Packaged artifact snapshot mismatch.");
+    issue("artifacts");
     state.artifacts = [
       record,
       ...state.artifacts.filter(
         (artifact) => artifact.artifact_digest !== record.artifact_digest,
       ),
     ].slice(0, MAX_RECORDS);
-    state.selectedArtifact = record.artifact_digest;
-    renderArtifacts();
-    announce(`Packaged artifact ${shortDigest(record.artifact_digest)}`);
+    if (sameStamp(before) && element("package-game").value === requestedGame) state.selectedArtifact = record.artifact_digest;
+    renderArtifacts(); await loadArtifactIdentity();
+    announce(`Packaged ${requestedGame} artifact ${shortDigest(record.artifact_digest)} from saved revision ${before.revision}`);
   } catch (error) {
     element("package-note").textContent = error.message;
     announce(error.message);
-  }
+  } finally { endOperation("package"); }
 });
 
 element("artifact-select").addEventListener("change", () => {
   state.selectedArtifact = element("artifact-select").value || null;
+  state.artifactIdentity = null;
   renderArtifacts();
   renderPreview();
+  void loadArtifactIdentity();
 });
 
 element("preview-start").addEventListener("click", async () => {
   const artifact = selectedArtifact();
-  if (!artifact) return;
+  if (!artifact || state.artifactIdentity?.artifact_digest !== artifact.artifact_digest || !beginOperation("preview")) return;
+  const ticket = issue("preview");
   try {
-    state.preview = await jsonRequest("/api/v1/preview/start", "POST", {
+    const preview = await jsonRequest("/api/v1/preview/start", "POST", {
       artifact_digest: artifact.artifact_digest,
       max_seconds: Number(element("preview-seconds").value),
     });
+    if (!currentTicket("preview", ticket)) return;
+    state.preview = preview;
     renderPreview();
     announce("Preview started with the selected immutable artifact.");
   } catch (error) {
     announce(error.message);
-  }
+  } finally { endOperation("preview"); }
 });
 
 element("preview-input-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const text = element("preview-input").value;
-  if (!text) return;
+  if (!text || utf8Bytes(text) > 1024 || state.busy.has("preview") || !beginOperation("preview-input")) return;
   try {
     await jsonRequest("/api/v1/preview/input", "POST", { text });
-    element("preview-input").value = "";
+    if (element("preview-input").value === text) element("preview-input").value = "";
   } catch (error) {
     announce(error.message);
-  }
+  } finally { endOperation("preview-input"); }
 });
 
 element("preview-stop").addEventListener("click", async () => {
+  if (!beginOperation("preview")) return;
+  const ticket = issue("preview");
   try {
-    state.preview = await jsonRequest("/api/v1/preview/stop", "POST", {});
+    const preview = await jsonRequest("/api/v1/preview/stop", "POST", {});
+    if (!currentTicket("preview", ticket)) return;
+    state.preview = preview;
     renderPreview();
     announce(`Preview ${state.preview.state}.`);
   } catch (error) {
     announce(error.message);
-  }
+  } finally { endOperation("preview"); }
 });
 
 element("publish-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const artifact = selectedArtifact();
-  if (!artifact || !previewMatchesArtifact(artifact) || !event.currentTarget.reportValidity()) {
+  if (!artifact || !previewMatchesArtifact(artifact) || state.artifactIdentity?.artifact_digest !== artifact.artifact_digest || state.publicationAuth?.configured !== true || state.busy.has("publication") || state.pendingPublication || !event.currentTarget.reportValidity()) {
     announce("A successful preview of the selected artifact is required.");
     return;
   }
@@ -1008,7 +1216,7 @@ element("publish-form").addEventListener("submit", (event) => {
     allow_stale: false,
   };
   const stale =
-    artifact.draft_revision !== state.snapshot.revision ||
+    state.dirty || artifact.draft_revision !== state.snapshot.revision ||
     artifact.payload_digest !== state.snapshot.snapshot_sha256;
   if (stale) {
     element("stale-copy").textContent =
@@ -1026,6 +1234,7 @@ element("publish-form").addEventListener("submit", (event) => {
 
 element("stale-artifact-form").addEventListener("submit", (event) => {
   event.preventDefault();
+  if (!state.pendingPublication) return;
   state.pendingPublication.allow_stale = true;
   element("stale-artifact-dialog").close();
   continuePublication();
@@ -1038,11 +1247,18 @@ element("production-form").addEventListener("submit", (event) => {
     element("production-error").textContent = "The confirmation phrase does not match.";
     return;
   }
+  if (!state.pendingPublication) return;
   state.pendingPublication.production_confirmation = expected;
   element("production-dialog").close();
   void submitPublication(state.pendingPublication);
 });
 
+element("reconcile-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (event.currentTarget.reportValidity()) void reconcilePublication();
+});
+element("refresh-publication-support").addEventListener("click", () => void loadPublicationSupport());
+window.addEventListener("pagehide", stopPreviewPolling);
 window.addEventListener("beforeunload", (event) => {
   if (state.dirty) {
     event.preventDefault();
@@ -1054,7 +1270,7 @@ async function initialize() {
   try {
     await loadCapabilities();
     await loadWorkspace();
-    await Promise.all([loadArtifacts(), loadPreview(), loadPublications()]);
+    await Promise.all([loadArtifacts(), loadPreview(), loadPublications(), loadPublicationSupport()]);
     renderStatus();
     renderWorkflowAvailability();
     announce("Worldwright Studio workspace loaded.");

@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "track": "R5",
+  "status": "local_fixture_checks_passed_native_live_open",
+  "observed_at": "2026-11-12T02:01:56.894005+00:00",
+  "scope": "Selected EWW LF-normalized text readbacks; not a complete checkout, native build, signed provenance, deployment or acceptance closure.",
+  "full_r5_closed": false,
+  "native_rust_executed": false,
+  "platform": "Linux",
+  "python": "3.12.3",
+  "node": "v22.23.3",
+  "playwright": "1.56.0",
+  "tree_sitter": "0.25.2",
+  "tree_sitter_rust": "0.24.0",
+  "rust_grammar_subjects": 10,
+  "node_workflow_cases": 18,
+  "chromium_fixture_groups": 5,
+  "chromium_version": "141.0.7390.37",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "apps/worldwright-studio/assets/app.js"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "node",
+        "scripts/test-studio-capabilities.cjs"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "node",
+        "scripts/test-studio-workflow.cjs"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "/tmp/r5-venv/bin/python",
+        "scripts/test-studio-browser.py"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "subjects": [
+    {
+      "path": "apps/worldwright-studio/assets/app.css",
+      "sha256_lf_text": "d736d1269b71b255be429b9a9dc208bce2a4cd63b9bdf3383b36f49f66a03a06"
+    },
+    {
+      "path": "apps/worldwright-studio/assets/app.js",
+      "sha256_lf_text": "a71a47b7535d5755044281549c519830a909823078e8e37662e1bc8e59d9adde"
+    },
+    {
+      "path": "apps/worldwright-studio/assets/index.html",
+      "sha256_lf_text": "7572b03df21619d4ea1cecbc7d4666af19cdc7eed291e3ae43aa747806e6657d"
+    },
+    {
+      "path": "apps/worldwright-studio/src/artifact.rs",
+      "sha256_lf_text": "bd065fd9f3b1a3a3ca74c221f1484aaf4f932d043c45b7d939f6a19036f3d3f0"
+    },
+    {
+      "path": "apps/worldwright-studio/src/cli.rs",
+      "sha256_lf_text": "da879c82fb0a81b1548b7616d728adef6d1d2360d6a82a2e8062c9d8c9f1f7db"
+    },
+    {
+      "path": "apps/worldwright-studio/src/lib.rs",
+      "sha256_lf_text": "b5f3d8256f5bd6a7d12439f10798b67b9ef7d6fc5a78f91f5d4714bfb2119dcc"
+    },
+    {
+      "path": "apps/worldwright-studio/src/main.rs",
+      "sha256_lf_text": "a590b7b56c8ccf0544fde2a7e7042553552034f8fc38d5f6f616cb70d7b6de79"
+    },
+    {
+      "path": "apps/worldwright-studio/src/preview.rs",
+      "sha256_lf_text": "a49be7be4d3cc44e27c03db3363e8905e85bde8e16562a950203839055111bc4"
+    },
+    {
+      "path": "apps/worldwright-studio/src/publication.rs",
+      "sha256_lf_text": "780bf379d571eda7478afc74dea7ebccd1c863fcbf5bae65def50e2d9483ee1e"
+    },
+    {
+      "path": "apps/worldwright-studio/src/r5_tests.rs",
+      "sha256_lf_text": "67b21dd4745883de9819fecf52d9a15e0f91747f5c1604cc4fcc7c2ba05186fc"
+    },
+    {
+      "path": "apps/worldwright-studio/src/session.rs",
+      "sha256_lf_text": "087f4e1d6ced77de73b3ea0d376fb6912434acd592da46efb0705fee829636c1"
+    },
+    {
+      "path": "apps/worldwright-studio/src/web.rs",
+      "sha256_lf_text": "8b2e357418f68e92c42b218b30e1e378ac1780fa1ad00db4d2f29a7ac102902c"
+    },
+    {
+      "path": "apps/worldwright-studio/src/workspace.rs",
+      "sha256_lf_text": "49ff2c975069c267161307f24ea34afc9af094fa62e2981f358a871e4ae78e9c"
+    },
+    {
+      "path": "scripts/r5-requirements.txt",
+      "sha256_lf_text": "89aa8b009f02fa42ce39c04ae0be9fd9148ba5b74976b87321537bc7df482380"
+    },
+    {
+      "path": "scripts/test-studio-browser.py",
+      "sha256_lf_text": "2c008eede7c7d170558eec7193deec644ad614abb957f41d1e44cd63f5300416"
+    },
+    {
+      "path": "scripts/test-studio-capabilities.cjs",
+      "sha256_lf_text": "8b468d2a4870d1c014cf2f33fb9000b1d1c76770198f2a1dd37a63f8d6db468c"
+    },
+    {
+      "path": "scripts/test-studio-workflow.cjs",
+      "sha256_lf_text": "8f09e142cc99ed9c4bae7f7c1fee3c9e76f09212c1c3c187b5d90836d0336cf6"
+    }
+  ],
+  "log": {
+    "path": "r5-local-contracts.log",
+    "sha256": "0ae9ac77045433afd51617a6ba194a392d30476507c5f2784940d86df809f5ae"
+  },
+  "open": [
+    "native fmt/check/Clippy/tests/build/rustdoc and supported-host evidence",
+    "real Rust/PG/operator workflow and maximum-size backend",
+    "Windows DACL/path races and real filesystem power-loss",
+    "R1/R2/R3/R4 prerequisites, deployment/load/soak/adoption",
+    "manual accessibility and independent builder acceptance"
+  ]
+}

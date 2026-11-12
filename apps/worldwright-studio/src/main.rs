@@ -10,7 +10,7 @@ async fn main() -> ExitCode {
         Ok(Command::Help) => {
             println!("Worldwright Studio");
             println!(
-                "Usage: worldwright-studio serve --workspace <path> [--content <path>] [--bind 127.0.0.1:PORT] [--preview-command <path>] [--release-endpoint http://127.0.0.1:PORT] [--operator-token-env ENV]"
+                "Usage: worldwright-studio serve --workspace <path> [--content <path>] [--bind 127.0.0.1:PORT] [--preview-command <path>] [--release-endpoint http://127.0.0.1:PORT] [--operator-token-env ENV | --operator-token-file ABSOLUTE_PATH]"
             );
             println!("Draft revisions are append-only and use shared authoritative validation.");
             println!(

@@ -159,6 +159,7 @@
           <button id="package-artifact" type="submit">Package validated bytes</button>
         </form>
         <p id="package-note" class="supporting-text">Validate a clean saved revision first.</p>
+        <p class="supporting-text">Game selection belongs to packaging, not the game-neutral draft JSON. Check it after reopening Studio; existing artifacts show their verified game.</p>
         <label for="artifact-select">Selected artifact</label>
         <select id="artifact-select"></select>
         <p id="artifact-identity" class="digest">No artifact selected</p>
@@ -223,6 +224,19 @@
         </form>
         <p id="publication-note" class="supporting-text">Submission is not approval or activation.</p>
         <ol id="publication-list" class="publication-list"></ol>
+        <details class="publication-support">
+          <summary>Publication connection and local recovery</summary>
+          <p id="publication-auth-note" class="supporting-text">Checking server-side configuration. Credentials are never entered in this page.</p>
+          <button id="refresh-publication-support" type="button" class="quiet-button">Refresh connection and recovery information</button>
+          <p class="supporting-text">Recovery reconciles existing local status files only. It does not submit, approve or activate. If the original submission outcome is unknown, reconcile it with an operator before retrying.</p>
+          <ol id="publication-recovery-list" class="publication-list" aria-label="Publication records needing local recovery"></ol>
+          <form id="reconcile-form">
+            <label for="reconcile-request">Existing request ID confirmed by operator</label>
+            <input id="reconcile-request" required pattern="[0-9a-f]{32}" maxlength="32" autocomplete="off" aria-describedby="reconcile-help">
+            <p id="reconcile-help" class="supporting-text">After a lost submission response, obtain the exact request ID through the authorized operator workflow. Reconciliation reads its current status and requires the matching local artifact and successful preview. It never submits again, approves, or activates. An unknown ID cannot be discovered here.</p>
+            <button id="reconcile-publication" type="submit" class="quiet-button" disabled>Reconcile existing request</button>
+          </form>
+        </details>
       </section>
     </aside>
   </main>

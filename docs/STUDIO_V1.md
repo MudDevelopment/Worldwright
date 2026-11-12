@@ -15,7 +15,8 @@ worldwright-studio serve --workspace <path> \
   --operator-token-env WORLDWRIGHT_OPERATOR_TOKEN
 ```
 
-The endpoint and token options must be supplied together. The token is read
+The endpoint requires exactly one token source: `--operator-token-env NAME` or
+`--operator-token-file ABSOLUTE_PRIVATE_FILE`, never both. The token is read
 server-side and is never sent to the browser, persisted, or logged. The
 listener binds exactly IPv4 `127.0.0.1`; port `0` selects an ephemeral port.
 
@@ -23,6 +24,7 @@ listener binds exactly IPv4 `127.0.0.1`; port `0` selects an ephemeral port.
 
 ```text
 <root>/.worldwright-studio
+<root>/.worldwright-studio-session  # operational serve sentinel; crash recovery is manual
 <root>/revisions/00000000000000000001.json
 <root>/artifacts/<sha256>.wwr
 <root>/artifacts/<sha256>.json
@@ -67,7 +69,9 @@ JSON endpoints require their exact media type. Responses include CSP,
 Studio confines HTTP filesystem work to its fixed workspace layout and rejects
 symlinks, unexpected filenames, noncanonical revisions, mismatched digests,
 orphaned artifact records, and oversized files. Artifacts and preview receipts
-are create-new; publication refresh uses a `.previous` rollback sequence.
+are create-new; publication refresh uses validated `.next`/`.previous` replacement
+journals with explicit recovery. It does not silently roll back an uncertain
+remote operation.
 Preview is direct/no-shell,
 environment-cleared, output-bounded, and uses the existing M5 watchdog; it is
 not an OS sandbox or network firewall. Publication authority and audit remain
@@ -93,3 +97,34 @@ artifact-sidecar and publication schemas are unchanged. Artifact game identity
 remains hashed into its manifest, and official preview now dispatches that
 contract rather than always choosing reference rules. Current regression
 execution is pending; see `EXPEDITION_PLAYABLE.md`.
+
+## R5 workflow/recovery increment
+
+See `R5_ACCEPTANCE.md` for the current API table and acceptance boundaries.
+Studio now guards asynchronous draft/validation/preview/publication responses,
+shows verified artifact game identity, bounds UI request waits/responses, and
+provides local publication replacement recovery. Drafts/revisions/sidecars keep
+their existing formats; packaging choice is not a persisted game preference.
+
+Publication may alternatively use `--operator-token-file ABSOLUTE_PRIVATE_FILE`
+with the loopback endpoint (mutually exclusive with token-env). Each explicit
+operation reads the file afresh; browser code never receives the bearer or path.
+The environment option remains startup-only. Expiry/denial is not automatically
+retried. Use the connection/recovery details panel for nonsecret guidance and
+explicit `.next`/`.previous` reconciliation; it never approves or activates.
+For a lost initial submission response, obtain the exact request ID through an
+authorized operator and use **Reconcile existing request**. This only reads status
+and restores matching local history; missing/corrupt/mismatched artifact or
+original preview evidence fails closed. Unknown IDs cannot be discovered here.
+
+Updated serve processes refuse a second writer for the same workspace. After a
+crash, never delete `.worldwright-studio-session` merely because its PID looks
+absent or old. Establish all writers stopped, preserve a private workspace copy,
+and follow [R5 recovery instructions](R5_ACCEPTANCE.md). The permanent workspace
+marker and journal evidence must remain intact. Direct/older writers do not
+participate in this cooperative guard.
+
+The complete [check plan](R5_CHECK_PLAN.md) covers focused/full native tests,
+SDK relocation, fixtures, real backend/manual recovery and independent acceptance.
+The [ledger](verification/r5-implementation-ledger.md) separates executed local
+fixtures from unrun native/live gates. R1/R2/R4/R5 acceptance remains open.

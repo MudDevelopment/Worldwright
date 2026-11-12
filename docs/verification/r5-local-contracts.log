@@ -1,0 +1,46 @@
+PASS Rust grammar only: apps/worldwright-studio/src/artifact.rs
+PASS Rust grammar only: apps/worldwright-studio/src/cli.rs
+PASS Rust grammar only: apps/worldwright-studio/src/lib.rs
+PASS Rust grammar only: apps/worldwright-studio/src/main.rs
+PASS Rust grammar only: apps/worldwright-studio/src/preview.rs
+PASS Rust grammar only: apps/worldwright-studio/src/publication.rs
+PASS Rust grammar only: apps/worldwright-studio/src/r5_tests.rs
+PASS Rust grammar only: apps/worldwright-studio/src/session.rs
+PASS Rust grammar only: apps/worldwright-studio/src/web.rs
+PASS Rust grammar only: apps/worldwright-studio/src/workspace.rs
+PASS Python syntax: scripts/test-studio-browser.py
+COMMAND: node --check apps/worldwright-studio/assets/app.js
+EXIT: 0
+COMMAND: node scripts/test-studio-capabilities.cjs
+PASS: 1024 rooms visible, 64-exit cap, UTF-8 byte boundaries, invalid capabilities rejected
+EXIT: 0
+COMMAND: node scripts/test-studio-workflow.cjs
+PASS: save preserves edits and selected new room while acknowledgement is pending
+PASS: duplicate save suppressed and conflict preserves local content
+PASS: late reload never overwrites new edits
+PASS: late validation cannot validate a newer draft
+PASS: late import keeps edits made during file/API read
+PASS: preview polling does not overlap and old poll cannot replace stop result
+PASS: new preview input text survives an old send acknowledgement
+PASS: late artifact game identity cannot replace current selection
+PASS: artifact identity mismatch fails closed and preview requires full snapshot identity
+PASS: 401 submission remains one request and explains server-side renewal
+PASS: in-flight publication list cannot erase a newly submitted record
+PASS: request timeout aborts and never retries mutations
+PASS: streamed response body is capped and canceled before JSON parsing
+PASS: unsaved edits mark preview stale while selected package game survives saving
+PASS: known-request reconciliation suppresses duplicates and preserves newer request input
+PASS: reconciliation rejects invalid ID or disabled credentials before any request
+PASS: reconciliation identity mismatch and expired credentials preserve local history
+PASS: late publication list cannot erase explicitly reconciled history
+PASS: 18 Studio workflow fixture cases; not real Rust/PG/operator/browser acceptance
+EXIT: 0
+COMMAND: /tmp/r5-venv/bin/python scripts/test-studio-browser.py
+PASS: real Chromium renders 1024 rooms and 64 exit controls
+PASS: real DOM enforces 4096 UTF-8 bytes, not character count
+PASS: real browser save race preserves edits, selected game and next revision
+PASS: publication disabled without credentials; labeled recovery/status UI; no page errors
+PASS: keyboard-triggered known-ID reconciliation is labeled status-only, single request
+Chromium: 141.0.7390.37
+PASS: 5 Chromium fixture groups; actual Rust/PG/TLS/manual accessibility remain OPEN
+EXIT: 0
