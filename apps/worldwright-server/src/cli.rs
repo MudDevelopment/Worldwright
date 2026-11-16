@@ -5,7 +5,6 @@ use sha2::{Digest, Sha256};
 use std::{
     env,
     ffi::OsString,
-    fs::OpenOptions,
     fs::{self, File},
     io::{self, Read, Write},
     net::{IpAddr, SocketAddr},
@@ -32,6 +31,7 @@ pub(crate) enum Command {
     Operator(OperatorCommand),
     Backup(BackupCommand),
     Takeover(TakeoverOptions),
+    Maintenance(crate::r6_cli::Maintenance),
 }
 
 #[cfg(test)]
@@ -59,6 +59,19 @@ mod backup_parser_tests {
             let mut values = base.to_vec();
             values.extend(extra);
             assert!(parse(values.iter().map(OsString::from)).is_err());
+        }
+    }
+
+    #[test]
+    fn r6_pg_tool_route_is_exact_and_password_is_not_in_argv() {
+        let (endpoint,password)=pg_tool_connection("postgres://user:p%40ss+word@127.0.0.1:5432/db?sslmode=verify-full").unwrap();
+        assert_eq!(password.as_deref(),Some("p@ss+word"));
+        assert!(!endpoint.contains("p%40ss")); assert!(!endpoint.contains("p@ss"));
+        assert!(endpoint.contains("127.0.0.1:5432/db")); assert!(endpoint.contains("sslmode=verify-full"));
+        for value in ["postgres://localhost/db","postgres://user:pw@localhost/", "https://user:pw@localhost/db",
+            "postgres://user:pw@localhost/db?host=other", "postgres://user:pw@localhost/db?password=leak",
+            "postgres://user:pw@localhost/db?service=other", "postgres://user:p%00w@localhost/db"] {
+            assert!(pg_tool_connection(value).is_err(),"{value}");
         }
     }
 
@@ -234,6 +247,7 @@ fn parse_inner(arguments: impl IntoIterator<Item = OsString>) -> Result<Command,
         Some("operator") => parse_operator(arguments),
         Some("backup") => parse_backup(arguments),
         Some("recovery") => parse_takeover(arguments),
+        Some("maintenance") => crate::r6_cli::parse(arguments).map(Command::Maintenance),
         Some(_) => Err("unknown command or extra argument".to_owned()),
         None => Err("command must be valid Unicode".to_owned()),
     }
@@ -1260,6 +1274,10 @@ where
                 ExitCode::from(1)
             }
         },
+        Command::Maintenance(command) => match crate::r6_cli::run(command).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => { eprintln!("worldwright-server: {error}"); ExitCode::from(1) }
+        },
         Command::Takeover(options) => match run_takeover(options).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
@@ -1300,6 +1318,8 @@ async fn run_backup(command: BackupCommand) -> Result<(), ServerError> {
             dump,
         } => {
             validate_service(&service)?;
+            validate_backup_key_separation(&auth, &key_env)?;
+            eprintln!("pg-service is a compatibility label only; pg_dump uses the explicit database URL endpoint");
             let db = resolve_env(&database_env)
                 .map_err(|_| ServerError::startup("database unavailable"))?;
             let store = worldwright_persistence::PostgresStore::connect(&db)
@@ -1324,19 +1344,13 @@ async fn run_backup(command: BackupCommand) -> Result<(), ServerError> {
             let failure_operation = random_id::<worldwright_core::ids::OperationId>()
                 .map_err(|_| ServerError::startup("operation identity failed"))?;
             let created_at = now_secs()?;
-            let reserve = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&output)
-                .map_err(|_| ServerError::startup("backup output already exists"))?;
+            let reserve = worldwright_operations::private_files::create_private(&output)
+                .map_err(|_| ServerError::startup("backup output requires a new file in an owned private directory with protected ACLs"))?;
             drop(reserve);
             let mut manifest_os = output.as_os_str().to_owned();
             manifest_os.push(".manifest.json");
             let manifest_path = PathBuf::from(manifest_os);
-            let mut manifest_file = match OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&manifest_path)
+            let mut manifest_file = match worldwright_operations::private_files::create_private(&manifest_path)
             {
                 Ok(file) => file,
                 Err(_) => {
@@ -1370,9 +1384,8 @@ async fn run_backup(command: BackupCommand) -> Result<(), ServerError> {
                     OsString::from("--no-privileges"),
                     OsString::from("--file"),
                     output.as_os_str().to_owned(),
-                    OsString::from(format!("--dbname=service={service}")),
                 ];
-                run_pg_tool(&tool, &args, Duration::from_secs(600))?;
+                run_pg_tool(&tool, &args, Duration::from_secs(600), &db)?;
                 let backup_digest = stream_digest(&output)?;
                 let manifest = BackupManifest {
                     schema_version: worldwright_operations::BACKUP_MANIFEST_VERSION,
@@ -1483,6 +1496,8 @@ async fn run_backup_restore(
     confirm: String,
 ) -> Result<(), ServerError> {
     validate_service(&service)?;
+    validate_backup_key_separation(&auth, &key_env)?;
+    eprintln!("pg-service is a compatibility label only; pg_restore uses the explicit target database URL endpoint");
     let control_url = resolve_env(&control_env)
         .map_err(|_| ServerError::startup("control database unavailable"))?;
     let target_url = resolve_env(&target_env)
@@ -1519,6 +1534,11 @@ async fn run_backup_restore(
             "backup world does not match target scope",
         ));
     }
+    for capability in [Capability::RestoreWorld, Capability::ViewStatus,
+        Capability::ManageOperators, Capability::InitiateRecovery] {
+        store.authorize_operator(&context, capability).await
+            .map_err(|_| ServerError::startup("restore requires current restore/view/manage-operators/initiate-recovery grants in the control database"))?;
+    }
     let job =
         worldwright_core::ids::RecoveryJobId::from_u128(u128::from_be_bytes(random_bytes::<16>()?))
             .map_err(|_| ServerError::startup("recovery identity failed"))?;
@@ -1530,7 +1550,8 @@ async fn run_backup_restore(
         .map_err(|_| ServerError::startup("operation identity failed"))?;
     let started_at = now_secs()?;
     let started = Instant::now();
-    let rpo_seconds = started_at.saturating_sub(signed.manifest.created_at);
+    let rpo_seconds = started_at.checked_sub(signed.manifest.created_at)
+        .ok_or_else(|| ServerError::startup("backup timestamp is in the future; recovery age cannot be measured"))?;
     store
         .begin_recovery_job(
             &context,
@@ -1550,8 +1571,11 @@ async fn run_backup_restore(
             .await
             .map_err(|_| ServerError::startup("target database connection failed"))?;
         let existing: Option<String> =
-            sqlx::query_scalar("SELECT to_regclass('worldwright_worlds')::TEXT")
-                .fetch_one(&target_pool)
+            sqlx::query_scalar("SELECT n.nspname || '.' || c.relname FROM pg_class c \
+                JOIN pg_namespace n ON n.oid=c.relnamespace \
+                WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' \
+                AND c.relkind IN ('r','p','v','m','S','f') LIMIT 1")
+                .fetch_optional(&target_pool)
                 .await
                 .map_err(|_| ServerError::startup("target emptiness check failed"))?;
         if existing.is_some() {
@@ -1565,10 +1589,9 @@ async fn run_backup_restore(
             OsString::from("--single-transaction"),
             OsString::from("--no-owner"),
             OsString::from("--no-privileges"),
-            OsString::from(format!("--dbname=service={service}")),
             input.as_os_str().to_owned(),
         ];
-        run_pg_tool(&tool, &args, Duration::from_secs(600))?;
+        run_pg_tool(&tool, &args, Duration::from_secs(600), &target_url)?;
         let target_store = worldwright_persistence::PostgresStore::connect(&target_url)
             .await
             .map_err(|_| ServerError::startup("restored target connection failed"))?;
@@ -1578,7 +1601,11 @@ async fn run_backup_restore(
             .map_err(|_| ServerError::startup("restored migrations invalid"))?;
         crate::release_runtime::verify_restored_world(&target_store, context.world)
             .await
-            .map_err(|_| ServerError::startup("restored world verification failed"))
+            .map_err(|_| ServerError::startup("restored world verification failed"))?;
+        target_store.verify_restored_manifest(&signed.manifest).await
+            .map_err(|_| ServerError::startup("restored database snapshot differs from signed manifest; keep target isolated"))?;
+        target_store.reconcile_restored_security(&store, &context, job, success_operation).await
+            .map_err(|_| ServerError::startup("restored security reconciliation failed or is commit-uncertain; keep target isolated and inspect its audit, never expose it"))
     }
     .await;
     let rto_seconds = started.elapsed().as_secs();
@@ -1587,7 +1614,10 @@ async fn run_backup_restore(
         "rpo_seconds": rpo_seconds,
         "rpo_target_seconds": worldwright_operations::RPO_TARGET_SECONDS,
         "rto_seconds": rto_seconds,
-        "rto_target_seconds": worldwright_operations::RTO_TARGET_SECONDS
+        "rto_target_seconds": worldwright_operations::RTO_TARGET_SECONDS,
+        "rpo_target_met": rpo_seconds <= worldwright_operations::RPO_TARGET_SECONDS,
+        "rto_target_met": rto_seconds <= worldwright_operations::RTO_TARGET_SECONDS,
+        "measurement_scope": "backup-age-at-restore-start_and_restore-verification-duration-not-incident-downtime"
     });
     if let Err(error) = restore_result {
         let _ = store
@@ -1634,6 +1664,11 @@ async fn run_backup_restore(
         "rto target seconds: {}",
         worldwright_operations::RTO_TARGET_SECONDS
     );
+    println!("rpo target met: {}", rpo_seconds <= worldwright_operations::RPO_TARGET_SECONDS);
+    println!("rto target met: {}", rto_seconds <= worldwright_operations::RTO_TARGET_SECONDS);
+    println!("measurement scope: backup age and restore verification duration, not total incident loss/downtime");
+    println!("restored sessions invalidated, prior operators disabled and grants revoked; only minimal current-control recovery authority restored");
+    println!("wait at least 31 seconds, then obtain a fresh issuer token before explicit takeover/regrant");
     println!("restore verified; takeover not performed");
     Ok(())
 }
@@ -1683,14 +1718,26 @@ fn validate_service(v: &str) -> Result<(), ServerError> {
     }
 }
 fn bounded_file(p: &PathBuf, max: usize) -> Result<Vec<u8>, ServerError> {
-    let m = fs::metadata(p).map_err(|_| ServerError::startup("file unavailable"))?;
-    if !m.is_file() || m.len() == 0 || m.len() > max as u64 {
-        return Err(ServerError::startup("file bounds invalid"));
+    worldwright_operations::private_files::read_private(p, max)
+        .map_err(|_| ServerError::startup("manifest requires a bounded private regular file in a protected directory"))
+}
+fn validate_backup_key_separation(auth: &ReleaseAuth, backup_env: &str) -> Result<(), ServerError> {
+    let operator = decode_hex_key(&resolve_env(&auth.key_env).map_err(|_| ServerError::startup("operator key unavailable"))?)
+        .map_err(|_| ServerError::startup("operator key invalid"))?;
+    let backup = decode_hex_key(&resolve_env(backup_env).map_err(|_| ServerError::startup("backup key unavailable"))?)
+        .map_err(|_| ServerError::startup("backup key invalid"))?;
+    if operator.len()<32 || backup.len()<32 || operator==backup {
+        return Err(ServerError::startup("backup-signing-key-env must name a valid key distinct from operator-key-env; rotate keys explicitly, do not rewrite old evidence"));
     }
-    fs::read(p).map_err(|_| ServerError::startup("file unavailable"))
+    Ok(())
 }
 fn stream_digest(p: &PathBuf) -> Result<[u8; 32], ServerError> {
-    let mut f = File::open(p).map_err(|_| ServerError::startup("backup unavailable"))?;
+    const MAX_BACKUP_BYTES: u64 = 128 * 1024 * 1024 * 1024;
+    let mut f = worldwright_operations::private_files::open_private(p)
+        .map_err(|_| ServerError::startup("backup requires a protected private regular file"))?;
+    let expected = f.metadata().map_err(|_| ServerError::startup("backup metadata unavailable"))?.len();
+    if expected == 0 || expected > MAX_BACKUP_BYTES { return Err(ServerError::startup("backup exceeds the 128 GiB bound or is empty")); }
+    let mut total = 0u64;
     let mut h = Sha256::new();
     let mut b = [0u8; 64 * 1024];
     loop {
@@ -1700,8 +1747,11 @@ fn stream_digest(p: &PathBuf) -> Result<[u8; 32], ServerError> {
         if n == 0 {
             break;
         }
+        total = total.checked_add(n as u64).ok_or_else(|| ServerError::startup("backup size overflow"))?;
+        if total > expected { return Err(ServerError::startup("backup changed during hashing")); }
         h.update(&b[..n])
     }
+    if total != expected { return Err(ServerError::startup("backup changed during hashing")); }
     Ok(h.finalize().into())
 }
 fn write_manifest_bytes(file: &mut File, bytes: &[u8]) -> Result<(), ServerError> {
@@ -1725,13 +1775,42 @@ fn now_secs() -> Result<u64, ServerError> {
         .map_err(|_| ServerError::startup("clock unavailable"))
 }
 
+// Bind libpq tools to the SAME explicit endpoint inspected through SQLx.
+// Password is removed from argv and sent only to the child environment.
+fn pg_tool_connection(value: &str) -> Result<(String, Option<String>), ServerError> {
+    if value.len() > 8192 { return Err(ServerError::startup("database URL exceeds tool bound")); }
+    let mut url = reqwest::Url::parse(value).map_err(|_| ServerError::startup("PostgreSQL tool URL invalid"))?;
+    if !matches!(url.scheme(), "postgres" | "postgresql") || url.host_str().is_none()
+        || url.username().is_empty() || url.path().len() < 2 || url.fragment().is_some()
+        || url.query_pairs().any(|(key, _)| matches!(key.as_ref(), "host" | "hostaddr" | "port" | "dbname" | "user" | "password" | "service" | "servicefile")) {
+        return Err(ServerError::startup("PostgreSQL tools require an explicit user/host/database URL without routing overrides; pg-service no longer selects the destination"));
+    }
+    let password = url.password().map(|value| {
+        let bytes=value.as_bytes(); let mut result=Vec::new(); let mut i=0;
+        while i<bytes.len() {
+            if bytes[i]==b'%' {
+                let text=value.get(i+1..i+3).ok_or_else(|| ServerError::startup("password encoding invalid"))?;
+                result.push(u8::from_str_radix(text,16).map_err(|_| ServerError::startup("password encoding invalid"))?); i+=3;
+            } else { result.push(bytes[i]); i+=1; }
+        }
+        let value=String::from_utf8(result).map_err(|_| ServerError::startup("password encoding invalid"))?;
+        if value.contains('\0') { return Err(ServerError::startup("password encoding invalid")); }
+        Ok(value)
+    }).transpose()?;
+    url.set_password(None).map_err(|_| ServerError::startup("cannot isolate database password"))?;
+    Ok((url.to_string(), password))
+}
+
 fn run_pg_tool(
     tool: &PathBuf,
     arguments: &[OsString],
     timeout: Duration,
+    database_url: &str,
 ) -> Result<(), ServerError> {
+    let (endpoint, password) = pg_tool_connection(database_url)?;
     let mut command = ProcessCommand::new(tool);
-    command.args(arguments).env_clear();
+    command.args(arguments).arg(format!("--dbname={endpoint}")).env_clear();
+    if let Some(password) = password { command.env("PGPASSWORD", password); }
     for name in [
         "PATH",
         "SystemRoot",
@@ -1739,7 +1818,6 @@ fn run_pg_tool(
         "HOME",
         "USERPROFILE",
         "APPDATA",
-        "PGSERVICEFILE",
         "PGPASSFILE",
     ] {
         if let Some(value) = env::var_os(name) {
@@ -2060,6 +2138,7 @@ fn print_help() {
     println!(
         "Protocol v1 browser transport with local process-local mode and PostgreSQL active-artifact mode."
     );
+    println!("       worldwright-server maintenance <retention-status|retention-prune|interrupt-job> ... (see docs/R6_FEATURES.md)");
     println!("Default bind: 127.0.0.1:3000; only loopback binds are accepted.");
 }
 

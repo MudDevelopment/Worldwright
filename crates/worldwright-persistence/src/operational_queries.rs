@@ -98,6 +98,11 @@ RETURNING subject, capability, target_environment, world_id
 ";
 
 #[allow(dead_code)]
+pub(crate) const GRANT_SUBJECT: &str = "
+SELECT subject FROM worldwright_operator_grants
+WHERE grant_id = $1 AND target_environment = $2 AND world_id = $3
+";
+
 pub(crate) const OPERATOR_FOR_UPDATE: &str = "
 SELECT kind, enabled
 FROM worldwright_operators

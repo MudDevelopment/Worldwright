@@ -1,0 +1,22 @@
+{
+  "cases": [],
+  "failure": "ValueError: missing native tool: cargo",
+  "files": [
+    {
+      "path": "events.jsonl",
+      "sha256": "ddb3d5aa3893308da40276f69f5c4b9f49986155076c5e747c5f68b822dabc13"
+    }
+  ],
+  "finished_at": 1794492439,
+  "full_r6_closed": false,
+  "host_os": "Linux",
+  "independent_adoption": false,
+  "kind": "native-browser-security-prerequisites",
+  "phases": [],
+  "schema_version": 1,
+  "started_at": 1794492439,
+  "status": "failed",
+  "target_directory": "/tmp/r6-native-target",
+  "target_policy": "cached-development-not-fresh-R0",
+  "track": "R6"
+}

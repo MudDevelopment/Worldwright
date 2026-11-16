@@ -889,3 +889,22 @@ new bundled-sample workspace. The `-Workspace` argument reopens an existing
 workspace without importing content; session sentinels are never auto-removed.
 It does not weaken execution policy or constitute native/release acceptance.
 See docs/R5_CHECK_PLAN.md section 4 for instructions and recovery boundaries.
+
+## R6 starting implementation: real browser/native evidence
+
+The first R6 batch adds `scripts/r6-check.ps1`, `r6-native.py`, `r6-browser.py`,
+`r6-evidence.py`, shared `r6_support.py`, and `test-r6.py`. The browser runner
+uses actual supplied Rust binaries and a NEW isolated workspace, not fixture HTTP.
+The native collector links build/source/config/binary identity, nonzero executed
+native tests and browser evidence; failed/interrupted runs remain failed.
+
+See [R6 execution guide](docs/R6_ACCEPTANCE.md) and
+[R6 ledger](docs/verification/r6-implementation-ledger.md) for pinned Python/browser
+setup and the single Windows command. Stop the existing development Studio before
+rebuilding its Windows executable. Cached development checks are not fresh R0.
+Windows automated shutdown is explicitly manual-pending, not a Ctrl+C pass.
+
+R6 is security/recovery/privacy/operation closure, not a new name for R5. These
+collectors do not implement all remaining roadmap work or issue acceptance:
+R2/R3 prerequisites, backup/restore/takeover drills, OS-security review, retention,
+supply-chain review and independent named adoption remain OPEN.

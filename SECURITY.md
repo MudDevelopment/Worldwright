@@ -715,3 +715,22 @@ Recovery instructions: docs/R5_ACCEPTANCE.md. Full positive/negative native and
 independent security matrix: docs/R5_CHECK_PLAN.md. R1/R2/full workspace/R4/R5
 and broader R6 security/adoption gates remain open; Node/Chromium fixtures do not
 close them. No issuer key, production credential, approval or license is granted.
+
+## R6 evidence tooling boundary
+
+The first R6 collectors intentionally run only non-DB native prerequisites and
+an isolated synthetic-content workflow on actual Studio/preview binaries. No
+production URL, credentials, HMAC signing key, operator publication, backup target,
+retention deletion or policy adoption is selected automatically. Browser network
+requests are restricted to the runner's own loopback origins; HTTP redirects and
+proxy inheritance are refused by its probe client. Studio receives a restricted
+environment; logs mask known environment secrets only on a best-effort basis.
+Review protected output before sharing. POSIX modes are not Windows DACL proof.
+
+R6 report hashes bind bytes, not authorship. Neither an unsigned passing collection
+nor a boolean in JSON authenticates approval. The integrity verifier rejects
+closure/adoption claims and missing/modified phase/case evidence; final integrated
+R6 approval is not automated by this batch. All actual multi-user/Windows ACL,
+issuer/key distribution, restored security-state reconciliation, recovery-objective,
+retention/legal and independently adopted support gates remain OPEN.
+See docs/R6_ACCEPTANCE.md and docs/verification/r6-implementation-ledger.md.

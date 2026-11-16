@@ -1,0 +1,2 @@
+{"event": "started", "kind": "native-browser-security-prerequisites"}
+{"event": "failed", "failure": "ValueError: missing native tool: cargo"}

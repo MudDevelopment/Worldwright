@@ -1,4 +1,5 @@
-//! Pure, bounded contracts for authenticated Worldwright operator operations.
+//! Bounded operator contracts and fail-closed private-file handling.
+pub mod private_files;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,7 @@ pub const MAX_AUTH_AGE_SECONDS: u64 = 300;
 pub const TOTP_STEP_SECONDS: u64 = 30;
 pub const TOTP_DIGITS: u32 = 8;
 pub const MIN_SIGNING_KEY_BYTES: usize = 32;
+pub const MAX_SIGNING_KEY_BYTES: usize = 1024;
 pub const RELEASE_SUBMISSION_VERSION: u32 = 1;
 pub const MAX_RELEASE_SUBMISSION_METADATA_BYTES: usize = 4096;
 pub const RELEASE_SUBMISSION_PREFIX: &[u8] = b"WORLDWRIGHT-RELEASE-SUBMISSION-V1\n";
@@ -547,7 +549,7 @@ pub fn verify_token(
 }
 
 pub fn decode_hex_key(value: &str) -> Result<Vec<u8>, OperationsError> {
-    if value.is_empty() || value.len() % 2 != 0 {
+    if value.is_empty() || value.len() % 2 != 0 || value.len() > MAX_SIGNING_KEY_BYTES * 2 {
         return Err(OperationsError::InvalidKey);
     }
     decode_hex(value).ok_or(OperationsError::InvalidKey)
@@ -607,7 +609,7 @@ pub fn verify_totp(secret: &[u8], code: &str, unix_seconds: u64) -> Result<(), O
 }
 
 fn validate_key(key: &[u8]) -> Result<(), OperationsError> {
-    if key.len() < MIN_SIGNING_KEY_BYTES {
+    if !(MIN_SIGNING_KEY_BYTES..=MAX_SIGNING_KEY_BYTES).contains(&key.len()) {
         Err(OperationsError::InvalidKey)
     } else {
         Ok(())

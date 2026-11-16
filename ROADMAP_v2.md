@@ -700,3 +700,15 @@ Previously observed Windows SDK/terminal successes are retained, not promoted
 into complete workspace or R5 closure. R1/R2, remaining native workspace checks,
 all R4 deployment/load/soak/adoption, real reviewed publication and manual
 accessibility/independent-builder gates stay OPEN.
+
+## R6 starting implementation — browser/native collection, not security closure
+
+The first R6 batch implements actual-binary isolated browser workflow collection,
+bounded native-test orchestration and read-only evidence completeness/integrity
+checks. It preserves the eight R6 units above; none is renamed to browser testing.
+The separate R6 ledger and docs/R6_ACCEPTANCE.md enumerate remaining issuer,
+authority/OS, live recovery, objective adoption, privacy/retention, external-effect
+and supply-chain/support obligations. R2/R3 and existing R5/R4 gates remain open.
+Fourteen local helper tests passed; no R6 actual native/browser/live run completed
+in the sandbox (missing Cargo). Windows forced cleanup is manual-pending, never
+claimed as a graceful Ctrl+C acceptance pass. No final R6 approval is issued.

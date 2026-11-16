@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "track": "R6",
+  "kind": "local-helper-observations",
+  "observed_at": "2026-11-12T14:19:11.080980+00:00",
+  "full_r6_closed": false,
+  "native_rust_executed": false,
+  "real_studio_browser_executed": false,
+  "powershell_executed": false,
+  "scope": "Eight selected LF-text readbacks; not full checkout provenance or independent adoption",
+  "checks": [
+    {
+      "check": "Python syntax scripts/r6_support.py",
+      "status": "passed"
+    },
+    {
+      "check": "Python syntax scripts/r6-browser.py",
+      "status": "passed"
+    },
+    {
+      "check": "Python syntax scripts/r6-native.py",
+      "status": "passed"
+    },
+    {
+      "check": "Python syntax scripts/r6-evidence.py",
+      "status": "passed"
+    },
+    {
+      "check": "Python syntax scripts/test-r6.py",
+      "status": "passed"
+    },
+    {
+      "check": "14 helper tests",
+      "status": "passed"
+    },
+    {
+      "check": "R6 guide Bash syntax and fence balance",
+      "status": "passed"
+    }
+  ],
+  "subjects": [
+    {
+      "path": "scripts/r6_support.py",
+      "sha256_lf_text": "2b39799a4c729dd8fd04a672a5bc06fe947ad6a7d246440b0e0d0bc7354abe9e"
+    },
+    {
+      "path": "scripts/r6-browser.py",
+      "sha256_lf_text": "febdeda4fc57713da52999cbd4079fa4f64e4bf3b2ab0f5d5f82019e50a5d64a"
+    },
+    {
+      "path": "scripts/r6-native.py",
+      "sha256_lf_text": "f3c83a4b18a683eea4cf90f42e6d29bf7b79cccca3b835dae83071372dadc233"
+    },
+    {
+      "path": "scripts/r6-evidence.py",
+      "sha256_lf_text": "8c04c2842047ce18271abf0606b025c2360399de192706c7fd4c79847d1277ab"
+    },
+    {
+      "path": "scripts/test-r6.py",
+      "sha256_lf_text": "eba7f8b0ba08d91431e88385c18a878eb752615cabb1d043f588b635acfef3ee"
+    },
+    {
+      "path": "scripts/r6-check.ps1",
+      "sha256_lf_text": "bdb51ed01949c9769c25275df3c730d566392b353c38f7209de05ce5b6532d31"
+    },
+    {
+      "path": "scripts/r6-requirements.txt",
+      "sha256_lf_text": "8d0cf21e750ed1cc16b8b403683b2d0387b1d8016f23758523da35b249bef17a"
+    },
+    {
+      "path": "scripts/r3_io.py",
+      "sha256_lf_text": "6d0f91a28497df5c119d154fe886790b4f94a1b90c40ae94793d03ff2c3faa7f"
+    }
+  ],
+  "log": {
+    "path": "r6-local-tests.log",
+    "sha256": "24c46e07760f393dff4a13f4f62a448273e630b87ae7196893f078cd910449ea"
+  },
+  "native_attempt": {
+    "path": "r6-local-prerequisite/r6-report.json",
+    "sha256": "c0d3e372e26c8da10fd2300ad326b59796fe1684b69092b7622ec7e5dbd38e91",
+    "status": "failed",
+    "reason": "missing native tool: cargo"
+  },
+  "limitations": [
+    "No actual Rust-backed browser run",
+    "Native test, full workspace, PowerShell and live R2/R3/R6 remain open",
+    "Independent security/recovery/retention/supply-chain adoption not implemented or supplied"
+  ]
+}

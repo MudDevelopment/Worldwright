@@ -1,0 +1,19 @@
+test_boolean_schema_is_not_integer_version (__main__.R6Tests.test_boolean_schema_is_not_integer_version) ... ok
+test_closure_claim_is_rejected (__main__.R6Tests.test_closure_claim_is_rejected) ... ok
+test_duplicate_case_is_rejected (__main__.R6Tests.test_duplicate_case_is_rejected) ... ok
+test_empty_and_duplicate_test_discovery_fail (__main__.R6Tests.test_empty_and_duplicate_test_discovery_fail) ... ok
+test_ignored_and_zero_or_incomplete_execution_fail (__main__.R6Tests.test_ignored_and_zero_or_incomplete_execution_fail) ... ok
+test_known_secret_is_redacted (__main__.R6Tests.test_known_secret_is_redacted) ... ok
+test_missing_browser_case_is_rejected (__main__.R6Tests.test_missing_browser_case_is_rejected) ... ok
+test_new_output_is_exclusive (__main__.R6Tests.test_new_output_is_exclusive) ... ok
+test_nonzero_phase_is_retained_before_failure (__main__.R6Tests.test_nonzero_phase_is_retained_before_failure) ... ok
+test_path_escape_refused (__main__.R6Tests.test_path_escape_refused) ... ok
+test_tampered_file_is_rejected (__main__.R6Tests.test_tampered_file_is_rejected) ... ok
+test_timeout_is_failure_not_success (__main__.R6Tests.test_timeout_is_failure_not_success) ... ok
+test_unlisted_file_is_rejected (__main__.R6Tests.test_unlisted_file_is_rejected) ... ok
+test_valid_fixture_still_has_no_closure_or_adoption (__main__.R6Tests.test_valid_fixture_still_has_no_closure_or_adoption) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.150s
+
+OK

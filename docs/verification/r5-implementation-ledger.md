@@ -243,3 +243,44 @@ README and the check plan document prompt-free invocation and policy boundaries.
 No cargo clean, execution-policy bypass, sentinel removal, migration change or
 old evidence-hash update was introduced. Native execution remains NOT VERIFIED;
 all prior open gates remain open.
+
+## User-observed native targeted build and startup announcement
+
+The next submitted transcript successfully ran the self-contained dot-sourced
+launch block (not the new start-studio-local.ps1 file). Its Rust/Cargo 1.85.1 and
+x86_64-pc-windows-msvc checks completed, and the explicit-target locked/offline
+build of worldwright and worldwright-studio finished successfully in 1m 07s.
+Both expected executables were found and hashed. This supersedes the earlier
+path/setup failure for this narrowly scoped attempt, not the full native gate.
+
+User-reported SHA-256, in the Get-FileHash array order:
+- worldwright-studio.exe: 3B884B377E46915637FD662348D655818B43C0E369D2C0D3F32E77C7EF1742E6
+- worldwright.exe: 0BFEAB56A9263F24CD72B85E74B9686151588DA35BBF642155471657F74DC2A5
+
+Both were under the established temporary native-check cache followed by
+x86_64-pc-windows-msvc\debug. Studio announced http://127.0.0.1:64885/ for:
+C:\Users\Guy.Hunter\AppData\Local\Worldwright-R5-Launch-187d263469d540fb9f220d748534b4d7\native-studio-workspace
+Port 64885 is ephemeral, not a new configured default.
+
+Observed: targeted native dev build success, expected binary existence/hash
+output and Studio startup URL announcement. Not yet observed: successful HTTP
+load, real browser authoring/preview, graceful shutdown/child cleanup/sentinel
+removal, same-workspace reopen, native test or Clippy results, or execution of the
+new script launcher. These binary hashes are user-observed and not independently
+recomputed or bound to a complete checkout/accepted provenance tuple here.
+
+Next: open the announced URL while keeping the terminal running; exercise the
+sample authoring/preview; gracefully stop and verify exact-workspace reopen.
+All unexecuted full-workspace/native-test, R1/R2/R3/R4/R5, Windows security/fault,
+migration and independent adoption gates remain OPEN. No existing fixture
+observation/report hash was replaced with these binary hashes.
+
+## R6 starting-collection handoff
+
+R6's new real-binary browser and native runners can collect the still-missing
+execution evidence for selected R5 paths. They do not close this ledger's full
+workspace, maximum-size/manual browser, actual authorized publication/activation,
+Windows security/shutdown or independent-builder gates. The prior user-observed
+Windows targeted build/startup announcement remains exactly that limited evidence.
+R6 collection records have their own source recipe and do not rebaseline existing
+R5 report hashes. See ../R6_ACCEPTANCE.md and r6-implementation-ledger.md.

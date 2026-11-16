@@ -1515,3 +1515,26 @@ verifier's own synthetic tests authenticate the report or a native executable.
 R5 native tests and actual builder/operator/R1/R2/manual acceptance remain open.
 Node and Chromium fixture execution is separately recorded in the R5 ledger;
 prior user-observed SDK relocation/terminal passes keep their narrower scope.
+
+## R6 collection architecture — first batch, not closure
+
+R6 reuses bounded `r3_io` subprocess capture and existing Studio/browser/CLI
+contracts rather than adding application endpoints or a second authority plane.
+The native collector snapshots tracked plus untracked/nonignored source before
+and after execution, records pinned tools/configs, builds actual binaries, invokes
+an isolated browser workflow and checks discovered versus executed native tests.
+The source recipe is named `r6-source-inventory-v1-not-r0-interchangeable` so its
+digest cannot silently replace an R0 prerequisite digest.
+
+Reports use a new collector schema v1 with create-new external output, per-phase
+logs, fsynced progress events, binary/artifact identities and contained evidence
+hashes. No existing workspace, artifact, application-config or SQL schema changes.
+`full_r6_closed` and `independent_adoption` stay false; integrity checking is not
+an independent signature or review. Real browser binary identity alone is not
+native build provenance unless linked by the native collection.
+
+Unix automated runs exercise active-preview SIGINT cleanup and same-workspace
+reopen. Windows automation records forced cleanup and manual Ctrl+C/reopen pending;
+CTRL_BREAK is not substituted for the implemented signal contract. General process
+escape/race/ACL and abrupt collector termination still require separate review.
+See docs/R6_ACCEPTANCE.md for the complete eight-unit remaining-work matrix.

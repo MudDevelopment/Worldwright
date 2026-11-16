@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     env,
-    fs::{self, OpenOptions},
+    fs,
     io::{Read, Write},
     net::{IpAddr, TcpStream},
     path::{Path, PathBuf},
@@ -51,6 +51,13 @@ fn run(args: Vec<String>) -> Result<(), String> {
         }
         Some("--version") | Some("-V") => {
             println!("worldwright-console {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
+        Some("trust-model") if args.len() == 1 => {
+            println!("{}", json!({"schema_version":1,"mechanism":"HMAC-SHA256",
+                "hmac_key_holders_can_mint_any_subject":true,"bearer_tokens_cannot_mint":true,
+                "capabilities_checked_in_current_database":true,
+                "key_custody_is_separate_from_grants":true,"production_approval":false}));
             Ok(())
         }
         Some("credential") => credential_command(&args[1..]),
@@ -187,16 +194,8 @@ fn credential_create(path: &Path, subject: &str, kind: OperatorKind) -> Result<(
         totp_secret_hex: secret.clone(),
     };
     let bytes = serde_json::to_vec_pretty(&c).map_err(|_| "serialization failed")?;
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .map_err(|_| "credential output cannot be created")?;
+    let mut file = worldwright_operations::private_files::create_private(path)
+        .map_err(|_| "credential output requires a new file in an owned private directory; verify Linux permissions or Windows owner/SYSTEM/Administrators-only ACLs")?;
     if file
         .write_all(&bytes)
         .and_then(|_| file.sync_all())
@@ -214,8 +213,7 @@ fn credential_create(path: &Path, subject: &str, kind: OperatorKind) -> Result<(
             base32(&decode_hex(&s)?)
         );
     }
-    #[cfg(windows)]
-    eprintln!("warning: Windows ACLs were not changed; protect credential file manually");
+    // Private ACL/ownership checks completed before writing; no automatic chmod.
     Ok(())
 }
 fn token_issue(
@@ -277,13 +275,9 @@ fn token_issue(
     Ok(())
 }
 fn read_credential(p: &Path) -> Result<CredentialFile, String> {
-    let m = fs::metadata(p).map_err(|_| "credential cannot be read")?;
-    if !m.is_file() || m.len() == 0 || m.len() > MAX_FILE as u64 {
-        return Err("credential bounds invalid".into());
-    }
-    let c: CredentialFile =
-        serde_json::from_slice(&fs::read(p).map_err(|_| "credential cannot be read")?)
-            .map_err(|_| "credential invalid")?;
+    let bytes = worldwright_operations::private_files::read_private(p, MAX_FILE)
+        .map_err(|_| "credential requires an owned private directory/file, no symlinks/reparse points, and a readable private ACL; permissions are not changed automatically")?;
+    let c: CredentialFile = serde_json::from_slice(&bytes).map_err(|_| "credential invalid")?;
     if c.schema_version != 1 {
         Err("credential schema invalid".into())
     } else {
@@ -653,6 +647,7 @@ fn parse_response(data: &[u8]) -> Result<(u16, &[u8]), String> {
     Ok((code, body))
 }
 fn print_help() {
+    println!("worldwright-console trust-model  (read-only issuer/key-custody boundary)");
     println!("Worldwright Console");
     println!("Usage:");
     println!("  worldwright-console credential <create|status> ...");

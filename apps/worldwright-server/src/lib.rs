@@ -9,6 +9,7 @@ mod operator;
 mod r2_live_tests;
 #[cfg(test)]
 mod r2_oidc_tests;
+mod r6_cli;
 mod release_cli;
 mod release_runtime;
 mod web;
