@@ -10,6 +10,8 @@ import shutil
 import sys
 import tomllib
 from r6_support import Collector, ROOT, encode, new_file, read, require, sha, source_identity, test_listing, test_result
+import native_paths as native
+import worldwright_local as local
 
 
 def main():
@@ -19,11 +21,20 @@ def main():
     parser.add_argument('--allow-dirty', action='store_true')
     parser.add_argument('--browser-executable', type=Path)
     args = parser.parse_args()
+    local.local_path(Path(sys.prefix))
+    local.configure_tools_environment()
     collector = Collector(args.output, 'native-browser-security-prerequisites')
     target = args.target_dir.resolve()
     try:
-        require(not target.is_relative_to(ROOT.resolve()) and not target.is_relative_to(collector.output.resolve())
-                and not collector.output.resolve().is_relative_to(target), 'target/evidence must be disjoint and outside checkout')
+        target = local.local_path(args.target_dir)
+        require(not target.is_relative_to(collector.output.resolve())
+                and not collector.output.resolve().is_relative_to(target), 'target/evidence must be disjoint')
+        collector.report['storage_policy'] = 'repository-local-native-v1'
+        collector.report['native_paths'] = native.configure_native(target)
+        collector.phase('native-path-preflight', [sys.executable, '-B', str(ROOT / 'scripts/native-storage.py'),
+                        'check', '--output', str(collector.output / 'path-preflight')], 900)
+        preflight = json.loads(read(collector.output / 'path-preflight/r6-report.json'))
+        require(preflight.get('status') == 'native-storage-preflight-passed-not-acceptance', 'native path preflight did not pass')
         require(os.name == 'nt' or sys.platform.startswith('linux'), 'supported native OS required')
         if os.name != 'nt':
             require(os.geteuid() != 0, 'ordinary non-root Ubuntu user required')
@@ -101,6 +112,8 @@ def main():
         new_file(collector.output / 'source-after.json', encode(after))
         require(before == after, 'source/lock/worktree changed during collection')
         require(all(sha(path) == item['sha256'] for path, item in ((Path(c['path']), c) for c in configs)), 'Cargo configuration changed during collection')
+        require(native.configuration_inventory() == collector.report['native_paths']['cargo_configurations'], 'Cargo config inventory changed during collection')
+        require(all(sha(Path(item['path'])) == item['sha256'] for item in collector.report['native_paths']['binaries'].values()), 'native tool binary changed during collection')
         require(all(sha(path) == collector.report['binaries'][name]['sha256'] for name, path in binaries.items()), 'binary changed during collection')
         collector.report['browser_status'] = browser_report['status']
         collector.report['status'] = 'collected_native_browser_not_closed'

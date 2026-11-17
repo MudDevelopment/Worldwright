@@ -28,19 +28,48 @@ Source-identity recipes remain unchanged: output is excluded through Git rules,
 not silently removed from the recorded source inventory.
 
 `scripts/worldwright_local.py` supplies non-link/non-reparse containment checks
-and configures temporary, profile, browser, package and prospective Rust cache
+and configures temporary, profile, browser, package and Rust cache
 paths before the enabled helper subprocesses run. R7 outputs and R6 helper
 fixture outputs are now restricted to `.worldwright-local/`; input/output
 separation, exclusive creation, hashes and signed-decision requirements remain.
 This is cooperative tool configuration, not an OS filesystem sandbox.
 
-The collector currently requires `--tools-only`. It does not run Cargo, rustc,
-Rustup, Studio, a restore, a live DB test, or a browser acceptance session. Local
-Cargo/Rustup directories may be prepared, but no toolchain/cache is copied or
-installed there. Native-mode adaptation remains pending; old native/launcher
-commands must not be used under this policy. A successful helper report is
-`tool-evidence-collected-native-pending`, never R6/R7 closure. The 8 new storage
-regressions are authored and await actual execution alongside the retained suites.
+The collector requires explicit `--tools-only` or `--native`. The old 70-test
+helper pass is acknowledged for its captured source; native cache preparation
+and the original 12 path/import regressions have since executed successfully.
+A complete preflight is still pending after correcting a Windows path-spelling
+comparison defect. `native_paths.py` pins real compiler executables/sysroot,
+rejects unreviewed Cargo environment/configuration routing, and ensures nested
+SDK Cargo/rustc invocations select local binaries. `native-storage.py prepare`
+copies existing approved cached toolchain/registry/git trees without moving or
+overwriting originals, copying credentials/configuration, or downloading tools.
+A staged copy is promoted only after per-file byte comparison. Stale target
+binaries are not imported because they can embed old absolute Cargo paths.
+
+`native-storage.py check` verifies actual local compiler versions/host/sysroot,
+offline dependency metadata, native temp/embedded Cargo paths through a tiny
+compiled probe, PowerShell temp paths and a Chromium startup. `r6-native.py`
+requires this check freshly inside its own evidence directory before application
+compilation; old successful reports do not bypass preflight. Selected compiler
+hashes and Cargo config inventory are checked again after native collection.
+Existing path checks distinguish spelling from identity: an unambiguous Windows
+extended drive prefix is converted only for containment checking, and both forms
+must identify the same filesystem entry using samefile. The observed entry and
+the expected entry must both be local; different files with equal bytes are not
+interchangeable. Device namespaces, UNC, streams and ambiguous extended spellings
+remain rejected. Raw observed probe paths are preserved in evidence, not rewritten.
+Native report v2 remains readable historically; the additive
+`storage_policy=repository-local-native-v1` marker requires a matching successful
+preflight phase and tool configuration. Unknown markers fail. Old reports do not
+retroactively prove local-storage compliance.
+
+The Windows ACL subprocess now forwards only explicitly listed non-secret
+storage variables after env_clear, retaining restrictive credential checks.
+Studio's process allowlist retains local temp/profile/module-cache settings;
+preview already forwards TMP/TEMP/TMPDIR. This does not certify OS isolation.
+No command here applies migrations, performs restore, supplies independent
+review, or closes R6/R7. Usage, import bounds and remaining verification are in
+[NATIVE_STORAGE.md](docs/NATIVE_STORAGE.md).
 
 ## Playable second-game integration — November 9, 2026
 

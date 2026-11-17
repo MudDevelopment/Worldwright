@@ -4,26 +4,20 @@
 param([string]$Python = 'python', [switch]$AllowDirty, [string]$BrowserExecutable)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$output = Join-Path $env:LOCALAPPDATA ('Worldwright-R6-' + [guid]::NewGuid().ToString('N'))
-$target = Join-Path $env:TEMP 'worldwright-native-check-e73e9337f80540e5a64ef73e18782200'
+if ($Python -eq 'python') {
+    $Python = Join-Path $repo '.worldwright-local\python\Worldwright-R6-Python\Scripts\python.exe'
+}
 $oldBytecode = $env:PYTHONDONTWRITEBYTECODE
 $oldColor = $env:CARGO_TERM_COLOR
 Push-Location -LiteralPath $repo
 try {
     $env:PYTHONDONTWRITEBYTECODE = '1'
     $env:CARGO_TERM_COLOR = 'never'
-    & $Python -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)'
-    if ($LASTEXITCODE -ne 0) { throw 'Python prerequisite failed' }
-    & $Python (Join-Path $PSScriptRoot 'test-r6.py')
-    if ($LASTEXITCODE -ne 0) { throw 'Collector tests failed; native collection not started' }
-    Write-Host "New R6 evidence directory: $output"
-    $arguments = @((Join-Path $PSScriptRoot 'r6-native.py'), '--output', $output, '--target-dir', $target)
+    $arguments = @('-B', (Join-Path $PSScriptRoot 'collect-worldwright-signoff.py'), '--repo', $repo, '--native')
     if ($AllowDirty) { $arguments += '--allow-dirty' }
     if ($BrowserExecutable) { $arguments += @('--browser-executable', $BrowserExecutable) }
     & $Python @arguments
-    if ($LASTEXITCODE -ne 0) { throw "R6 collection stopped; preserve $output" }
-    & $Python (Join-Path $PSScriptRoot 'r6-evidence.py') --report (Join-Path $output 'r6-report.json') --check-local
-    if ($LASTEXITCODE -ne 0) { throw "R6 evidence validation failed; preserve $output" }
+    if ($LASTEXITCODE -ne 0) { throw 'R6 collection stopped; preserve the repository-local evidence directory printed above.' }
     Write-Host 'Collected prerequisites only. R6 security/recovery/retention/independent acceptance remains OPEN.'
 } finally {
     $env:PYTHONDONTWRITEBYTECODE = $oldBytecode

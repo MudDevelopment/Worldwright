@@ -112,9 +112,19 @@ if ($rules.Count -eq 0) {exit 2};
 foreach($rule in $rules) {if ($rule.AccessControlType -eq 'Allow' -and $trusted -notcontains $rule.IdentityReference.Value) {exit 2}};
 exit 0
 } catch {exit 2}"#;
-    let mut child=Command::new(executable).args(["-NoLogo","-NoProfile","-NonInteractive","-Command",CHECK])
-        .env_clear().env("SystemRoot",&root).env("WINDIR",&root).env("WORLDWRIGHT_PRIVATE_FILE",path)
-        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+    let mut command = Command::new(executable);
+    command.args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", CHECK])
+        .env_clear().env("SystemRoot", &root).env("WINDIR", &root)
+        .env("WORLDWRIGHT_PRIVATE_FILE", path);
+    // Keep only non-secret storage settings after env_clear. Otherwise the
+    // PowerShell ACL probe can fall back to the real user's profile/temp cache.
+    for key in ["TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "PSModuleAnalysisCachePath"] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::null())
+        .stderr(Stdio::null()).spawn()?;
     let until=Instant::now()+Duration::from_secs(5);
     loop {
         match child.try_wait() {

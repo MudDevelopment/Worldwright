@@ -1,6 +1,6 @@
-"""Repository-local storage for the R6/R7 TOOL-ONLY validation path.
+"""Repository-local storage for R6/R7 collection and native preflight.
 This redirects cooperative tools; it is not an OS filesystem sandbox.
-Native Cargo/Rustup execution remains disabled in the signoff wrapper.
+Native tool selection and override/config guards live in native_paths.py.
 """
 from pathlib import Path
 import os
@@ -85,6 +85,9 @@ def configure_tools_environment():
                       PIP_CONFIG_FILE=os.devnull, CARGO_TERM_COLOR='never',
                       GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1',
                       GIT_CONFIG_GLOBAL=str(LOCAL / 'tool-home' / 'gitconfig'))
+    os.environ['PSModuleAnalysisCachePath'] = str(local_path(LOCAL / 'tool-home' / 'powershell-module-analysis-cache'))
+    os.environ['DOTNET_CLI_HOME'] = str(local_path(LOCAL / 'tool-home'))
+    os.environ['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
     sys.dont_write_bytecode = True
     tempfile.tempdir = str(LOCAL / 'temp')
     return {name: os.environ[name] for name in sorted(paths)}

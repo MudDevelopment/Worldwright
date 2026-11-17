@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 from r6_support import Collector, ROOT, new_file, read, require, sha
 from r3_io import NoRedirects
+import worldwright_local as local
 
 MAX_LOG = 1024 * 1024
 
@@ -47,7 +48,9 @@ class Studio:
         self.lock = threading.Lock()
         self.name = name
         env = {key: value for key, value in os.environ.items() if key.upper() in {
-            'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'LOCALAPPDATA'}}
+            'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'LOCALAPPDATA',
+            'APPDATA', 'XDG_CACHE_HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_RUNTIME_DIR',
+            'PSMODULEANALYSISCACHEPATH'}}
         options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {}
         self.process = subprocess.Popen([str(binary), 'serve', '--workspace', str(workspace),
             '--preview-command', str(preview), '--bind', '127.0.0.1:0'], cwd=collector.output,
@@ -248,13 +251,16 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--browser-executable', type=Path)
     args = parser.parse_args()
+    local.configure_tools_environment()
     collector = Collector(args.output, 'real-studio-browser')
     try:
         import psutil
         import importlib.metadata
         require(importlib.metadata.version('playwright') == '1.56.0', 'Playwright 1.56.0 required')
         require(importlib.metadata.version('psutil') == '7.2.2', 'psutil 7.2.2 required')
-        paths = {name: getattr(args, name).resolve(strict=True) for name in ('studio', 'preview')}
+        paths = {name: local.local_path(getattr(args, name)).resolve(strict=True) for name in ('studio', 'preview')}
+        if args.browser_executable is not None:
+            args.browser_executable = local.local_path(args.browser_executable).resolve(strict=True)
         collector.report['binaries'] = {name: {'path': str(path), 'sha256': sha(path)} for name, path in paths.items()}
         collector.report['scope'] = 'Actual binary browser workflow only; no native build provenance, PG, operator approval or full OS isolation certification'
         workflow(collector, paths['studio'], paths['preview'], args.browser_executable)

@@ -76,6 +76,14 @@ def verify(path, check_local=False):
         expected = {'rustc-version', 'cargo-version', 'native-host', 'node-version', 'format', 'locked-metadata',
                     'build-studio', 'real-browser', 'clippy', 'studio-capabilities', 'studio-workflow-fixtures'}
         expected |= {name + suffix for name in NATIVE_CASES for suffix in ('-list', '-run')}
+        if report.get('storage_policy') == 'repository-local-native-v1':
+            expected.add('native-path-preflight')
+            preflight = load(path.parent / 'path-preflight/r6-report.json')
+            require(preflight.get('kind') == 'native-storage-check' and preflight.get('status') == 'native-storage-preflight-passed-not-acceptance', 'native path preflight missing or failed')
+            require(preflight.get('full_r6_closed') is False and preflight.get('independent_adoption') is False, 'preflight cannot approve acceptance')
+            require(preflight.get('native_paths') == report.get('native_paths'), 'preflight/native tool configuration differs')
+        else:
+            require('storage_policy' not in report, 'unknown storage policy')
         require(records(report.get('phases'), 'name') == expected, 'native phase inventory differs')
         for phase in report['phases']:
             require(type(phase.get('exit_code')) is int and phase['exit_code'] == 0 and phase.get('interruption') is None, 'failed/interrupted phase')
@@ -100,6 +108,11 @@ def verify(path, check_local=False):
                 require(sha(Path(binary['path'])) == binary['sha256'], 'current binary differs')
             for config in report['cargo_configurations']:
                 require(sha(Path(config['path'])) == config['sha256'], 'current Cargo configuration differs')
+            if report.get('storage_policy') == 'repository-local-native-v1':
+                import native_paths
+                require(native_paths.configuration_inventory() == report['native_paths']['cargo_configurations'], 'current Cargo configuration inventory differs')
+                for tool in report['native_paths']['binaries'].values():
+                    require(sha(Path(tool['path'])) == tool['sha256'], 'current native tool differs')
     else:
         raise ValueError('unknown collection kind')
     return report

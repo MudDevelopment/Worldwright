@@ -5,14 +5,14 @@
 > browser caches and temporary work must remain under `E:\Hold\Worldwright`.
 > Earlier local instructions using LOCALAPPDATA, user-profile directories, or
 > external TEMP/cache/output paths are superseded; do not run those recipes.
-> `scripts/collect-worldwright-signoff.py --tools-only` now enables the local
-> helper-validation phase only. It configures Python/Git/Playwright tool storage
-> under `.worldwright-local`, checks Git exclusion, preserves source fingerprints,
-> and runs 35 R7 + 16 R6 + 11 follow-through + 8 storage tests. Evidence is written
-> to `.worldwright-local/evidence/signoff-<id>`. Native compilation/Studio acceptance
-> remains blocked pending Cargo/Rustup relocation and native child-path validation.
-> Earlier launchers and native scripts are not approved for this storage policy.
-> No old workspace, cache, or environment is automatically moved or deleted.
+> `scripts/collect-worldwright-signoff.py` supports `--tools-only` and explicit
+> `--native` modes. Both use repository-local storage and retain source identity.
+> Native mode requires a fresh pinned/offline path preflight before application
+> compilation. Prepare existing cached Rust/Cargo files and run that preflight
+> first using [NATIVE_STORAGE.md](docs/NATIVE_STORAGE.md). No automatic downloads,
+> source-cache deletion, Cargo clean, old-workspace modification or release approval
+> occur. `r6-check.ps1` now delegates to this wrapper; other old launchers and R0
+> external-path recipes are not covered by this adaptation.
 >
 > Run with the rebuilt environment (no activation or external cache required):
 >
@@ -21,13 +21,16 @@
 > ```
 >
 > Expected successful wrapper status: `tool-evidence-collected-native-pending`.
-> The first repository-local Windows run reached 29 completed R7 cases before
-> the runner's former 120-second whole-suite deadline interrupted case 30. The R7
-> fixture suite now has a bounded 600-second execution deadline; other phases
-> retain 120 seconds. The console and report record elapsed time and interruption.
-> Tests, required counts and acceptance thresholds are unchanged. A fresh run is
-> required; no complete suite pass is claimed. No release gate is automatically
-> closed. The moved R5 workspace is not opened by this command.
+> The previous source tuple passed all 70 helper tests on Windows; its report
+> is preserved at `.worldwright-local/evidence/signoff-e05fc054b3694bdabadea22f4f8cf8b1/`.
+> R7 completed in 134.96 seconds with the corrected 600-second suite deadline.
+> Native cache preparation has now succeeded. The first 12 native-path tests,
+> offline metadata, and tiny compiled probe ran successfully, but preflight stopped
+> on a Windows extended-path comparison bug. That checker is corrected with four
+> additional regressions (86 helper tests total); full preflight/native acceptance
+> remain pending. If already prepared, rerun only `native-storage.py check`.
+> Existing evidence is not rewritten to claim coverage of newer source. The moved
+> R5 workspace is not opened by the collectors. No release gate closes automatically.
 
 **Build worlds. Write the rules.**
 

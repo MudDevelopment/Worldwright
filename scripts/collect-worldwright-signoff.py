@@ -1,8 +1,8 @@
 """Collect local #2 evidence and prepare #4 handoff; never grants approval.
 STORAGE POLICY: generated files must stay within E:/Hold/Worldwright.
-Only --tools-only is enabled: helper tests, source fingerprints and draft handoff.
-Native compilation/browser acceptance remains blocked until Cargo/Rustup storage
-and native subprocess paths have been adapted and verified.
+--tools-only runs helper tests, source fingerprints and draft handoff.
+--native additionally requires a fresh repository-local native preflight before
+application compilation/browser tests. Missing tools/cache fail without downloads.
 No installation, migration, deployment, key creation, signing or source edits.
 """
 from pathlib import Path
@@ -68,7 +68,9 @@ def main(argv=None):
     parser.add_argument('--output', type=Path)
     parser.add_argument('--target-dir', type=Path)
     parser.add_argument('--allow-dirty', action='store_true')
-    parser.add_argument('--tools-only', action='store_true', help='Run helper validation only; native collection remains blocked')
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument('--tools-only', action='store_true', help='Run helper validation only')
+    mode.add_argument('--native', action='store_true', help='Run helpers plus preflight-gated offline native collection')
     parser.add_argument('--browser-executable', type=Path)
     args = parser.parse_args(argv)
     if sys.version_info < (3, 11):
@@ -79,8 +81,6 @@ def main(argv=None):
     parent = repo / '.worldwright-local' / 'evidence'
     output = (args.output or parent / ('signoff-' + uuid.uuid4().hex)).absolute()
     target = (args.target_dir or repo / '.worldwright-local' / 'target').absolute()
-    if not args.tools_only:
-        parser.error('Native collection is still blocked pending Cargo/Rustup and native path validation. Use --tools-only for the enabled repository-local helper checks.')
     sys.dont_write_bytecode = True
     import worldwright_local as local
     if local.ROOT.resolve() != repo.resolve():
@@ -96,8 +96,9 @@ def main(argv=None):
               'status': 'failed', 'started_at': int(time.time()), 'phases': [],
               'item_2_closed': False, 'item_4_closed': False,
               'full_r6_closed': False, 'supported_private_beta_authorized': False,
-              'scope': 'tool-regressions-only', 'storage_paths': storage_paths,
-              'native_collection_status': 'not-run-path-adaptation-pending'}
+              'scope': 'tool-regressions-only' if args.tools_only else 'native-and-tool-prerequisites',
+              'storage_paths': storage_paths,
+              'native_collection_status': 'not-requested' if args.tools_only else 'pending-local-preflight'}
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', CARGO_TERM_COLOR='never')
     print('EVIDENCE DIRECTORY: ' + str(output), flush=True)
     print('Do not edit source, format, or run another build during collection.', flush=True)
@@ -144,10 +145,10 @@ def main(argv=None):
             raise ValueError('Dependency pins differ; install the repository R6 and R7 requirements with approval')
         from playwright.sync_api import sync_playwright
         if args.browser_executable:
-            browser_path = args.browser_executable.absolute()
+            browser_path = local.local_path(args.browser_executable)
         else:
             with sync_playwright() as playwright:
-                browser_path = Path(playwright.chromium.executable_path)
+                browser_path = local.local_path(Path(playwright.chromium.executable_path))
         if not browser_path.is_file():
             report['prerequisite_failure'] = 'Chromium missing: supply --browser-executable with an approved Chromium executable, or provision the approved Playwright browser cache.'
             raise ValueError('Chromium is not installed; no native build started')
@@ -190,6 +191,7 @@ def main(argv=None):
             if args.browser_executable:
                 arguments += ['--browser-executable', args.browser_executable.absolute()]
             native_ok = phase('native-browser-tests-clippy', arguments)
+            report['native_collection_status'] = 'collected-not-closed' if native_ok else 'failed-see-native-report'
             if native_ok:
                 verified = phase('native-integrity', [scripts / 'r6-evidence.py', '--report',
                                                       output / 'native/r6-report.json', '--check-local'])
