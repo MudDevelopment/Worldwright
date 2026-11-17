@@ -734,3 +734,26 @@ R6 approval is not automated by this batch. All actual multi-user/Windows ACL,
 issuer/key distribution, restored security-state reconciliation, recovery-objective,
 retention/legal and independently adopted support gates remain OPEN.
 See docs/R6_ACCEPTANCE.md and docs/verification/r6-implementation-ledger.md.
+
+## R7 release-review trust boundary
+
+R7 uses independently supplied Ed25519 public-key configuration and an explicit
+approved SHA-256 trust-store pin. The store must be outside the candidate input
+tree; keys bundled with evidence are not trusted. The CLI never accepts private
+signer keys or signs automatically. Six gate certificates and five independent
+owner decisions are required, with domain-separated canonical payloads, current
+key validity/revocation and bounded decision/exception lifetimes. Any explicit
+denial, missing gate or signature mismatch is NO-GO. See docs/R7_ACCEPTANCE.md.
+
+Signatures authenticate reviewed statements, not the truth of a dishonest manual
+observation. Reviewers must authenticate and run the upstream validators and
+inspect real evidence before attesting closure. Python container checks are not
+Rust graph/content validation. Synthetic test keys and GO fixtures are temporary,
+not project approvals. The test CI has no signer, deployment or publishing secret.
+
+Candidate bytes/paths are bounded, unknown/duplicate fields and nonfinite values
+are rejected where protocol schemas require them, and packet copies are checked
+against signed inventory. Use trusted controlled directories; this does not
+certify hostile same-user filesystem races or Windows DACL isolation. R7 grants
+neither public publication nor production rollout. R6 runtime/OS/recovery work
+and all missing actual release evidence remain open.

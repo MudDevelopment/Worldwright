@@ -141,3 +141,13 @@ The local world runtime is a real implementation exercised by the new tests. It 
 - Runtime ownership/attachment and effect-policy checks were tested; account login, capability models, restart-safe sessions, and durable execution were not. An in-memory result is not a persisted receipt.
 
 Run [DEVELOPMENT.md](DEVELOPMENT.md) with the approved pinned toolchain and inspect both remote jobs before establishing a merge/release gate. No operational support commitment, license approval, or production-readiness claim is created by these checks.
+
+## R7 tooling validation (not beta approval)
+
+The R7 decision layer has 35 locally executed synthetic tests, Python syntax
+checks and an actual unapproved-draft NO-GO execution. Positive fixtures use only
+temporary fake identities/reports/binaries and real test-generated signatures.
+No project release received GO. The Windows wrapper and hosted two-platform CI
+are configured but unexecuted here. Run scripts/r7-check.ps1 or r7-check.py; see
+[R7 guide](R7_ACCEPTANCE.md) and [ledger](verification/r7-implementation-ledger.md).
+R1–R6 native/live/owner gates and the R6 source-validation backlog remain OPEN.

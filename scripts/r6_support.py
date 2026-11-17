@@ -107,7 +107,7 @@ class Collector:
             require(not parent.is_symlink(), 'symlink output ancestor refused')
         os.umask(0o077)
         self.output.mkdir(mode=0o700)
-        self.report = {'schema_version': 1, 'track': 'R6', 'kind': kind, 'status': 'failed',
+        self.report = {'schema_version': 2 if kind == 'native-browser-security-prerequisites' else 1, 'track': 'R6', 'kind': kind, 'status': 'failed',
                        'started_at': int(time.time()), 'full_r6_closed': False,
                        'independent_adoption': False, 'phases': [], 'cases': []}
         self.events = self.output / 'events.jsonl'

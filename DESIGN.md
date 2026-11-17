@@ -1538,3 +1538,27 @@ reopen. Windows automation records forced cleanup and manual Ctrl+C/reopen pendi
 CTRL_BREAK is not substituted for the implemented signal contract. General process
 escape/race/ACL and abrupt collector termination still require separate review.
 See docs/R6_ACCEPTANCE.md for the complete eight-unit remaining-work matrix.
+
+## R7 decision-layer protocol v1
+
+R7 is a Python release-control layer over existing native/runtime/evidence work,
+not an application feature fork. `r7_core.py` validates a bounded candidate,
+current R0-compatible source/lock/patch fingerprint, exact SQL migration bytes,
+artifact envelope/payload/game/content provenance, native report/log/binary linkage,
+beta/soak/deployment/SBOM identity, policies and signed reviews. Runtime Git commit
+and `content_source_revision` are separate: Studio emits studio-rN-snapshotSHA.
+
+Six Ed25519 prerequisite closures cover 32 exact case groups; five distinct final
+reviewers (project, engineering, security, service, legal) bind the candidate,
+closure-envelope set and independently pinned trust store. Human closures attest
+their actual upstream/manual validation; R7 does not rerun or fabricate it.
+Nonblocking-only exceptions cannot bypass a missing gate. Signer/decision/exception
+expiry and revocation are enforced. See docs/R7_ACCEPTANCE.md for the exact v1
+fields, domains, time bounds and cryptographic byte representation.
+
+The new protocol is additive; existing R0–R6/.wwr/config formats and hashes are
+unchanged. A future required-field/semantic change must version R7 rather than
+reinterpret old signatures. A private packet copies only listed bytes, preserves
+Unix binary executability and carries its candidate/reviews/notes/hash inventory.
+Archive verification is not a fresh source/cluster/DB check. No public registry
+publication, production deployment, licensing grant or R6 completion is implied.

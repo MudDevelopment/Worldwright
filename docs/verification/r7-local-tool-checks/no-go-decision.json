@@ -1,0 +1,12 @@
+{
+  "blockers": [
+    "open-prerequisite-blockers"
+  ],
+  "decision": "NO-GO",
+  "evaluated_at": 1794866678,
+  "production_rollout_authorized": false,
+  "public_publication_authorized": false,
+  "schema_version": 1,
+  "supported_private_beta_authorized": false,
+  "track": "R7"
+}

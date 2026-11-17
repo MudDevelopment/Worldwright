@@ -1,0 +1,62 @@
+name: R7 release-decision tooling tests
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  r7-tool-tests:
+    name: R7 synthetic policy tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: R7 tests on Linux
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/r7-venv"
+          python="$RUNNER_TEMP/r7-venv/bin/python"
+          "$python" -m pip install -r scripts/r7-requirements.txt
+          export PYTHONDONTWRITEBYTECODE=1
+          "$python" scripts/r7-check.py --output "$RUNNER_TEMP/r7-checks"
+      - name: R7 tests on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $venv = Join-Path $env:RUNNER_TEMP 'r7-venv'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { throw 'venv failed' }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          & $python -m pip install -r scripts/r7-requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'dependencies failed' }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          & $python scripts/r7-check.py --output (Join-Path $env:RUNNER_TEMP 'r7-checks')
+          if ($LASTEXITCODE -ne 0) { throw 'R7 tool tests failed' }
+      - name: Retain tool-test evidence on GitHub.com
+        if: always() && github.server_url == 'https://github.com'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r7-tool-tests-${{ matrix.os }}
+          path: ${{ runner.temp }}/r7-checks
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain tool-test evidence on GitHub Enterprise
+        if: always() && github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: r7-tool-tests-${{ matrix.os }}
+          path: ${{ runner.temp }}/r7-checks
+          retention-days: 14
+          if-no-files-found: error
+# No signer credentials, publication step, deployment step, or acceptance closure.

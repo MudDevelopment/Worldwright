@@ -1,0 +1,56 @@
+{
+  "draft_no_go_confirmed": true,
+  "kind": "tool-validation-only",
+  "phases": [
+    {
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "interruption": null,
+      "log_sha256": "a7d1384891eb6136c92e097b1eac1438ff1d8bc84a96a656d7e266323e45bf6f",
+      "name": "synthetic-tests"
+    },
+    {
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "interruption": null,
+      "log_sha256": "9b9442454861aa8069bc853a127eba4be79a5db1755a7864c1a89e359efd6712",
+      "name": "draft-init"
+    },
+    {
+      "exit_code": 1,
+      "expected_exit_code": 1,
+      "interruption": null,
+      "log_sha256": "b3a1147d43594aad9e65143f0a09987a9dbe1c5d3e20d254d74805a903efbcfb",
+      "name": "draft-no-go"
+    }
+  ],
+  "schema_version": 1,
+  "started_at": 1794866675,
+  "status": "tool-tests-passed-release-not-authorized",
+  "subjects": [
+    {
+      "path": "scripts/r7.py",
+      "sha256_lf_text": "239f5b5305cc875454f313a399ece31e23d1ec1df0ca0941ce4562e3dca260d7"
+    },
+    {
+      "path": "scripts/r7_core.py",
+      "sha256_lf_text": "7cdce9e47a4c16675218ad2692df39dbcc8fbd0e3ff4173d13aab9cd43009c53"
+    },
+    {
+      "path": "scripts/r7-check.py",
+      "sha256_lf_text": "fa853838419ccd62d00b32d672007c672102b74b3040715f25f7d4b7196072f1"
+    },
+    {
+      "path": "scripts/test-r7.py",
+      "sha256_lf_text": "ea7b3a549adee578f93328593b4a03f76adc29d6e71d28b0b00125e7ab8c163a"
+    },
+    {
+      "path": "scripts/r3_io.py",
+      "sha256_lf_text": "6d0f91a28497df5c119d154fe886790b4f94a1b90c40ae94793d03ff2c3faa7f"
+    }
+  ],
+  "supported_private_beta_authorized": false,
+  "synthetic_tests_only": true,
+  "tests_passed": 35,
+  "track": "R7"
+}

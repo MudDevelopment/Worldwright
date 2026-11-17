@@ -10,7 +10,7 @@ from r6_support import encode, read, require, safe_path, sha, source_identity, t
 BROWSER_CASES = {'real-http-ready', 'browser-import-edit-save-reload-validate',
                  'real-preview-reference', 'real-preview-expedition',
                  'real-host-origin-content-type-authority-denial', 'browser-no-script-errors-or-external-requests'}
-NATIVE_CASES = {'r5-native', 'studio-full', 'operations-authority', 'release-integrity',
+NATIVE_CASES = {'r5-native', 'studio-full', 'server-r6', 'operations-authority', 'release-integrity',
                 'console-authority', 'terminal', 'relocated-consumers', 'retained-sdk'}
 
 
@@ -36,7 +36,8 @@ def records(records, key):
 def verify(path, check_local=False):
     path = Path(path).resolve(strict=True)
     report = load(path)
-    require(type(report.get('schema_version')) is int and report['schema_version'] == 1 and report.get('track') == 'R6', 'unsupported report')
+    expected_schema = 2 if report.get('kind') == 'native-browser-security-prerequisites' else 1
+    require(type(report.get('schema_version')) is int and report['schema_version'] == expected_schema and report.get('track') == 'R6', 'unsupported report; native v1 requires recollection with server coverage')
     require(report.get('full_r6_closed') is False and report.get('independent_adoption') is False, 'collector cannot claim closure/adoption')
     files = report.get('files')
     names = records(files, 'path')
@@ -84,6 +85,7 @@ def verify(path, check_local=False):
             discovered = test_listing(read(path.parent / (label + '-list.log')))
             passed = test_result(read(path.parent / (label + '-run.log')), len(discovered))
             require(discovered == case.get('discovered') and type(case.get('passed')) is int and passed == case['passed'], 'native test counts differ')
+        require(set(report.get('binaries', {})) == {'worldwright', 'worldwright-studio', 'worldwright-server'}, 'native binary inventory incomplete')
         before = load(path.parent / 'source-before.json')
         after = load(path.parent / 'source-after.json')
         require(before == after and before['source_sha256'] == report.get('source_sha256'), 'source changed during run')

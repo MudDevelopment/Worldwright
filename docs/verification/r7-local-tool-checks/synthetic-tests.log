@@ -1,0 +1,50 @@
+test_artifact_tamper (__main__.R7Tests.test_artifact_tamper) ... ok
+test_bad_trust_pin_and_unlisted_packet_file (__main__.R7Tests.test_bad_trust_pin_and_unlisted_packet_file) ... ok
+test_candidate_cannot_supply_its_own_trust_anchor (__main__.R7Tests.test_candidate_cannot_supply_its_own_trust_anchor) ... ok
+test_case_colliding_files_fail (__main__.R7Tests.test_case_colliding_files_fail) ... ok
+test_complete_signed_synthetic_candidate (__main__.R7Tests.test_complete_signed_synthetic_candidate) ... ok
+test_denial_cannot_be_overridden (__main__.R7Tests.test_denial_cannot_be_overridden) ... ok
+test_deployment_and_sbom_match_release (__main__.R7Tests.test_deployment_and_sbom_match_release) ... ok
+test_draft_init_has_no_approvals_and_never_overwrites (__main__.R7Tests.test_draft_init_has_no_approvals_and_never_overwrites) ... R7 DRAFT / NO-GO: /tmp/r7-synthetic-im54p_7y/draft/candidate.json
+ok
+test_exceptions_do_not_waive_gates (__main__.R7Tests.test_exceptions_do_not_waive_gates) ... ok
+test_expired_review (__main__.R7Tests.test_expired_review) ... ok
+test_fingerprint_cli_records_current_identity_without_approval (__main__.R7Tests.test_fingerprint_cli_records_current_identity_without_approval) ... Current source/migration identity only; no build, approval or release: /tmp/r7-synthetic-e7irpp6r/fingerprint
+ok
+test_fixed_beta_is_not_tunable (__main__.R7Tests.test_fixed_beta_is_not_tunable) ... ok
+test_gate_case_cannot_be_waived (__main__.R7Tests.test_gate_case_cannot_be_waived) ... ok
+test_helper_report_is_not_native_acceptance (__main__.R7Tests.test_helper_report_is_not_native_acceptance) ... ok
+test_missing_role (__main__.R7Tests.test_missing_role) ... ok
+test_native_boolean_exit_is_not_zero (__main__.R7Tests.test_native_boolean_exit_is_not_zero) ... ok
+test_native_missing_required_phase (__main__.R7Tests.test_native_missing_required_phase) ... ok
+test_nested_unlisted_packet_manifest_is_rejected (__main__.R7Tests.test_nested_unlisted_packet_manifest_is_rejected) ... ok
+test_no_unsigned_or_tampered_approval (__main__.R7Tests.test_no_unsigned_or_tampered_approval) ... ok
+test_open_blocker_wins (__main__.R7Tests.test_open_blocker_wins) ... ok
+test_packet_approval_expiry_is_rechecked (__main__.R7Tests.test_packet_approval_expiry_is_rechecked) ... ok
+test_packet_roundtrip_and_tamper (__main__.R7Tests.test_packet_roundtrip_and_tamper) ... R7 packet bytes and current reviewer signatures verified. Archive verification only; current checkout/deployment was NOT revalidated.
+ok
+test_paths_and_duplicate_json (__main__.R7Tests.test_paths_and_duplicate_json) ... ok
+test_pending_gate_is_not_closure (__main__.R7Tests.test_pending_gate_is_not_closure) ... ok
+test_policy_owner_and_runtime_matrix (__main__.R7Tests.test_policy_owner_and_runtime_matrix) ... ok
+test_real_cli_uses_current_git_and_preserves_no_go (__main__.R7Tests.test_real_cli_uses_current_git_and_preserves_no_go) ... R7 GO: /tmp/r7-synthetic-zhpol14s/run/decision.json
+R7 NO-GO: /tmp/r7-synthetic-zhpol14s/changed/decision.json
+Blockers: current-source-tuple-mismatch
+ok
+test_rehashed_wrong_artifact (__main__.R7Tests.test_rehashed_wrong_artifact) ... ok
+test_release_cli_creates_verifiable_private_packet (__main__.R7Tests.test_release_cli_creates_verifiable_private_packet) ... R7 GO: /tmp/r7-synthetic-z4elx_3l/release-cli/decision.json
+R7 packet bytes and current reviewer signatures verified. Archive verification only; current checkout/deployment was NOT revalidated.
+ok
+test_revoked_key (__main__.R7Tests.test_revoked_key) ... ok
+test_same_public_key_is_not_independent_review (__main__.R7Tests.test_same_public_key_is_not_independent_review) ... ok
+test_schema_boolean_and_unknown_field_fail (__main__.R7Tests.test_schema_boolean_and_unknown_field_fail) ... ok
+test_soak_duration_is_real_and_not_boolean (__main__.R7Tests.test_soak_duration_is_real_and_not_boolean) ... ok
+test_source_and_migration_drift (__main__.R7Tests.test_source_and_migration_drift) ... ok
+test_studio_content_revision_is_not_the_runtime_git_commit (__main__.R7Tests.test_studio_content_revision_is_not_the_runtime_git_commit) ... ok
+test_unsigned_review_handoff_and_domain_bytes (__main__.R7Tests.test_unsigned_review_handoff_and_domain_bytes) ... Unsigned review requests only; no approval or signature created: /tmp/r7-synthetic-k5pdtsgw/requests
+Canonical bytes only. Sign using the independently managed reviewer key; this command grants nothing.
+ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 3.496s
+
+OK

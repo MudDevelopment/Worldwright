@@ -1,0 +1,2 @@
+# R7 decision/test tooling only; install through the approved dependency channel.
+cryptography==46.0.6

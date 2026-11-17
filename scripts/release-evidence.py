@@ -59,6 +59,7 @@ def main() -> int:
     parser.add_argument("--artifact-digest", required=True)
     parser.add_argument("--container-digest", required=True)
     parser.add_argument("--decisions", type=Path)
+    parser.add_argument("--collect-only", action="store_true", help="collect inventory without claiming distribution approval")
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{64}", args.artifact_digest) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.container_digest):
         parser.error("exact lowercase artifact and container digests are required")
@@ -69,7 +70,8 @@ def main() -> int:
         patch = command(["git", "diff", "--binary", "HEAD"])
         untracked = command(["git", "ls-files", "--others", "--exclude-standard"]).decode().splitlines()
         metadata = json.loads(command(["cargo", "metadata", "--format-version", "1", "--locked", "--offline"]))
-        release = {"commit": revision, "source_patch_sha256": digest(patch), "cargo_lock_sha256": digest(lock),
+        (args.output / "cargo-metadata.json").write_bytes(json.dumps(metadata, sort_keys=True).encode("utf-8") + b"\n")
+        release = {"commit": revision, "source_patch_sha256": digest(patch), "cargo_lock_sha256": digest(lock.replace(b"\r\n", b"\n")),
                    "artifact_sha256": args.artifact_digest, "container_digest": args.container_digest}
         components = []
         for package in metadata["packages"]:
@@ -85,14 +87,16 @@ def main() -> int:
             blockers = check_decisions(json.loads(read_bounded(args.decisions)), release, args.decisions.parent)
         if patch or untracked:
             blockers.append("source tree is not clean; commit reviewed changes before supported distribution")
-        report = {"schema_version": 1, "release": release, "sbom_sha256": digest(read_bounded(args.output / "sbom.json")),
-                  "blockers": blockers, "supported_distribution_gate_passed": not blockers,
+        structure_passed = not blockers
+        blockers.append("Unsigned legacy decisions cannot authorize distribution; use the R7 signed candidate process.")
+        report = {"schema_version": 2, "kind": "legacy-inventory-not-authorization", "release": release, "sbom_sha256": digest(read_bounded(args.output / "sbom.json")),
+                  "blockers": blockers, "legacy_structure_checks_passed": structure_passed, "supported_distribution_gate_passed": False,
                   "limitations": ["Evidence hashes prove integrity, not authorship or authorized approval.",
                                   "SBOM contains Cargo metadata declarations, not a legal license grant.",
                                   "Advisory, signing, live acceptance and owner evidence must be independently reviewed."]}
         (args.output / "release-evidence.json").write_text(json.dumps(report, indent=2) + "\n")
-        print("Release evidence collected; supported-distribution gate:", "PASS" if not blockers else "BLOCKED")
-        return int(bool(blockers))
+        print("Legacy inventory collected; NO distribution approval. Use R7 signed evidence and owner decisions.")
+        return 0 if args.collect_only else 1
     except (ValueError, OSError, subprocess.SubprocessError, KeyError) as error:
         (args.output / "failure.json").write_text(json.dumps({"error": str(error), "gate_passed": False}) + "\n")
         print("Release evidence failed; no supported-distribution approval.")

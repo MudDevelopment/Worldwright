@@ -1,5 +1,17 @@
 # Worldwright
 
+> **Local storage policy — November 17, 2026:** For this working copy, all
+> assistant-created project files, evidence, virtual environments, build caches,
+> browser caches and temporary work must remain under `E:\Hold\Worldwright`.
+> Earlier local instructions using LOCALAPPDATA, user-profile directories, or
+> external TEMP/cache/output paths are superseded; do not run those recipes.
+> `scripts/collect-worldwright-signoff.py` is temporarily blocked before writes
+> and subprocess execution: the downstream R6/R7 external-path restrictions and
+> child-process temporary/cache behavior still need repository-local adaptation
+> and verification. Proposed runtime locations are `.worldwright-local/evidence`
+> and `.worldwright-local/target`; collection is not yet enabled. Existing files
+> outside the repository have not been moved or deleted.
+
 **Build worlds. Write the rules.**
 
 Worldwright is a proposed Rust-based development suite for creating, testing, deploying, and operating **MUDs—multi-user domains**: persistent, multiplayer, primarily text-driven worlds.
@@ -908,3 +920,17 @@ R6 is security/recovery/privacy/operation closure, not a new name for R5. These
 collectors do not implement all remaining roadmap work or issue acceptance:
 R2/R3 prerequisites, backup/restore/takeover drills, OS-security review, retention,
 supply-chain review and independent named adoption remain OPEN.
+
+## R7 private-beta decision tooling
+
+R7 now provides candidate initialization/fingerprinting, signed prerequisite and
+owner reviews, expiring exceptions, GO/NO-GO records, private release packets and
+archive verification. Use [docs/R7_ACCEPTANCE.md](docs/R7_ACCEPTANCE.md) for the
+complete schema and commands; `scripts/r7-check.ps1` / `scripts/r7-check.py` run
+35 synthetic tooling tests plus an actual unapproved-draft NO-GO check.
+
+No signer keys, owner names, approvals, public publication or deployment are
+created by these tools. Content provenance (including Studio snapshot revisions)
+is distinct from runtime source commit. The current project remains NO-GO while
+R1–R6 evidence and approvals are missing; unfinished R6 runtime work remains open.
+The configured R7 CI job is tool validation, not a release-authorizing workflow.

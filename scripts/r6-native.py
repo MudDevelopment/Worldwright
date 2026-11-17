@@ -67,9 +67,9 @@ def main():
         common = ['--locked', '--offline', '--target', host, '--target-dir', str(target)]
         collector.phase('format', ['cargo', 'fmt', '--all', '--', '--check'], 180)
         collector.phase('locked-metadata', ['cargo', 'metadata', '--format-version', '1', '--locked', '--offline', '--filter-platform', host], 180)
-        collector.phase('build-studio', ['cargo', 'build', '-p', 'worldwright', '-p', 'worldwright-studio', '--bin', 'worldwright', '--bin', 'worldwright-studio', *common], 1800)
+        collector.phase('build-studio', ['cargo', 'build', '-p', 'worldwright', '-p', 'worldwright-studio', '-p', 'worldwright-server', '--bin', 'worldwright', '--bin', 'worldwright-studio', '--bin', 'worldwright-server', *common], 1800)
         extension = '.exe' if os.name == 'nt' else ''
-        binaries = {name: target / host / 'debug' / (name + extension) for name in ('worldwright', 'worldwright-studio')}
+        binaries = {name: target / host / 'debug' / (name + extension) for name in ('worldwright', 'worldwright-studio', 'worldwright-server')}
         collector.report['binaries'] = {name: {'path': str(path), 'sha256': sha(path)} for name, path in binaries.items()}
         browser = [sys.executable, str(ROOT / 'scripts/r6-browser.py'), '--studio', str(binaries['worldwright-studio']), '--preview', str(binaries['worldwright']), '--output', str(collector.output / 'browser')]
         if args.browser_executable: browser += ['--browser-executable', str(args.browser_executable.resolve())]
@@ -87,13 +87,14 @@ def main():
             collector.case(label, discovered=names, passed=count)
         suite('r5-native', ['-p', 'worldwright-studio', '--lib', 'r5_'], expected=19 if os.name == 'nt' else 21)
         suite('studio-full', ['-p', 'worldwright-studio'])
+        suite('server-r6', ['-p', 'worldwright-server', '--lib', 'r6_'], minimum=2)
         suite('operations-authority', ['-p', 'worldwright-operations', '--lib'])
         suite('release-integrity', ['-p', 'worldwright-release', '--lib'])
         suite('console-authority', ['-p', 'worldwright-console'])
         suite('terminal', ['-p', 'worldwright-expedition', '--lib', 'terminal::tests'])
         suite('relocated-consumers', ['-p', 'worldwright', '--test', 'maturity'])
         suite('retained-sdk', ['-p', 'worldwright', '--test', 'sdk_compatibility'])
-        collector.phase('clippy', ['cargo', 'clippy', '-p', 'worldwright-studio', '-p', 'worldwright-operations', '-p', 'worldwright-console', '-p', 'worldwright-release', '--all-targets', '--all-features', *common, '--', '-D', 'warnings'], 1800)
+        collector.phase('clippy', ['cargo', 'clippy', '-p', 'worldwright-studio', '-p', 'worldwright-server', '-p', 'worldwright-operations', '-p', 'worldwright-console', '-p', 'worldwright-release', '--all-targets', '--all-features', *common, '--', '-D', 'warnings'], 1800)
         collector.phase('studio-capabilities', ['node', 'scripts/test-studio-capabilities.cjs'])
         collector.phase('studio-workflow-fixtures', ['node', 'scripts/test-studio-workflow.cjs'])
         after = source_identity()

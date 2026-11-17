@@ -712,3 +712,17 @@ and supply-chain/support obligations. R2/R3 and existing R5/R4 gates remain open
 Fourteen local helper tests passed; no R6 actual native/browser/live run completed
 in the sandbox (missing Cargo). Windows forced cleanup is manual-pending, never
 claimed as a graceful Ctrl+C acceptance pass. No final R6 approval is issued.
+
+## R7 decision tooling implemented — current project remains NO-GO
+
+R7 candidate/identity/evidence/policy checking, signed prerequisite and five-role
+owner decisions, expiring nonblocking exceptions, release notes/private packet
+creation and archival verification are installed. All 35 local synthetic tool
+tests passed, including signed positive fixtures and negative gate/tamper cases;
+a real unapproved draft was rejected. These are not actual project approvals.
+Ubuntu/Windows tool-test CI is configured, not observed hosted acceptance.
+
+R1–R6 same-release evidence and independent owners are still required. The prior
+R6 runtime feature pass is uncompiled/incompletely verified and is not completed
+by this R7 work. No old hashes, migration bytes, public-publication restrictions
+or release gates were relaxed. See docs/R7_ACCEPTANCE.md and the separate R7 ledger.

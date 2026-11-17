@@ -1809,7 +1809,9 @@ fn run_pg_tool(
 ) -> Result<(), ServerError> {
     let (endpoint, password) = pg_tool_connection(database_url)?;
     let mut command = ProcessCommand::new(tool);
-    command.args(arguments).arg(format!("--dbname={endpoint}")).env_clear();
+    // Put options before pg_restore's positional input; do not depend on getopt
+    // argument permutation differing between native Windows and Unix builds.
+    command.arg(format!("--dbname={endpoint}")).args(arguments).env_clear();
     if let Some(password) = password { command.env("PGPASSWORD", password); }
     for name in [
         "PATH",

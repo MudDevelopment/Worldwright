@@ -115,6 +115,28 @@ class R6Tests(unittest.TestCase):
             with self.assertRaises(ValueError): collector.phase('timeout', [sys.executable, '-c', 'import time;time.sleep(5)'], 0.1)
         self.assertEqual(collector.report['phases'][0]['interruption'], 'timeout')
 
+    def test_native_v2_rejects_v1_without_inventing_server_evidence(self):
+        collector = support.Collector(self.root / 'native', 'native-browser-security-prerequisites')
+        self.assertEqual(collector.report['schema_version'], 2)
+        self.assertIn('server-r6', evidence.NATIVE_CASES)
+        with contextlib.redirect_stdout(io.StringIO()): collector.finish()
+        path = collector.output / 'r6-report.json'
+        self.edit_report(path, lambda value: value.update(schema_version=1))
+        with self.assertRaisesRegex(ValueError, 'native v1 requires recollection'):
+            evidence.verify(path)
+
+    def test_server_build_tests_and_clippy_are_wired(self):
+        import ast
+        tree = ast.parse(Path(__file__).with_name('r6-native.py').read_text())
+        calls = [v for v in ast.walk(tree) if isinstance(v, ast.Call)]
+        for phase in ('build-studio', 'clippy'):
+            call = next(v for v in calls if isinstance(v.func, ast.Attribute) and v.func.attr == 'phase'
+                        and v.args and isinstance(v.args[0], ast.Constant) and v.args[0].value == phase)
+            constants = [v.value for v in ast.walk(call.args[1]) if isinstance(v, ast.Constant)]
+            self.assertIn('worldwright-server', constants)
+        self.assertTrue(any(isinstance(v.func, ast.Name) and v.func.id == 'suite' and v.args
+                            and isinstance(v.args[0], ast.Constant) and v.args[0].value == 'server-r6' for v in calls))
+
     def test_known_secret_is_redacted(self):
         with patch.dict(os.environ, {'R6_TEST_TOKEN': 'test-only-redaction-canary'}):
             collector = support.Collector(self.root / 'redaction', 'test')

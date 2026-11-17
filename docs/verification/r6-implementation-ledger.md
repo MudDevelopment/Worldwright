@@ -88,3 +88,13 @@ installation or launch, R6 helper/native execution, real Studio browser workflow
 or completed acceptance evidence. Browser launch preflight and the R6 collection
 remain next. No pip upgrade or dependency-version change is required by this log.
 All existing R6 and earlier unexecuted gates remain OPEN.
+
+## R7 handoff — R6 not silently closed
+
+R7 release-decision tooling was implemented separately. Its security gate
+certificate requires explicit current R6 closure observations, not the previous
+14 helper tests, dependency installation, targeted Studio startup or a fabricated
+passed flag. The preceding R6 runtime feature pass added source changes but left
+compilation, tests, documentation reconciliation and some feature work unfinished.
+That backlog is not certified or repaired by R7. Do not sign R6 closure until the
+actual source/native/database/OS/recovery/retention/supply-chain obligations pass.

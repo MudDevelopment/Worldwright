@@ -11,13 +11,13 @@ SELECT
     ) AS session_active,
     EXISTS (
         SELECT 1
-        FROM worldwright_operator_grants AS grant
-        WHERE grant.subject = o.subject
-          AND grant.capability = $4
-          AND grant.target_environment = $5
-          AND grant.world_id = $6
-          AND grant.revoked_at IS NULL
-          AND (grant.expires_at IS NULL OR grant.expires_at > clock_timestamp())
+        FROM worldwright_operator_grants AS granted
+        WHERE granted.subject = o.subject
+          AND granted.capability = $4
+          AND granted.target_environment = $5
+          AND granted.world_id = $6
+          AND granted.revoked_at IS NULL
+          AND (granted.expires_at IS NULL OR granted.expires_at > clock_timestamp())
     ) AS capability_active
 FROM worldwright_operators AS o
 WHERE o.subject = $1
@@ -37,13 +37,13 @@ SELECT
     ) AS session_active,
     EXISTS (
         SELECT 1
-        FROM worldwright_operator_grants AS grant
-        WHERE grant.subject = o.subject
-          AND grant.capability = $4
-          AND grant.target_environment = $5
-          AND grant.world_id = $6
-          AND grant.revoked_at IS NULL
-          AND (grant.expires_at IS NULL OR grant.expires_at > clock_timestamp())
+        FROM worldwright_operator_grants AS granted
+        WHERE granted.subject = o.subject
+          AND granted.capability = $4
+          AND granted.target_environment = $5
+          AND granted.world_id = $6
+          AND granted.revoked_at IS NULL
+          AND (granted.expires_at IS NULL OR granted.expires_at > clock_timestamp())
     ) AS capability_active
 FROM worldwright_operators AS o
 WHERE o.subject = $1
@@ -167,7 +167,7 @@ INSERT INTO worldwright_operator_audit (
     target_id,
     reason,
     outcome,
-    authorization,
+    \"authorization\",
     before_state,
     after_state
 )

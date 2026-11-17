@@ -32,9 +32,9 @@ impl PostgresStore {
         let mut authority = control.pool().begin().await?;
         let capabilities = [Capability::ViewStatus, Capability::ManageOperators,
             Capability::RestoreWorld, Capability::InitiateRecovery];
-        let mut proof = serde_json::Value::Null;
+        let mut proofs = Vec::with_capacity(capabilities.len());
         for capability in capabilities {
-            proof = authorize_tx(&mut authority, context, capability, true).await?;
+            proofs.push(authorize_tx(&mut authority, context, capability, true).await?);
         }
         let (display, kind): (String, String) = sqlx::query_as(
             "SELECT display_name,kind FROM worldwright_operators WHERE subject=$1 AND enabled=TRUE")
@@ -44,12 +44,15 @@ impl PostgresStore {
             worldwright_operations::Environment::Production => "production",
         };
         let mut target = self.pool().begin().await?;
+        // Prevent an insert/update racing the singleton check and quarantine.
+        sqlx::query("LOCK TABLE worldwright_worlds IN SHARE ROW EXCLUSIVE MODE")
+            .execute(&mut *target).await?;
         let worlds: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM worldwright_worlds")
             .fetch_one(&mut *target).await?;
         if worlds != 1 { return Err(PersistenceError::RecoveryConflict); }
         let fenced = sqlx::query("UPDATE worldwright_worlds SET authority_incarnation=gen_random_uuid(), \
-            active_writer_id=NULL, writer_epoch=writer_epoch+1, updated_at=clock_timestamp() \
-            WHERE world_id=$1 AND writer_epoch<9223372036854775807 AND pending_activation_id IS NULL \
+            active_writer_id=NULL, writer_epoch=0, updated_at=clock_timestamp() \
+            WHERE world_id=$1 AND pending_activation_id IS NULL \
             AND release_maintenance=FALSE")
             .bind(uuid_of(context.world)).execute(&mut *target).await?;
         if fenced.rows_affected()!=1 { return Err(PersistenceError::RecoveryConflict); }
@@ -87,11 +90,13 @@ impl PostgresStore {
             serde_json::to_value(context.claims.assurance).map_err(|_| PersistenceError::InvalidData)?
                 .as_str().ok_or(PersistenceError::InvalidData)?.to_owned(),
             "restore_verified", context.environment, context.world, "restore", &job.to_string(),
-            context.reason, "confirmed", proof, None,
+            context.reason, "confirmed", serde_json::json!({"authority_source":"live_control_database","required_capabilities":proofs}), None,
             Some(serde_json::json!({"phase":"security_reconciled","authority_source":"live_control_database",
                 "fresh_token_delay_seconds":31,"old_operators_disabled":true,"old_grants_revoked":true}))).await?;
         // Re-check time/current control authority immediately before target commit.
-        authorize_tx(&mut authority, context, Capability::RestoreWorld, true).await?;
+        for capability in capabilities {
+            authorize_tx(&mut authority, context, capability, true).await?;
+        }
         target.commit().await.map_err(|_| PersistenceError::UnknownOutcome)
     }
 }

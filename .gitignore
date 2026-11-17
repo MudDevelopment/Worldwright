@@ -25,3 +25,7 @@ rustc-ice-*.txt
 
 # Local development authentication registries contain password hashes
 accounts.local.json
+
+# Repository-local workspaces, environments, evidence, caches and temporary files.
+# These are runtime data, not source inputs; do not commit them.
+/.worldwright-local/

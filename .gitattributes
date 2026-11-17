@@ -4,3 +4,7 @@
 *.toml text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+
+# Migration/checksum and evidence-log bytes are immutable; do not normalize them.
+*.sql -text
+*.log -text

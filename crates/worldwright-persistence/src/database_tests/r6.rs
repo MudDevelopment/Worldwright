@@ -98,5 +98,12 @@ async fn r6_restore_reconciles_current_control_authority_not_restored_grants() {
         (SELECT COUNT(*) FROM worldwright_operator_grants WHERE revoked_at IS NULL), \
         (SELECT COUNT(*) FROM worldwright_operators WHERE enabled=TRUE)")
         .fetch_one(target.store.pool_for_test()).await.unwrap();
-    assert_eq!(row,(0,4,1)); target.finish().await; control.finish().await;
+    assert_eq!(row,(0,4,1));
+    let fenced:(i64,Option<uuid::Uuid>)=sqlx::query_as("SELECT writer_epoch,active_writer_id FROM worldwright_worlds WHERE world_id=$1")
+        .bind(uuid::Uuid::from_u128(1)).fetch_one(target.store.pool_for_test()).await.unwrap();
+    assert_eq!(fenced,(0,None));
+    let proof:serde_json::Value=sqlx::query_scalar("SELECT \"authorization\" FROM worldwright_operator_audit WHERE operation_id=$1")
+        .bind(uuid::Uuid::from_u128(981)).fetch_one(target.store.pool_for_test()).await.unwrap();
+    assert_eq!(proof["required_capabilities"].as_array().unwrap().len(),4);
+    target.finish().await; control.finish().await;
 }
