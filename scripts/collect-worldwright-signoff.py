@@ -1,8 +1,8 @@
 """Collect local #2 evidence and prepare #4 handoff; never grants approval.
 STORAGE POLICY: generated files must stay within E:/Hold/Worldwright.
-Execution is currently blocked before any writes or child-process launches:
-underlying R6/R7 collectors still require external output/cache paths, and
-subprocess temporary/tool-cache paths have not yet been fully audited.
+Only --tools-only is enabled: helper tests, source fingerprints and draft handoff.
+Native compilation/browser acceptance remains blocked until Cargo/Rustup storage
+and native subprocess paths have been adapted and verified.
 No installation, migration, deployment, key creation, signing or source edits.
 """
 from pathlib import Path
@@ -68,6 +68,7 @@ def main(argv=None):
     parser.add_argument('--output', type=Path)
     parser.add_argument('--target-dir', type=Path)
     parser.add_argument('--allow-dirty', action='store_true')
+    parser.add_argument('--tools-only', action='store_true', help='Run helper validation only; native collection remains blocked')
     parser.add_argument('--browser-executable', type=Path)
     args = parser.parse_args(argv)
     if sys.version_info < (3, 11):
@@ -78,16 +79,25 @@ def main(argv=None):
     parent = repo / '.worldwright-local' / 'evidence'
     output = (args.output or parent / ('signoff-' + uuid.uuid4().hex)).absolute()
     target = (args.target_dir or repo / '.worldwright-local' / 'target').absolute()
-    # Fail before mkdir/importing third-party tools/starting any subprocess.
-    # Merely moving the top-level report would leave child caches/temp files outside.
-    parser.error('Collection paused: repository-only storage is mandatory. R6/R7 output guards and all child-process temp/cache paths must be adapted and verified before collection can run. No evidence, cache, or temporary files were created by this collector.')
+    if not args.tools_only:
+        parser.error('Native collection is still blocked pending Cargo/Rustup and native path validation. Use --tools-only for the enabled repository-local helper checks.')
+    sys.dont_write_bytecode = True
+    import worldwright_local as local
+    if local.ROOT.resolve() != repo.resolve():
+        parser.error('Collector and repository paths differ')
+    local.local_path(Path(sys.prefix))
+    local.local_path(output)
+    local.local_path(target)
+    storage_paths = local.configure_tools_environment()
     validate_paths(repo, output, target)
     os.umask(0o077)
     output.mkdir(mode=0o700)
     report = {'schema_version': 1, 'kind': 'local-signoff-collection-not-approval',
               'status': 'failed', 'started_at': int(time.time()), 'phases': [],
               'item_2_closed': False, 'item_4_closed': False,
-              'full_r6_closed': False, 'supported_private_beta_authorized': False}
+              'full_r6_closed': False, 'supported_private_beta_authorized': False,
+              'scope': 'tool-regressions-only', 'storage_paths': storage_paths,
+              'native_collection_status': 'not-run-path-adaptation-pending'}
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', CARGO_TERM_COLOR='never')
     print('EVIDENCE DIRECTORY: ' + str(output), flush=True)
     print('Do not edit source, format, or run another build during collection.', flush=True)
@@ -114,6 +124,13 @@ def main(argv=None):
         return result.returncode == 0
 
     try:
+        ignored = subprocess.run(['git', 'check-ignore', '-q', '--', '.worldwright-local'],
+                                 cwd=repo, env=env, capture_output=True, timeout=30, check=False)
+        tracked = subprocess.run(['git', 'ls-files', '-z', '--cached', '--', '.worldwright-local'],
+                                 cwd=repo, env=env, capture_output=True, timeout=30, check=False)
+        if ignored.returncode != 0 or tracked.returncode != 0 or tracked.stdout:
+            report['prerequisite_failure'] = '.worldwright-local must be Git-ignored and contain no tracked files; nothing is automatically untracked.'
+            raise ValueError('Runtime storage is not excluded from source identity')
         dependencies = {}
         for name in ('playwright', 'psutil', 'cryptography'):
             try:
@@ -166,7 +183,7 @@ def main(argv=None):
         draft_ok = phase('draft-handoff', [scripts / 'r7.py', 'init', '--output', output / 'candidate-draft'])
         native_ok = False
         verified = False
-        if tools_ok:
+        if tools_ok and not args.tools_only:
             arguments = [scripts / 'r6-native.py', '--output', output / 'native', '--target-dir', target]
             if args.allow_dirty:
                 arguments.append('--allow-dirty')
@@ -185,7 +202,9 @@ def main(argv=None):
         report.update(tool_regressions_passed=tools_ok, draft_created=draft_ok,
                       native_collection_passed=native_ok, native_integrity_passed=verified,
                       source_unchanged=stable)
-        if tools_ok and draft_ok and native_ok and verified and stable:
+        if args.tools_only and tools_ok and draft_ok and stable:
+            report['status'] = 'tool-evidence-collected-native-pending'
+        elif tools_ok and draft_ok and native_ok and verified and stable:
             report['status'] = 'local-evidence-collected-review-and-live-acceptance-pending'
     except KeyboardInterrupt:
         report['failure'] = 'Interrupted: preserve evidence and verify child processes stopped before restarting.'
@@ -213,7 +232,7 @@ def main(argv=None):
         print('\nRESULT: ' + report['status'], flush=True)
         print('PRESERVE / RETURN THIS DIRECTORY: ' + str(output), flush=True)
         print('Items #2 and #4 are NOT automatically signed off. No approval was created.', flush=True)
-    return 0 if report['status'] == 'local-evidence-collected-review-and-live-acceptance-pending' else 1
+    return 0 if report['status'] in ('tool-evidence-collected-native-pending', 'local-evidence-collected-review-and-live-acceptance-pending') else 1
 
 
 if __name__ == '__main__':

@@ -8,11 +8,11 @@ import shutil
 import sys
 import time
 import r7_core as c
+import worldwright_local as local
 
 
 def new_output(path, forbidden=()):
-    path=Path(path).resolve()
-    c.require(not path.exists() and all(not path.is_relative_to(Path(root).resolve()) for root in (c.ROOT,*forbidden)),'new-external-output-required')
+    path=local.new_output(path, forbidden)
     path.mkdir(mode=0o700,parents=False)
     return path
 
@@ -200,6 +200,7 @@ def main():
     p=sub.add_parser('verify-packet'); p.add_argument('--packet',type=Path,required=True); p.add_argument('--trust-store',type=Path,required=True); p.add_argument('--trust-store-sha256',required=True)
     args=parser.parse_args()
     try:
+        local.configure_tools_environment()
         if args.operation=='init': template(args.output)
         elif args.operation=='fingerprint':
             output=new_output(args.output)

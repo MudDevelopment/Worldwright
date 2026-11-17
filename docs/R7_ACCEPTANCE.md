@@ -313,3 +313,25 @@ retains failures and contains no signing, publishing or deployment credentials.
 The separate R7 implementation ledger records feature tests versus actual release
 readiness. R6 code added in the preceding pass is still not certified; finishing
 its code review, documentation and native/database validation remains necessary.
+
+## Repository-local Windows runner timeout — November 17, 2026
+
+The retained run at
+`.worldwright-local/evidence/signoff-a55ae016739f4302808b00eb841af020/`
+reported `interruption: timeout` for the R7 synthetic suite. Its log records 29
+completed `ok` cases and an unfinished 30th case, not an assertion failure. The
+wrapper recorded unchanged before/after source identities. Later suites were
+not reached; the run remains failed and its evidence is preserved unchanged.
+
+The runner's whole-suite deadline was 120 seconds. It is now 600 seconds for
+`synthetic-tests` only, with 120 seconds retained for the other phases. Each
+phase records `timeout_seconds` and `elapsed_seconds`, and reports interruption
+on the console. The fixtures create independent Git checkouts and signed test
+packets; changing their runner budget does not change a product latency, beta,
+soak, signature, or acceptance requirement. No assertion/count was weakened,
+no case was skipped, and no failed evidence was relabeled. Source changes
+require a new collection directory and an observed complete rerun.
+
+Use the repository-local `--tools-only` command in README.md. Earlier external
+path examples in this document are not valid for the current Windows working
+copy. Native storage adaptation and actual native/live acceptance remain open.

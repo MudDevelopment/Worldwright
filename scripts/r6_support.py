@@ -6,6 +6,7 @@ import os
 import re
 import time
 import r3_io
+import worldwright_local as local
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_FILE = 64 * 1024 * 1024
@@ -101,7 +102,7 @@ class Collector:
     def __init__(self, output, kind):
         self.output = Path(output).absolute()
         require(not self.output.exists() and not self.output.is_symlink(), 'new output directory required')
-        require(not self.output.resolve().is_relative_to(ROOT.resolve()), 'evidence must be outside checkout')
+        local.new_output(self.output)
         require(self.output.parent.is_dir(), 'existing trusted output parent required')
         for parent in self.output.parents:
             require(not parent.is_symlink(), 'symlink output ancestor refused')

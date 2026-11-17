@@ -19,6 +19,29 @@
 >
 > **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROADMAP_v2 owns current priorities, release-track dependency order, blocking decisions and exit evidence; ROAD-MAP retains historical milestone scope. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
 
+## Repository-local tool collection — November 17, 2026
+
+The current Windows working copy requires all generated project data under
+`E:\Hold\Worldwright`. `.worldwright-local/` is Git-ignored; the signoff wrapper
+rejects collection if runtime files are tracked or the exclusion is missing.
+Source-identity recipes remain unchanged: output is excluded through Git rules,
+not silently removed from the recorded source inventory.
+
+`scripts/worldwright_local.py` supplies non-link/non-reparse containment checks
+and configures temporary, profile, browser, package and prospective Rust cache
+paths before the enabled helper subprocesses run. R7 outputs and R6 helper
+fixture outputs are now restricted to `.worldwright-local/`; input/output
+separation, exclusive creation, hashes and signed-decision requirements remain.
+This is cooperative tool configuration, not an OS filesystem sandbox.
+
+The collector currently requires `--tools-only`. It does not run Cargo, rustc,
+Rustup, Studio, a restore, a live DB test, or a browser acceptance session. Local
+Cargo/Rustup directories may be prepared, but no toolchain/cache is copied or
+installed there. Native-mode adaptation remains pending; old native/launcher
+commands must not be used under this policy. A successful helper report is
+`tool-evidence-collected-native-pending`, never R6/R7 closure. The 8 new storage
+regressions are authored and await actual execution alongside the retained suites.
+
 ## Playable second-game integration — November 9, 2026
 
 The generated expedition program and official expedition artifact preview share

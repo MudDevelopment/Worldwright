@@ -5,12 +5,29 @@
 > browser caches and temporary work must remain under `E:\Hold\Worldwright`.
 > Earlier local instructions using LOCALAPPDATA, user-profile directories, or
 > external TEMP/cache/output paths are superseded; do not run those recipes.
-> `scripts/collect-worldwright-signoff.py` is temporarily blocked before writes
-> and subprocess execution: the downstream R6/R7 external-path restrictions and
-> child-process temporary/cache behavior still need repository-local adaptation
-> and verification. Proposed runtime locations are `.worldwright-local/evidence`
-> and `.worldwright-local/target`; collection is not yet enabled. Existing files
-> outside the repository have not been moved or deleted.
+> `scripts/collect-worldwright-signoff.py --tools-only` now enables the local
+> helper-validation phase only. It configures Python/Git/Playwright tool storage
+> under `.worldwright-local`, checks Git exclusion, preserves source fingerprints,
+> and runs 35 R7 + 16 R6 + 11 follow-through + 8 storage tests. Evidence is written
+> to `.worldwright-local/evidence/signoff-<id>`. Native compilation/Studio acceptance
+> remains blocked pending Cargo/Rustup relocation and native child-path validation.
+> Earlier launchers and native scripts are not approved for this storage policy.
+> No old workspace, cache, or environment is automatically moved or deleted.
+>
+> Run with the rebuilt environment (no activation or external cache required):
+>
+> ```powershell
+> & 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-R6-Python\Scripts\python.exe' -B 'E:\Hold\Worldwright\scripts\collect-worldwright-signoff.py' --repo 'E:\Hold\Worldwright' --tools-only --allow-dirty
+> ```
+>
+> Expected successful wrapper status: `tool-evidence-collected-native-pending`.
+> The first repository-local Windows run reached 29 completed R7 cases before
+> the runner's former 120-second whole-suite deadline interrupted case 30. The R7
+> fixture suite now has a bounded 600-second execution deadline; other phases
+> retain 120 seconds. The console and report record elapsed time and interruption.
+> Tests, required counts and acceptance thresholds are unchanged. A fresh run is
+> required; no complete suite pass is claimed. No release gate is automatically
+> closed. The moved R5 workspace is not opened by this command.
 
 **Build worlds. Write the rules.**
 
