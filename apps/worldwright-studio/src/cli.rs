@@ -8,7 +8,8 @@ pub enum Command {
     Help,
     Version,
     Status,
-    Serve(ServeOptions),
+    // Keep the help/version/status variants small as serve options grow.
+    Serve(Box<ServeOptions>),
 }
 pub struct ServeOptions {
     pub workspace: PathBuf,
@@ -116,7 +117,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
     {
         return Err("release endpoint requires exactly one token env or token file".into());
     }
-    Ok(Command::Serve(ServeOptions {
+    Ok(Command::Serve(Box::new(ServeOptions {
         workspace: workspace.ok_or("--workspace is required")?,
         content,
         bind,
@@ -124,7 +125,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         release_endpoint: endpoint,
         operator_token_env: token,
         operator_token_file: token_file,
-    }))
+    })))
 }
 fn value(v: &OsString, k: &str) -> Result<String, String> {
     let s = v.to_str().ok_or(format!("{k} must be UTF-8"))?;
@@ -191,9 +192,7 @@ mod tests {
             "--operator-token-env",
             "WORLDWRIGHT_TOKEN",
         ]));
-        assert!(
-            matches!(command, Ok(Command::Serve(ServeOptions { bind, .. })) if bind.port() == 3010)
-        );
+        assert!(matches!(command, Ok(Command::Serve(options)) if options.bind.port() == 3010));
         assert!(
             parse(args(&[
                 "serve",

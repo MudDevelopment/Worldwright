@@ -12,6 +12,7 @@ import tomllib
 from r6_support import Collector, ROOT, encode, new_file, read, require, sha, source_identity, test_listing, test_result
 import native_paths as native
 import worldwright_local as local
+import r6_subjects as subjects
 
 
 def main():
@@ -80,8 +81,11 @@ def main():
         collector.phase('locked-metadata', ['cargo', 'metadata', '--format-version', '1', '--locked', '--offline', '--filter-platform', host], 180)
         collector.phase('build-studio', ['cargo', 'build', '-p', 'worldwright', '-p', 'worldwright-studio', '-p', 'worldwright-server', '--bin', 'worldwright', '--bin', 'worldwright-studio', '--bin', 'worldwright-server', *common], 1800)
         extension = '.exe' if os.name == 'nt' else ''
-        binaries = {name: target / host / 'debug' / (name + extension) for name in ('worldwright', 'worldwright-studio', 'worldwright-server')}
-        collector.report['binaries'] = {name: {'path': str(path), 'sha256': sha(path)} for name, path in binaries.items()}
+        build_outputs = {name: target / host / 'debug' / (name + extension) for name in ('worldwright', 'worldwright-studio', 'worldwright-server')}
+        collector.report['binary_subject_policy'] = subjects.POLICY
+        collector.report['binaries'] = subjects.retain_binaries(build_outputs, collector.output)
+        binaries = {name: Path(record['path']) for name, record in collector.report['binaries'].items()}
+        collector.event('binary-subjects-retained', policy=subjects.POLICY, binaries=collector.report['binaries'])
         browser = [sys.executable, str(ROOT / 'scripts/r6-browser.py'), '--studio', str(binaries['worldwright-studio']), '--preview', str(binaries['worldwright']), '--output', str(collector.output / 'browser')]
         if args.browser_executable: browser += ['--browser-executable', str(args.browser_executable.resolve())]
         collector.phase('real-browser', browser, 1200)
@@ -114,7 +118,11 @@ def main():
         require(all(sha(path) == item['sha256'] for path, item in ((Path(c['path']), c) for c in configs)), 'Cargo configuration changed during collection')
         require(native.configuration_inventory() == collector.report['native_paths']['cargo_configurations'], 'Cargo config inventory changed during collection')
         require(all(sha(Path(item['path'])) == item['sha256'] for item in collector.report['native_paths']['binaries'].values()), 'native tool binary changed during collection')
-        require(all(sha(path) == collector.report['binaries'][name]['sha256'] for name, path in binaries.items()), 'binary changed during collection')
+        collector.report['cache_binary_observations'] = subjects.cache_observations(collector.report['binaries'])
+        subjects.verify_retained(collector.output, collector.report['binaries'], check_local=True)
+        changed = [name for name, value in collector.report['cache_binary_observations'].items() if not value['matches_retained']]
+        if changed:
+            print('Cargo cache outputs changed; retained browser subjects verified unchanged: ' + ', '.join(changed), flush=True)
         collector.report['browser_status'] = browser_report['status']
         collector.report['status'] = 'collected_native_browser_not_closed'
     except (Exception, KeyboardInterrupt) as error:

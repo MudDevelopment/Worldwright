@@ -4,8 +4,7 @@ use rpassword::prompt_password;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
-    env,
-    fs,
+    env, fs,
     io::{Read, Write},
     net::{IpAddr, TcpStream},
     path::{Path, PathBuf},
@@ -54,10 +53,13 @@ fn run(args: Vec<String>) -> Result<(), String> {
             Ok(())
         }
         Some("trust-model") if args.len() == 1 => {
-            println!("{}", json!({"schema_version":1,"mechanism":"HMAC-SHA256",
+            println!(
+                "{}",
+                json!({"schema_version":1,"mechanism":"HMAC-SHA256",
                 "hmac_key_holders_can_mint_any_subject":true,"bearer_tokens_cannot_mint":true,
                 "capabilities_checked_in_current_database":true,
-                "key_custody_is_separate_from_grants":true,"production_approval":false}));
+                "key_custody_is_separate_from_grants":true,"production_approval":false})
+            );
             Ok(())
         }
         Some("credential") => credential_command(&args[1..]),

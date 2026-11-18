@@ -6,6 +6,7 @@ import json
 import os
 import re
 from r6_support import encode, read, require, safe_path, sha, source_identity, test_listing, test_result
+import r6_subjects as subjects
 
 BROWSER_CASES = {'real-http-ready', 'browser-import-edit-save-reload-validate',
                  'real-preview-reference', 'real-preview-expedition',
@@ -94,6 +95,12 @@ def verify(path, check_local=False):
             passed = test_result(read(path.parent / (label + '-run.log')), len(discovered))
             require(discovered == case.get('discovered') and type(case.get('passed')) is int and passed == case['passed'], 'native test counts differ')
         require(set(report.get('binaries', {})) == {'worldwright', 'worldwright-studio', 'worldwright-server'}, 'native binary inventory incomplete')
+        retained = 'binary_subject_policy' in report
+        if retained:
+            require(report['binary_subject_policy'] == subjects.POLICY, 'unknown binary subject policy')
+            subjects.verify_retained(path.parent, report['binaries'], check_local=check_local)
+        else:
+            require(all('retained_relative_path' not in binary for binary in report['binaries'].values()), 'retained binary policy missing')
         before = load(path.parent / 'source-before.json')
         after = load(path.parent / 'source-after.json')
         require(before == after and before['source_sha256'] == report.get('source_sha256'), 'source changed during run')
@@ -102,6 +109,8 @@ def verify(path, check_local=False):
         require(report.get('browser_status') == child['status'], 'browser outcome mismatch')
         for short, full in (('studio', 'worldwright-studio'), ('preview', 'worldwright')):
             require(child['binaries'][short]['sha256'] == report['binaries'][full]['sha256'], 'browser/native binaries differ')
+            if retained:
+                require(child['binaries'][short]['path'] == report['binaries'][full]['path'], 'browser did not use the retained subject path')
         if check_local:
             require(source_identity() == before, 'current checkout no longer matches collection')
             for binary in report['binaries'].values():

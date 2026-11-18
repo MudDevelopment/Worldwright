@@ -108,7 +108,10 @@ impl PublicationClient {
 
     /// The browser never receives a token or a filesystem path. Read a fresh
     /// token for each explicit operation; never automatically replay a POST.
-    pub fn from_token_file(endpoint: String, path: PathBuf) -> Result<Self, PublicationClientError> {
+    pub fn from_token_file(
+        endpoint: String,
+        path: PathBuf,
+    ) -> Result<Self, PublicationClientError> {
         if !path.is_absolute() {
             return Err(PublicationClientError::InvalidRequest);
         }
@@ -177,14 +180,20 @@ impl PublicationClient {
 }
 
 fn remaining(deadline: Instant) -> Result<Duration, PublicationClientError> {
-    deadline.checked_duration_since(Instant::now())
+    deadline
+        .checked_duration_since(Instant::now())
         .filter(|duration| !duration.is_zero())
         .ok_or(PublicationClientError::Unavailable)
 }
 
-fn write_before_deadline(stream: &mut TcpStream, mut bytes: &[u8], deadline: Instant) -> Result<(), PublicationClientError> {
+fn write_before_deadline(
+    stream: &mut TcpStream,
+    mut bytes: &[u8],
+    deadline: Instant,
+) -> Result<(), PublicationClientError> {
     while !bytes.is_empty() {
-        stream.set_write_timeout(Some(remaining(deadline)?))
+        stream
+            .set_write_timeout(Some(remaining(deadline)?))
             .map_err(|_| PublicationClientError::Unavailable)?;
         match stream.write(bytes) {
             Ok(0) => return Err(PublicationClientError::Unavailable),
@@ -197,15 +206,22 @@ fn write_before_deadline(stream: &mut TcpStream, mut bytes: &[u8], deadline: Ins
     Ok(())
 }
 
-fn read_before_deadline(stream: &mut TcpStream, deadline: Instant) -> Result<Vec<u8>, PublicationClientError> {
+fn read_before_deadline(
+    stream: &mut TcpStream,
+    deadline: Instant,
+) -> Result<Vec<u8>, PublicationClientError> {
     let mut response = Vec::new();
     let mut chunk = [0_u8; 4096];
     loop {
-        stream.set_read_timeout(Some(remaining(deadline)?))
+        stream
+            .set_read_timeout(Some(remaining(deadline)?))
             .map_err(|_| PublicationClientError::Unavailable)?;
         let limit = chunk.len().min(MAX_RESPONSE_BYTES + 1 - response.len());
         match stream.read(&mut chunk[..limit]) {
-            Ok(0) => { remaining(deadline)?; return Ok(response); }
+            Ok(0) => {
+                remaining(deadline)?;
+                return Ok(response);
+            }
             Ok(count) => response.extend_from_slice(&chunk[..count]),
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => return Err(PublicationClientError::Unavailable),
@@ -265,8 +281,11 @@ fn read_token_file(path: &Path) -> Result<String, PublicationClientError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        if opened.dev() != metadata.dev() || opened.ino() != metadata.ino()
-            || opened.mode() & 0o077 != 0 || opened.nlink() != 1 || opened.uid() != metadata.uid()
+        if opened.dev() != metadata.dev()
+            || opened.ino() != metadata.ino()
+            || opened.mode() & 0o077 != 0
+            || opened.nlink() != 1
+            || opened.uid() != metadata.uid()
         {
             return Err(denied());
         }
@@ -274,15 +293,22 @@ fn read_token_file(path: &Path) -> Result<String, PublicationClientError> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        if opened.file_attributes() & 0x400 != 0 { return Err(denied()); }
+        if opened.file_attributes() & 0x400 != 0 {
+            return Err(denied());
+        }
     }
     let mut bytes = Vec::new();
-    file.take(4099).read_to_end(&mut bytes).map_err(|_| denied())?;
+    file.take(4099)
+        .read_to_end(&mut bytes)
+        .map_err(|_| denied())?;
     if bytes.len() as u64 != opened.len() {
         return Err(denied());
     }
     let text = std::str::from_utf8(&bytes).map_err(|_| denied())?;
-    let text = text.strip_suffix("\r\n").or_else(|| text.strip_suffix('\n')).unwrap_or(text);
+    let text = text
+        .strip_suffix("\r\n")
+        .or_else(|| text.strip_suffix('\n'))
+        .unwrap_or(text);
     if text.is_empty() || text.len() > 4096 || !text.bytes().all(|byte| byte.is_ascii_graphic()) {
         return Err(denied());
     }
@@ -480,17 +506,29 @@ mod tests {
 
     fn token_fixture() -> (PathBuf, PathBuf) {
         use std::fs;
-        let root = std::env::temp_dir().join(format!("worldwright-r5-token-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!(
+            "worldwright-r5-token-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         fs::create_dir(&root).unwrap();
         let root = root.canonicalize().unwrap();
         let path = root.join("token");
-        let mut options = fs::OpenOptions::new(); options.write(true).create_new(true);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        options.open(&path).unwrap().write_all(b"first-token\n").unwrap();
+        options
+            .open(&path)
+            .unwrap()
+            .write_all(b"first-token\n")
+            .unwrap();
         (root, path)
     }
 
@@ -499,28 +537,50 @@ mod tests {
         use std::{fs, net::TcpListener, thread};
         let (root, path) = token_fixture();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let client = PublicationClient::from_token_file(format!("http://{}", listener.local_addr().unwrap()), path.clone()).unwrap();
+        let client = PublicationClient::from_token_file(
+            format!("http://{}", listener.local_addr().unwrap()),
+            path.clone(),
+        )
+        .unwrap();
         assert!(client.renewable());
         assert!(!format!("{client:?}").contains("first-token"));
         let server = thread::spawn(move || {
-            for (token, status) in [("first-token", "401 Unauthorized"), ("second-token", "200 OK")] {
+            for (token, status) in [
+                ("first-token", "401 Unauthorized"),
+                ("second-token", "200 OK"),
+            ] {
                 let (mut stream, _) = listener.accept().unwrap();
-                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-                let mut bytes = Vec::new(); let mut chunk = [0; 512];
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut chunk = [0; 512];
                 while !bytes.windows(4).any(|value| value == b"\r\n\r\n") {
-                    let count = stream.read(&mut chunk).unwrap(); assert!(count > 0);
-                    bytes.extend_from_slice(&chunk[..count]); assert!(bytes.len() < 8192);
+                    let count = stream.read(&mut chunk).unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&chunk[..count]);
+                    assert!(bytes.len() < 8192);
                 }
-                assert!(String::from_utf8(bytes).unwrap().contains(&format!("Authorization: Bearer {token}\r\n")));
+                assert!(
+                    String::from_utf8(bytes)
+                        .unwrap()
+                        .contains(&format!("Authorization: Bearer {token}\r\n"))
+                );
                 write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
             }
         });
-        assert_eq!(client.request("GET", "/fixture", None), Err(PublicationClientError::Unauthorized));
+        assert_eq!(
+            client.request("GET", "/fixture", None),
+            Err(PublicationClientError::Unauthorized)
+        );
         fs::write(&path, b"second-token\r\n").unwrap();
         assert_eq!(client.request("GET", "/fixture", None).unwrap(), b"{}");
         server.join().unwrap();
         fs::remove_file(&path).unwrap();
-        assert_eq!(client.request("GET", "/fixture", None), Err(PublicationClientError::Unauthorized));
+        assert_eq!(
+            client.request("GET", "/fixture", None),
+            Err(PublicationClientError::Unauthorized)
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -528,18 +588,29 @@ mod tests {
     fn r5_token_file_rejects_invalid_bytes_and_unsafe_files() {
         use std::fs;
         let (root, path) = token_fixture();
-        for value in [Vec::new(), b"has space".to_vec(), b"two\nlines".to_vec(), vec![255], vec![b'x'; 4099]] {
-            fs::write(&path, value).unwrap(); assert!(read_token_file(&path).is_err());
+        for value in [
+            Vec::new(),
+            b"has space".to_vec(),
+            b"two\nlines".to_vec(),
+            vec![255],
+            vec![b'x'; 4099],
+        ] {
+            fs::write(&path, value).unwrap();
+            assert!(read_token_file(&path).is_err());
         }
         fs::write(&path, b"valid-token").unwrap();
         assert_eq!(read_token_file(&path).unwrap(), "valid-token");
         #[cfg(unix)]
         {
-            use std::os::unix::fs::{symlink, PermissionsExt};
-            let linked = root.join("linked"); symlink(&path, &linked).unwrap();
-            assert!(read_token_file(&linked).is_err()); fs::remove_file(linked).unwrap();
-            let linked = root.join("hard-link"); fs::hard_link(&path, &linked).unwrap();
-            assert!(read_token_file(&path).is_err()); fs::remove_file(linked).unwrap();
+            use std::os::unix::fs::{PermissionsExt, symlink};
+            let linked = root.join("linked");
+            symlink(&path, &linked).unwrap();
+            assert!(read_token_file(&linked).is_err());
+            fs::remove_file(linked).unwrap();
+            let linked = root.join("hard-link");
+            fs::hard_link(&path, &linked).unwrap();
+            assert!(read_token_file(&path).is_err());
+            fs::remove_file(linked).unwrap();
             fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
             assert!(read_token_file(&path).is_err());
         }
@@ -553,16 +624,25 @@ mod tests {
         let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (mut peer, _) = listener.accept().unwrap();
         let sender = thread::spawn(move || {
-            peer.set_write_timeout(Some(Duration::from_millis(100))).unwrap();
+            peer.set_write_timeout(Some(Duration::from_millis(100)))
+                .unwrap();
             for _ in 0..50 {
-                if peer.write_all(b"x").is_err() { break; }
+                if peer.write_all(b"x").is_err() {
+                    break;
+                }
                 thread::sleep(Duration::from_millis(20));
             }
         });
         let start = Instant::now();
-        assert_eq!(read_before_deadline(&mut client, start + Duration::from_millis(150)), Err(PublicationClientError::Unavailable));
+        assert_eq!(
+            read_before_deadline(&mut client, start + Duration::from_millis(150)),
+            Err(PublicationClientError::Unavailable)
+        );
         assert!(start.elapsed() < Duration::from_secs(2));
-        assert_eq!(write_before_deadline(&mut client, b"never send", Instant::now()), Err(PublicationClientError::Unavailable));
+        assert_eq!(
+            write_before_deadline(&mut client, b"never send", Instant::now()),
+            Err(PublicationClientError::Unavailable)
+        );
         drop(client);
         sender.join().unwrap();
     }
@@ -574,10 +654,14 @@ mod tests {
         let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (mut peer, _) = listener.accept().unwrap();
         let sender = thread::spawn(move || {
-            peer.set_write_timeout(Some(Duration::from_secs(1))).unwrap();
+            peer.set_write_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
             let _ = peer.write_all(&vec![b'x'; MAX_RESPONSE_BYTES + 1]);
         });
-        assert_eq!(read_before_deadline(&mut client, Instant::now() + Duration::from_secs(2)), Err(PublicationClientError::InvalidResponse));
+        assert_eq!(
+            read_before_deadline(&mut client, Instant::now() + Duration::from_secs(2)),
+            Err(PublicationClientError::InvalidResponse)
+        );
         drop(client);
         sender.join().unwrap();
     }

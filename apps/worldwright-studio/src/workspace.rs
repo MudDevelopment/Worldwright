@@ -107,8 +107,17 @@ impl Workspace {
             .lock()
             .map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let records = self.publication_records_unlocked()?;
-        if let Some(existing) = records.iter().find(|record| record.request_id == view.request_id) {
-            return if existing == view { Ok(()) } else { Err(WorkspaceError::Conflict { current_revision: 0 }) };
+        if let Some(existing) = records
+            .iter()
+            .find(|record| record.request_id == view.request_id)
+        {
+            return if existing == view {
+                Ok(())
+            } else {
+                Err(WorkspaceError::Conflict {
+                    current_revision: 0,
+                })
+            };
         }
         if records.len() >= 100 {
             return Err(WorkspaceError::Capacity);
@@ -196,17 +205,25 @@ impl Workspace {
         &self,
         request: &str,
     ) -> Result<PublicationView, WorkspaceError> {
-        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let path = self.publication_record_path(request)?;
         let view = self.read_publication_record_path(&path)?;
         if view.request_id != request {
-            return Err(WorkspaceError::InvalidWorkspace("publication record identity mismatch"));
+            return Err(WorkspaceError::InvalidWorkspace(
+                "publication record identity mismatch",
+            ));
         }
         Ok(view)
     }
 
     pub(crate) fn publication_records(&self) -> Result<Vec<PublicationView>, WorkspaceError> {
-        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let mut records = self.publication_records_unlocked()?;
         records.sort_by(|left, right| left.request_id.cmp(&right.request_id));
         Ok(records)
@@ -283,13 +300,17 @@ impl Workspace {
         {
             use std::os::unix::fs::MetadataExt;
             if metadata.dev() != opened.dev() || metadata.ino() != opened.ino() {
-                return Err(WorkspaceError::InvalidWorkspace("publication record changed during open"));
+                return Err(WorkspaceError::InvalidWorkspace(
+                    "publication record changed during open",
+                ));
             }
         }
         let mut bytes = Vec::new();
         file.take(65_537).read_to_end(&mut bytes)?;
         if bytes.len() > 65_536 || bytes.len() as u64 != opened.len() {
-            return Err(WorkspaceError::InvalidWorkspace("publication record exceeds bounds or changed"));
+            return Err(WorkspaceError::InvalidWorkspace(
+                "publication record exceeds bounds or changed",
+            ));
         }
         let view: PublicationView = serde_json::from_slice(&bytes)
             .map_err(|_| WorkspaceError::InvalidWorkspace("publication record invalid"))?;
@@ -299,18 +320,28 @@ impl Workspace {
     }
     /// List bounded recovery identities without trusting partial JSON records.
     pub(crate) fn publication_recovery(&self) -> Result<Vec<String>, WorkspaceError> {
-        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let mut all = std::collections::BTreeSet::new();
         let mut pending = std::collections::BTreeSet::new();
         for (index, entry) in fs::read_dir(self.publication_records_dir())?.enumerate() {
-            if index >= 300 { return Err(WorkspaceError::Capacity); }
+            if index >= 300 {
+                return Err(WorkspaceError::Capacity);
+            }
             let entry = entry?;
             let metadata = entry.path().symlink_metadata()?;
             if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 65_536 {
-                return Err(WorkspaceError::InvalidWorkspace("publication recovery entry invalid"));
+                return Err(WorkspaceError::InvalidWorkspace(
+                    "publication recovery entry invalid",
+                ));
             }
             reject_unsafe_record_metadata(&metadata)?;
-            let name = entry.file_name().into_string().map_err(|_| WorkspaceError::InvalidWorkspace("publication filename invalid"))?;
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| WorkspaceError::InvalidWorkspace("publication filename invalid"))?;
             let (id, recovery) = if let Some(id) = name.strip_suffix(".json.next") {
                 (id, true)
             } else if let Some(id) = name.strip_suffix(".json.previous") {
@@ -318,20 +349,32 @@ impl Workspace {
             } else if let Some(id) = name.strip_suffix(".json") {
                 (id, false)
             } else {
-                return Err(WorkspaceError::InvalidWorkspace("unexpected publication recovery file"));
+                return Err(WorkspaceError::InvalidWorkspace(
+                    "unexpected publication recovery file",
+                ));
             };
             self.publication_record_path(id)?;
             all.insert(id.to_owned());
-            if all.len() > 100 { return Err(WorkspaceError::Capacity); }
-            if recovery { pending.insert(id.to_owned()); }
+            if all.len() > 100 {
+                return Err(WorkspaceError::Capacity);
+            }
+            if recovery {
+                pending.insert(id.to_owned());
+            }
         }
         Ok(pending.into_iter().collect())
     }
 
     /// Explicit local crash recovery only. Never contact the operator service,
     /// invent an approval, or retry an initial submission with unknown outcome.
-    pub(crate) fn recover_publication_record(&self, request: &str) -> Result<PublicationView, WorkspaceError> {
-        let _guard = self.lock.lock().map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
+    pub(crate) fn recover_publication_record(
+        &self,
+        request: &str,
+    ) -> Result<PublicationView, WorkspaceError> {
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| WorkspaceError::InvalidWorkspace("workspace lock is poisoned"))?;
         let path = self.publication_record_path(request)?;
         let next_path = path.with_extension("json.next");
         let previous_path = path.with_extension("json.previous");
@@ -342,7 +385,9 @@ impl Workspace {
                 Ok(_) => {
                     let view = self.read_publication_record_path(file)?;
                     if view.request_id != request {
-                        return Err(WorkspaceError::InvalidWorkspace("recovery request identity mismatch"));
+                        return Err(WorkspaceError::InvalidWorkspace(
+                            "recovery request identity mismatch",
+                        ));
                     }
                     Ok(Some(view))
                 }
@@ -351,12 +396,17 @@ impl Workspace {
         let current = read(&path)?;
         let next = read(&next_path)?;
         let previous = read(&previous_path)?;
-        let valid = |before: &PublicationView, after: &PublicationView| -> Result<(), WorkspaceError> {
-            if !same_publication_identity(before, after) || !valid_status_transition(before.status, after.status) {
-                return Err(WorkspaceError::InvalidWorkspace("publication recovery identity or transition conflict"));
-            }
-            Ok(())
-        };
+        let valid =
+            |before: &PublicationView, after: &PublicationView| -> Result<(), WorkspaceError> {
+                if !same_publication_identity(before, after)
+                    || !valid_status_transition(before.status, after.status)
+                {
+                    return Err(WorkspaceError::InvalidWorkspace(
+                        "publication recovery identity or transition conflict",
+                    ));
+                }
+                Ok(())
+            };
         // Validate all available evidence before mutating files. Ambiguous or
         // incomplete JSON is preserved for explicit operator diagnosis.
         let recovered = match (current, previous, next) {
@@ -389,7 +439,11 @@ impl Workspace {
                 fs::rename(&previous_path, &path)?;
                 previous
             }
-            _ => return Err(WorkspaceError::InvalidWorkspace("ambiguous publication recovery; files preserved")),
+            _ => {
+                return Err(WorkspaceError::InvalidWorkspace(
+                    "ambiguous publication recovery; files preserved",
+                ));
+            }
         };
         self.sync_publication_directory()?;
         Ok(recovered)
@@ -681,20 +735,26 @@ fn entry_exists(path: &Path) -> Result<bool, std::io::Error> {
 
 fn reject_unsafe_record_metadata(metadata: &fs::Metadata) -> Result<(), WorkspaceError> {
     if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 65_536 {
-        return Err(WorkspaceError::InvalidWorkspace("publication record invalid"));
+        return Err(WorkspaceError::InvalidWorkspace(
+            "publication record invalid",
+        ));
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
         if metadata.nlink() != 1 {
-            return Err(WorkspaceError::InvalidWorkspace("publication record has multiple links"));
+            return Err(WorkspaceError::InvalidWorkspace(
+                "publication record has multiple links",
+            ));
         }
     }
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
         if metadata.file_attributes() & 0x400 != 0 {
-            return Err(WorkspaceError::InvalidWorkspace("publication record is a reparse point"));
+            return Err(WorkspaceError::InvalidWorkspace(
+                "publication record is a reparse point",
+            ));
         }
     }
     Ok(())

@@ -5,8 +5,8 @@ mod oidc;
 mod operational;
 mod operational_queries;
 mod operations;
-mod releases;
 mod recovery_security;
+mod releases;
 mod retention;
 mod store;
 mod types;
@@ -19,8 +19,10 @@ pub use oidc::{
     MAX_ACTIVE_PLAYER_INVITES, MAX_PLAYER_INVITE_TTL_SECONDS, MIN_PLAYER_INVITE_TTL_SECONDS,
     oidc_token_hash,
 };
-pub use retention::{EXTERNAL_OUTBOX_DISPATCH_SUPPORTED, MAX_RETENTION_BATCH,
-    RETENTION_POLICY_VERSION, RetentionResult, RetentionStatus};
+pub use retention::{
+    EXTERNAL_OUTBOX_DISPATCH_SUPPORTED, MAX_RETENTION_BATCH, RETENTION_POLICY_VERSION,
+    RetentionResult, RetentionStatus,
+};
 pub use store::PostgresStore;
 pub use types::{
     ActivationPlan, AuthenticatedActor, BootstrapOperator, DurableCharacterRoom,
@@ -2188,7 +2190,10 @@ mod database_tests {
             .bootstrap_operator(&admin_input, OperationId::from_u128(1).unwrap(), &grants)
             .await
             .expect("bootstrap");
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let claim = |subject: &str, session: u128| OperatorClaims {
             issuer: "issuer".into(),
             audience: "audience".into(),
@@ -2466,7 +2471,10 @@ mod database_tests {
             GrantId::from_u128(301).unwrap(),
             GrantId::from_u128(302).unwrap(),
         ];
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let admin_claim = OperatorClaims {
             issuer: "issuer".into(),
             audience: "audience".into(),

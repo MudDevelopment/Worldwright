@@ -220,8 +220,12 @@ impl PostgresStore {
         // Serialize revocation with authorization/action transactions for this
         // subject; an already admitted action must finish before revocation commits.
         let target: Option<(String, bool)> = sqlx::query_as(OPERATOR_FOR_UPDATE)
-            .bind(subject).fetch_optional(&mut *tx).await?;
-        if target.is_none() { return Err(PersistenceError::NotFound); }
+            .bind(subject)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if target.is_none() {
+            return Err(PersistenceError::NotFound);
+        }
         let changed = sqlx::query(REVOKE_OPERATOR_SESSION)
             .bind(uuid_of(session))
             .bind(subject)
@@ -395,12 +399,19 @@ impl PostgresStore {
         let authorization =
             authorize_tx(&mut tx, context, Capability::ManageOperators, true).await?;
         let target: Option<String> = sqlx::query_scalar(GRANT_SUBJECT)
-            .bind(uuid_of(grant_id)).bind(spell(context.environment)?)
-            .bind(uuid_of(context.world)).fetch_optional(&mut *tx).await?;
+            .bind(uuid_of(grant_id))
+            .bind(spell(context.environment)?)
+            .bind(uuid_of(context.world))
+            .fetch_optional(&mut *tx)
+            .await?;
         let target = target.ok_or(PersistenceError::OperatorDenied)?;
         let locked: Option<(String, bool)> = sqlx::query_as(OPERATOR_FOR_UPDATE)
-            .bind(&target).fetch_optional(&mut *tx).await?;
-        if locked.is_none() { return Err(PersistenceError::OperatorDenied); }
+            .bind(&target)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if locked.is_none() {
+            return Err(PersistenceError::OperatorDenied);
+        }
         let row: Option<(String, String, String, uuid::Uuid)> = sqlx::query_as(REVOKE_GRANT)
             .bind(uuid_of(grant_id))
             .bind(context.claims.subject.as_str())
@@ -612,28 +623,65 @@ impl PostgresStore {
     /// Mark a stranded job failed using fresh current authority. This never
     /// fabricates success, reruns pg_restore, deletes artifacts or takes over.
     pub async fn interrupt_recovery_job(
-        &self, context: &OperatorContext<'_>, job: RecoveryJobId, operation: OperationId,
+        &self,
+        context: &OperatorContext<'_>,
+        job: RecoveryJobId,
+        operation: OperationId,
     ) -> Result<(), PersistenceError> {
         let mut tx = self.pool().begin().await?;
         let row: Option<(String, String)> = sqlx::query_as(
             "SELECT kind, state FROM worldwright_recovery_jobs WHERE job_id=$1 \
-             AND world_id=$2 AND target_environment=$3")
-            .bind(uuid_of(job)).bind(uuid_of(context.world)).bind(spell(context.environment)?)
-            .fetch_optional(&mut *tx).await?;
+             AND world_id=$2 AND target_environment=$3",
+        )
+        .bind(uuid_of(job))
+        .bind(uuid_of(context.world))
+        .bind(spell(context.environment)?)
+        .fetch_optional(&mut *tx)
+        .await?;
         let (kind, state) = row.ok_or(PersistenceError::NotFound)?;
-        if state != "running" { return Err(PersistenceError::RecoveryConflict); }
-        let authorization = authorize_tx(&mut tx, context, recovery_capability(&kind)?, true).await?;
-        let changed = sqlx::query("UPDATE worldwright_recovery_jobs SET state='failed', \
+        if state != "running" {
+            return Err(PersistenceError::RecoveryConflict);
+        }
+        let authorization =
+            authorize_tx(&mut tx, context, recovery_capability(&kind)?, true).await?;
+        let changed = sqlx::query(
+            "UPDATE worldwright_recovery_jobs SET state='failed', \
             completed_at=clock_timestamp(), summary=jsonb_build_object(\
-            'phase','interrupted','reconciled_by',$2::TEXT) WHERE job_id=$1 AND state='running'")
-            .bind(uuid_of(job)).bind(&context.claims.subject).execute(&mut *tx).await?;
-        if changed.rows_affected() != 1 { return Err(PersistenceError::RecoveryConflict); }
-        insert_audit(&mut tx, operation, context.correlation, &context.claims.subject,
-            Some(operator_session(context)?), spell(context.claims.assurance)?,
-            if kind == "backup" { "backup_failed" } else { "restore_failed" },
-            context.environment, context.world, &kind, &job.to_string(), context.reason,
-            "failed", authorization, None, Some(json!({"state":"failed","phase":"interrupted"}))).await?;
-        tx.commit().await.map_err(|_| PersistenceError::UnknownOutcome)
+            'phase','interrupted','reconciled_by',$2::TEXT) WHERE job_id=$1 AND state='running'",
+        )
+        .bind(uuid_of(job))
+        .bind(&context.claims.subject)
+        .execute(&mut *tx)
+        .await?;
+        if changed.rows_affected() != 1 {
+            return Err(PersistenceError::RecoveryConflict);
+        }
+        insert_audit(
+            &mut tx,
+            operation,
+            context.correlation,
+            &context.claims.subject,
+            Some(operator_session(context)?),
+            spell(context.claims.assurance)?,
+            if kind == "backup" {
+                "backup_failed"
+            } else {
+                "restore_failed"
+            },
+            context.environment,
+            context.world,
+            &kind,
+            &job.to_string(),
+            context.reason,
+            "failed",
+            authorization,
+            None,
+            Some(json!({"state":"failed","phase":"interrupted"})),
+        )
+        .await?;
+        tx.commit()
+            .await
+            .map_err(|_| PersistenceError::UnknownOutcome)
     }
 
     pub async fn rotate_authority(
@@ -804,23 +852,35 @@ pub(crate) async fn authorize_tx(
         .bind(uuid_of(context.world))
         .fetch_optional(&mut **tx)
         .await?;
-    if row.is_none() { return Err(PersistenceError::OperatorDenied); }
+    if row.is_none() {
+        return Err(PersistenceError::OperatorDenied);
+    }
     // Read wall time AFTER the authority lock is obtained: a token verified at
     // HTTP ingress may expire while this transaction waits behind another actor.
-    let now: i64 = sqlx::query_scalar("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
-        .fetch_one(&mut **tx).await?;
+    let now: i64 =
+        sqlx::query_scalar("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+            .fetch_one(&mut **tx)
+            .await?;
     let now = u64::try_from(now).map_err(|_| PersistenceError::InvalidData)?;
-    if context.claims.expires_at <= now || context.claims.validate_at(
-        &context.claims.issuer, &context.claims.audience, now).is_err()
+    if context.claims.expires_at <= now
+        || context
+            .claims
+            .validate_at(&context.claims.issuer, &context.claims.audience, now)
+            .is_err()
     {
         return Err(PersistenceError::OperatorDenied);
     }
     // A new READ COMMITTED statement also refreshes grants/revoked-session state
     // after lock waits; the first statement's snapshot is not current authority.
     let current: Option<(String, bool, bool, bool, bool)> = sqlx::query_as(AUTHORIZE_OPERATOR)
-        .bind(context.claims.subject.as_str()).bind(context.claims.issued_at as f64)
-        .bind(uuid_of(session)).bind(spell(capability)?).bind(spell(context.environment)?)
-        .bind(uuid_of(context.world)).fetch_optional(&mut **tx).await?;
+        .bind(context.claims.subject.as_str())
+        .bind(context.claims.issued_at as f64)
+        .bind(uuid_of(session))
+        .bind(spell(capability)?)
+        .bind(spell(context.environment)?)
+        .bind(uuid_of(context.world))
+        .fetch_optional(&mut **tx)
+        .await?;
     let Some((kind, enabled, issued_after, session_active, capability_active)) = current else {
         return Err(PersistenceError::OperatorDenied);
     };

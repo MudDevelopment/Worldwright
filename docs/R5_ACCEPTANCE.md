@@ -243,3 +243,25 @@ fixture remain unchanged by this batch. Run the existing P2 contract/negative
 checks and native retained-consumer suite on the supported hosts; no imaginary
 previous SDK minor or stable ABI is promised. See `TOOLKIT_V1.md` and
 `P2_ACCEPTANCE.md`. Full current workspace and all outstanding R4 gates stay open.
+
+## Windows fixture correction — November 17, 2026
+
+Run `signoff-4468f6bee6f948329280405dd86edd9c` compiled the native applications
+and completed actual reference/expedition browser workflows before running the
+19 Windows R5 cases. Eighteen passed. The reconciliation case failed in the
+mock status server at `stream.read().unwrap()` with WSAEWOULDBLOCK (10035), then
+propagated the fixture thread panic through join. The fixture listener is
+nonblocking so its accept loop can enforce a three-second deadline. Windows
+can propagate that mode to the accepted stream; the fixture incorrectly assumed
+blocking stream I/O without selecting it.
+
+`web.rs::tests::r5_status_server` now explicitly calls
+`stream.set_nonblocking(false)` after accept and before the existing two-second
+read/write timeout settings. This changes only mock-server transport setup, not
+production reconciliation, security checks, nine case expectations, repeated
+reconciliation assertions, request/header validation, the 8192-byte cap, accept
+deadline or test count. The existing failing regression exercises the correction;
+no case was removed, ignored or changed to accept a weaker result. The corrected
+source must be rerun natively; no passing result is claimed for the new revision.
+The browser report retains `windows_shutdown.status=manual_pending`; automated
+browser success is not proof of interactive Ctrl+C/same-workspace recovery.

@@ -24,11 +24,17 @@
 > The previous source tuple passed all 70 helper tests on Windows; its report
 > is preserved at `.worldwright-local/evidence/signoff-e05fc054b3694bdabadea22f4f8cf8b1/`.
 > R7 completed in 134.96 seconds with the corrected 600-second suite deadline.
-> Native cache preparation has now succeeded. The first 12 native-path tests,
-> offline metadata, and tiny compiled probe ran successfully, but preflight stopped
-> on a Windows extended-path comparison bug. That checker is corrected with four
-> additional regressions (86 helper tests total); full preflight/native acceptance
-> remain pending. If already prepared, rerun only `native-storage.py check`.
+> Native preparation and the corrected complete path preflight have passed.
+> Run `signoff-573a6953d5b846e48bc27dcde072a1dc` passed all native suites,
+> browser workflows, Clippy and final Node fixtures, then failed the final binary
+> hash check. The collector had treated Cargo's shared target outputs as immutable
+> while later Cargo commands could rebuild them. It now retains independent byte
+> copies under `native/binaries/`, runs browser workflows against those copies and
+> verifies their identities afterward. Cache differences are recorded separately,
+> not used to rewrite tested-subject hashes. Six added regressions (92 helper tests
+> total) and this collector correction await execution. The old failed report stays
+> unchanged. Run a fresh `--native` collection; no preparation, formatting repair,
+> full cache rebuild or cache clearing is needed.
 > Existing evidence is not rewritten to claim coverage of newer source. The moved
 > R5 workspace is not opened by the collectors. No release gate closes automatically.
 

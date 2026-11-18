@@ -35,10 +35,19 @@ separation, exclusive creation, hashes and signed-decision requirements remain.
 This is cooperative tool configuration, not an OS filesystem sandbox.
 
 The collector requires explicit `--tools-only` or `--native`. The old 70-test
-helper pass is acknowledged for its captured source; native cache preparation
-and the original 12 path/import regressions have since executed successfully.
-A complete preflight is still pending after correcting a Windows path-spelling
-comparison defect. `native_paths.py` pins real compiler executables/sysroot,
+helper pass is acknowledged for its captured source. Native cache preparation,
+the corrected complete preflight and then all 86 helper tests have now passed
+in retained Windows runs. After format, fixture, workspace and lint fixes, all
+application checks passed in signoff-573a6953d5b846e48bc27dcde072a1dc; the run then
+failed a final hash guard that incorrectly treated Cargo target outputs as stable
+through later Cargo commands. The retained-subject correction below awaits a new
+run; this history is not retrospectively declared successful. An explicit source-format action
+is separate from collection: it requires --confirm-format-source, takes bounded
+byte backups of Git-visible Rust files, applies/checks the pinned formatter,
+records changed paths and before/after source identities, and checks every
+Git-visible non-Rust file's bytes remain unchanged. It never silently repairs
+source inside a supposedly stable evidence run, changes assertions to pass,
+overwrites old reports, or grants native acceptance. `native_paths.py` pins real compiler executables/sysroot,
 rejects unreviewed Cargo environment/configuration routing, and ensures nested
 SDK Cargo/rustc invocations select local binaries. `native-storage.py prepare`
 copies existing approved cached toolchain/registry/git trees without moving or
@@ -62,6 +71,25 @@ Native report v2 remains readable historically; the additive
 `storage_policy=repository-local-native-v1` marker requires a matching successful
 preflight phase and tool configuration. Unknown markers fail. Old reports do not
 retroactively prove local-storage compliance.
+
+`scripts/r6_subjects.py` separates build-cache entries from retained runtime
+subjects. Immediately after build, it writes fresh byte copies (not hard links)
+under the run's binaries/ directory, verifying source and copy hashes during
+retention. Browser/preview execution uses those exact paths. The final check
+and read-only verifier require unchanged retained bytes; local verification also
+checks the recorded subject paths identify the retained files. Source, compiler
+and configuration guards remain unchanged. Unit tests continue to use Cargo's
+normal test executables, bound to the same recorded source and test commands;
+this does not claim all tests ran the exact browser executable.
+
+Native report v2 has an additive binary_subject_policy=retained-byte-copy-v1
+marker. Its records include retained_relative_path, build_output_path and the
+copy method. The verifier requires both retained bytes and browser path/hash
+agreement; unknown or missing policy for retained records fails. Legacy reports
+retain their historical checks and are not reinterpreted as copied-subject proof.
+Cache outputs may change independently and are recorded diagnostically; their
+new hashes never replace the hashes of the executables actually browser-tested.
+This is guarded retention, not OS-enforced immutability or release approval.
 
 The Windows ACL subprocess now forwards only explicitly listed non-secret
 storage variables after env_clear, retaining restrictive credential checks.
@@ -1614,3 +1642,19 @@ reinterpret old signatures. A private packet copies only listed bytes, preserves
 Unix binary executability and carries its candidate/reviews/notes/hash inventory.
 Archive verification is not a fresh source/cluster/DB check. No public registry
 publication, production deployment, licensing grant or R6 completion is implied.
+
+## Studio command representation and scoped lint diagnostics — November 17, 2026
+
+The Studio CLI command enum now represents Serve as Box<ServeOptions> so growth
+of optional serve configuration does not inflate its payload-free help/version/
+status variants. Parsing still validates all fields before returning the command;
+the binary unwraps the owned options before passing them to web::serve. This is
+an internal command representation adjustment, not a flag, HTTP, persisted-format
+or retained SDK API change. Source callers constructing/matching the public Rust
+CLI enum must use the boxed payload. No lint suppression was added.
+
+The native-storage lint operation is diagnostic-only and uses the same selected
+packages, feature/target scope and -D warnings as the formal native collector.
+It preserves source/tool identities and uses existing repository-local caches,
+but does not replace tests or authorize a release. It exists to shorten the
+fix/check loop without silently resuming old evidence across source changes.

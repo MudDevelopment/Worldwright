@@ -8,7 +8,7 @@ use std::{
     fs::{self, File},
     io::{self, Read, Write},
     net::{IpAddr, SocketAddr},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command as ProcessCommand, ExitCode, Stdio},
     str::FromStr,
     thread,
@@ -64,14 +64,24 @@ mod backup_parser_tests {
 
     #[test]
     fn r6_pg_tool_route_is_exact_and_password_is_not_in_argv() {
-        let (endpoint,password)=pg_tool_connection("postgres://user:p%40ss+word@127.0.0.1:5432/db?sslmode=verify-full").unwrap();
-        assert_eq!(password.as_deref(),Some("p@ss+word"));
-        assert!(!endpoint.contains("p%40ss")); assert!(!endpoint.contains("p@ss"));
-        assert!(endpoint.contains("127.0.0.1:5432/db")); assert!(endpoint.contains("sslmode=verify-full"));
-        for value in ["postgres://localhost/db","postgres://user:pw@localhost/", "https://user:pw@localhost/db",
-            "postgres://user:pw@localhost/db?host=other", "postgres://user:pw@localhost/db?password=leak",
-            "postgres://user:pw@localhost/db?service=other", "postgres://user:p%00w@localhost/db"] {
-            assert!(pg_tool_connection(value).is_err(),"{value}");
+        let (endpoint, password) =
+            pg_tool_connection("postgres://user:p%40ss+word@127.0.0.1:5432/db?sslmode=verify-full")
+                .unwrap();
+        assert_eq!(password.as_deref(), Some("p@ss+word"));
+        assert!(!endpoint.contains("p%40ss"));
+        assert!(!endpoint.contains("p@ss"));
+        assert!(endpoint.contains("127.0.0.1:5432/db"));
+        assert!(endpoint.contains("sslmode=verify-full"));
+        for value in [
+            "postgres://localhost/db",
+            "postgres://user:pw@localhost/",
+            "https://user:pw@localhost/db",
+            "postgres://user:pw@localhost/db?host=other",
+            "postgres://user:pw@localhost/db?password=leak",
+            "postgres://user:pw@localhost/db?service=other",
+            "postgres://user:p%00w@localhost/db",
+        ] {
+            assert!(pg_tool_connection(value).is_err(), "{value}");
         }
     }
 
@@ -1276,7 +1286,10 @@ where
         },
         Command::Maintenance(command) => match crate::r6_cli::run(command).await {
             Ok(()) => ExitCode::SUCCESS,
-            Err(error) => { eprintln!("worldwright-server: {error}"); ExitCode::from(1) }
+            Err(error) => {
+                eprintln!("worldwright-server: {error}");
+                ExitCode::from(1)
+            }
         },
         Command::Takeover(options) => match run_takeover(options).await {
             Ok(()) => ExitCode::SUCCESS,
@@ -1319,7 +1332,9 @@ async fn run_backup(command: BackupCommand) -> Result<(), ServerError> {
         } => {
             validate_service(&service)?;
             validate_backup_key_separation(&auth, &key_env)?;
-            eprintln!("pg-service is a compatibility label only; pg_dump uses the explicit database URL endpoint");
+            eprintln!(
+                "pg-service is a compatibility label only; pg_dump uses the explicit database URL endpoint"
+            );
             let db = resolve_env(&database_env)
                 .map_err(|_| ServerError::startup("database unavailable"))?;
             let store = worldwright_persistence::PostgresStore::connect(&db)
@@ -1350,16 +1365,16 @@ async fn run_backup(command: BackupCommand) -> Result<(), ServerError> {
             let mut manifest_os = output.as_os_str().to_owned();
             manifest_os.push(".manifest.json");
             let manifest_path = PathBuf::from(manifest_os);
-            let mut manifest_file = match worldwright_operations::private_files::create_private(&manifest_path)
-            {
-                Ok(file) => file,
-                Err(_) => {
-                    let _ = fs::remove_file(&output);
-                    return Err(ServerError::startup(
-                        "backup manifest output already exists",
-                    ));
-                }
-            };
+            let mut manifest_file =
+                match worldwright_operations::private_files::create_private(&manifest_path) {
+                    Ok(file) => file,
+                    Err(_) => {
+                        let _ = fs::remove_file(&output);
+                        return Err(ServerError::startup(
+                            "backup manifest output already exists",
+                        ));
+                    }
+                };
             if store
                 .begin_recovery_job(
                     &context,
@@ -1497,7 +1512,9 @@ async fn run_backup_restore(
 ) -> Result<(), ServerError> {
     validate_service(&service)?;
     validate_backup_key_separation(&auth, &key_env)?;
-    eprintln!("pg-service is a compatibility label only; pg_restore uses the explicit target database URL endpoint");
+    eprintln!(
+        "pg-service is a compatibility label only; pg_restore uses the explicit target database URL endpoint"
+    );
     let control_url = resolve_env(&control_env)
         .map_err(|_| ServerError::startup("control database unavailable"))?;
     let target_url = resolve_env(&target_env)
@@ -1534,8 +1551,12 @@ async fn run_backup_restore(
             "backup world does not match target scope",
         ));
     }
-    for capability in [Capability::RestoreWorld, Capability::ViewStatus,
-        Capability::ManageOperators, Capability::InitiateRecovery] {
+    for capability in [
+        Capability::RestoreWorld,
+        Capability::ViewStatus,
+        Capability::ManageOperators,
+        Capability::InitiateRecovery,
+    ] {
         store.authorize_operator(&context, capability).await
             .map_err(|_| ServerError::startup("restore requires current restore/view/manage-operators/initiate-recovery grants in the control database"))?;
     }
@@ -1550,8 +1571,13 @@ async fn run_backup_restore(
         .map_err(|_| ServerError::startup("operation identity failed"))?;
     let started_at = now_secs()?;
     let started = Instant::now();
-    let rpo_seconds = started_at.checked_sub(signed.manifest.created_at)
-        .ok_or_else(|| ServerError::startup("backup timestamp is in the future; recovery age cannot be measured"))?;
+    let rpo_seconds = started_at
+        .checked_sub(signed.manifest.created_at)
+        .ok_or_else(|| {
+            ServerError::startup(
+                "backup timestamp is in the future; recovery age cannot be measured",
+            )
+        })?;
     store
         .begin_recovery_job(
             &context,
@@ -1664,11 +1690,23 @@ async fn run_backup_restore(
         "rto target seconds: {}",
         worldwright_operations::RTO_TARGET_SECONDS
     );
-    println!("rpo target met: {}", rpo_seconds <= worldwright_operations::RPO_TARGET_SECONDS);
-    println!("rto target met: {}", rto_seconds <= worldwright_operations::RTO_TARGET_SECONDS);
-    println!("measurement scope: backup age and restore verification duration, not total incident loss/downtime");
-    println!("restored sessions invalidated, prior operators disabled and grants revoked; only minimal current-control recovery authority restored");
-    println!("wait at least 31 seconds, then obtain a fresh issuer token before explicit takeover/regrant");
+    println!(
+        "rpo target met: {}",
+        rpo_seconds <= worldwright_operations::RPO_TARGET_SECONDS
+    );
+    println!(
+        "rto target met: {}",
+        rto_seconds <= worldwright_operations::RTO_TARGET_SECONDS
+    );
+    println!(
+        "measurement scope: backup age and restore verification duration, not total incident loss/downtime"
+    );
+    println!(
+        "restored sessions invalidated, prior operators disabled and grants revoked; only minimal current-control recovery authority restored"
+    );
+    println!(
+        "wait at least 31 seconds, then obtain a fresh issuer token before explicit takeover/regrant"
+    );
     println!("restore verified; takeover not performed");
     Ok(())
 }
@@ -1717,26 +1755,43 @@ fn validate_service(v: &str) -> Result<(), ServerError> {
         Ok(())
     }
 }
-fn bounded_file(p: &PathBuf, max: usize) -> Result<Vec<u8>, ServerError> {
-    worldwright_operations::private_files::read_private(p, max)
-        .map_err(|_| ServerError::startup("manifest requires a bounded private regular file in a protected directory"))
+fn bounded_file(p: &Path, max: usize) -> Result<Vec<u8>, ServerError> {
+    worldwright_operations::private_files::read_private(p, max).map_err(|_| {
+        ServerError::startup(
+            "manifest requires a bounded private regular file in a protected directory",
+        )
+    })
 }
 fn validate_backup_key_separation(auth: &ReleaseAuth, backup_env: &str) -> Result<(), ServerError> {
-    let operator = decode_hex_key(&resolve_env(&auth.key_env).map_err(|_| ServerError::startup("operator key unavailable"))?)
-        .map_err(|_| ServerError::startup("operator key invalid"))?;
-    let backup = decode_hex_key(&resolve_env(backup_env).map_err(|_| ServerError::startup("backup key unavailable"))?)
-        .map_err(|_| ServerError::startup("backup key invalid"))?;
-    if operator.len()<32 || backup.len()<32 || operator==backup {
-        return Err(ServerError::startup("backup-signing-key-env must name a valid key distinct from operator-key-env; rotate keys explicitly, do not rewrite old evidence"));
+    let operator = decode_hex_key(
+        &resolve_env(&auth.key_env)
+            .map_err(|_| ServerError::startup("operator key unavailable"))?,
+    )
+    .map_err(|_| ServerError::startup("operator key invalid"))?;
+    let backup = decode_hex_key(
+        &resolve_env(backup_env).map_err(|_| ServerError::startup("backup key unavailable"))?,
+    )
+    .map_err(|_| ServerError::startup("backup key invalid"))?;
+    if operator.len() < 32 || backup.len() < 32 || operator == backup {
+        return Err(ServerError::startup(
+            "backup-signing-key-env must name a valid key distinct from operator-key-env; rotate keys explicitly, do not rewrite old evidence",
+        ));
     }
     Ok(())
 }
-fn stream_digest(p: &PathBuf) -> Result<[u8; 32], ServerError> {
+fn stream_digest(p: &Path) -> Result<[u8; 32], ServerError> {
     const MAX_BACKUP_BYTES: u64 = 128 * 1024 * 1024 * 1024;
     let mut f = worldwright_operations::private_files::open_private(p)
         .map_err(|_| ServerError::startup("backup requires a protected private regular file"))?;
-    let expected = f.metadata().map_err(|_| ServerError::startup("backup metadata unavailable"))?.len();
-    if expected == 0 || expected > MAX_BACKUP_BYTES { return Err(ServerError::startup("backup exceeds the 128 GiB bound or is empty")); }
+    let expected = f
+        .metadata()
+        .map_err(|_| ServerError::startup("backup metadata unavailable"))?
+        .len();
+    if expected == 0 || expected > MAX_BACKUP_BYTES {
+        return Err(ServerError::startup(
+            "backup exceeds the 128 GiB bound or is empty",
+        ));
+    }
     let mut total = 0u64;
     let mut h = Sha256::new();
     let mut b = [0u8; 64 * 1024];
@@ -1747,11 +1802,17 @@ fn stream_digest(p: &PathBuf) -> Result<[u8; 32], ServerError> {
         if n == 0 {
             break;
         }
-        total = total.checked_add(n as u64).ok_or_else(|| ServerError::startup("backup size overflow"))?;
-        if total > expected { return Err(ServerError::startup("backup changed during hashing")); }
+        total = total
+            .checked_add(n as u64)
+            .ok_or_else(|| ServerError::startup("backup size overflow"))?;
+        if total > expected {
+            return Err(ServerError::startup("backup changed during hashing"));
+        }
         h.update(&b[..n])
     }
-    if total != expected { return Err(ServerError::startup("backup changed during hashing")); }
+    if total != expected {
+        return Err(ServerError::startup("backup changed during hashing"));
+    }
     Ok(h.finalize().into())
 }
 fn write_manifest_bytes(file: &mut File, bytes: &[u8]) -> Result<(), ServerError> {
@@ -1778,26 +1839,65 @@ fn now_secs() -> Result<u64, ServerError> {
 // Bind libpq tools to the SAME explicit endpoint inspected through SQLx.
 // Password is removed from argv and sent only to the child environment.
 fn pg_tool_connection(value: &str) -> Result<(String, Option<String>), ServerError> {
-    if value.len() > 8192 { return Err(ServerError::startup("database URL exceeds tool bound")); }
-    let mut url = reqwest::Url::parse(value).map_err(|_| ServerError::startup("PostgreSQL tool URL invalid"))?;
-    if !matches!(url.scheme(), "postgres" | "postgresql") || url.host_str().is_none()
-        || url.username().is_empty() || url.path().len() < 2 || url.fragment().is_some()
-        || url.query_pairs().any(|(key, _)| matches!(key.as_ref(), "host" | "hostaddr" | "port" | "dbname" | "user" | "password" | "service" | "servicefile")) {
-        return Err(ServerError::startup("PostgreSQL tools require an explicit user/host/database URL without routing overrides; pg-service no longer selects the destination"));
+    if value.len() > 8192 {
+        return Err(ServerError::startup("database URL exceeds tool bound"));
     }
-    let password = url.password().map(|value| {
-        let bytes=value.as_bytes(); let mut result=Vec::new(); let mut i=0;
-        while i<bytes.len() {
-            if bytes[i]==b'%' {
-                let text=value.get(i+1..i+3).ok_or_else(|| ServerError::startup("password encoding invalid"))?;
-                result.push(u8::from_str_radix(text,16).map_err(|_| ServerError::startup("password encoding invalid"))?); i+=3;
-            } else { result.push(bytes[i]); i+=1; }
-        }
-        let value=String::from_utf8(result).map_err(|_| ServerError::startup("password encoding invalid"))?;
-        if value.contains('\0') { return Err(ServerError::startup("password encoding invalid")); }
-        Ok(value)
-    }).transpose()?;
-    url.set_password(None).map_err(|_| ServerError::startup("cannot isolate database password"))?;
+    let mut url = reqwest::Url::parse(value)
+        .map_err(|_| ServerError::startup("PostgreSQL tool URL invalid"))?;
+    if !matches!(url.scheme(), "postgres" | "postgresql")
+        || url.host_str().is_none()
+        || url.username().is_empty()
+        || url.path().len() < 2
+        || url.fragment().is_some()
+        || url.query_pairs().any(|(key, _)| {
+            matches!(
+                key.as_ref(),
+                "host"
+                    | "hostaddr"
+                    | "port"
+                    | "dbname"
+                    | "user"
+                    | "password"
+                    | "service"
+                    | "servicefile"
+            )
+        })
+    {
+        return Err(ServerError::startup(
+            "PostgreSQL tools require an explicit user/host/database URL without routing overrides; pg-service no longer selects the destination",
+        ));
+    }
+    let password = url
+        .password()
+        .map(|value| {
+            let bytes = value.as_bytes();
+            let mut result = Vec::new();
+            let mut i = 0;
+            while i < bytes.len() {
+                if bytes[i] == b'%' {
+                    let text = value
+                        .get(i + 1..i + 3)
+                        .ok_or_else(|| ServerError::startup("password encoding invalid"))?;
+                    result.push(
+                        u8::from_str_radix(text, 16)
+                            .map_err(|_| ServerError::startup("password encoding invalid"))?,
+                    );
+                    i += 3;
+                } else {
+                    result.push(bytes[i]);
+                    i += 1;
+                }
+            }
+            let value = String::from_utf8(result)
+                .map_err(|_| ServerError::startup("password encoding invalid"))?;
+            if value.contains('\0') {
+                return Err(ServerError::startup("password encoding invalid"));
+            }
+            Ok(value)
+        })
+        .transpose()?;
+    url.set_password(None)
+        .map_err(|_| ServerError::startup("cannot isolate database password"))?;
     Ok((url.to_string(), password))
 }
 
@@ -1811,8 +1911,13 @@ fn run_pg_tool(
     let mut command = ProcessCommand::new(tool);
     // Put options before pg_restore's positional input; do not depend on getopt
     // argument permutation differing between native Windows and Unix builds.
-    command.arg(format!("--dbname={endpoint}")).args(arguments).env_clear();
-    if let Some(password) = password { command.env("PGPASSWORD", password); }
+    command
+        .arg(format!("--dbname={endpoint}"))
+        .args(arguments)
+        .env_clear();
+    if let Some(password) = password {
+        command.env("PGPASSWORD", password);
+    }
     for name in [
         "PATH",
         "SystemRoot",
@@ -2140,7 +2245,9 @@ fn print_help() {
     println!(
         "Protocol v1 browser transport with local process-local mode and PostgreSQL active-artifact mode."
     );
-    println!("       worldwright-server maintenance <retention-status|retention-prune|interrupt-job> ... (see docs/R6_FEATURES.md)");
+    println!(
+        "       worldwright-server maintenance <retention-status|retention-prune|interrupt-job> ... (see docs/R6_FEATURES.md)"
+    );
     println!("Default bind: 127.0.0.1:3000; only loopback binds are accepted.");
 }
 

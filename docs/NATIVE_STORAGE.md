@@ -19,9 +19,21 @@ bug: Rust emitted an extended Windows drive path for Cargo and Python path-value
 comparison treated it as different from its ordinary spelling. The failed report
 `native-storage-check-7a148a6edc414306ab82e9079b2d4493` is preserved unchanged.
 The corrected checker adds four regressions (16 native-path tests; 86 total
-helper tests) and requires containment plus actual filesystem identity. This
-correction and complete preflight still await a fresh Windows run. Preparation
-need not be repeated; run only `native-storage.py check` to resume validation.
+helper tests) and requires containment plus actual filesystem identity. Complete
+preflight then passed in `native-storage-check-05efaf01b5a244dd81525f407ad60620`.
+Native run `signoff-a1220a51923548a7813910c375987ef4` subsequently passed all 86
+helper tests and its nested path preflight, then stopped at rustfmt differences.
+Formatting repair succeeded in `native-storage-format-145eb268d2484e4c82beb04498afd059`.
+The next run, `signoff-4468f6bee6f948329280405dd86edd9c`, passed format, metadata,
+application build and real browser workflows, then stopped at 18/19 R5 tests.
+The R5 socket correction, retained-SDK workspace fix and subsequent lint fixes
+then passed. Run `signoff-573a6953d5b846e48bc27dcde072a1dc` completed all test,
+browser, Clippy and Node phases before failing its final binary hash guard.
+Cargo target outputs were incorrectly treated as immutable across later Cargo
+commands. The retained-binary correction described below is installed but awaits
+execution; six new regressions bring helper coverage to 92 tests. Earlier failed
+evidence stays unchanged. No setup/formatting repetition or cache clearing is
+required; a fresh native collection must establish the corrected binding.
 
 ## What changed
 
@@ -114,6 +126,31 @@ Expected check status: `native-storage-preflight-passed-not-acceptance`.
 Each command creates a separate new directory under `.worldwright-local/evidence`
 and writes `r6-report.json`. Failed reports are useful and must be preserved.
 
+## Explicit formatting repair after a format-check failure
+
+Only after collection has stopped, run:
+
+```powershell
+& 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-R6-Python\Scripts\python.exe' -B `
+    'E:\Hold\Worldwright\scripts\native-storage.py' format --confirm-format-source
+```
+
+This action intentionally modifies Rust source formatting using the pinned local
+Cargo/rustfmt. It snapshots exact current Git-visible Rust bytes (including
+uncommitted edits) to `rust-source-before/` in a new local evidence directory,
+with limits of 800 Rust files / 64 MiB aggregate. It refuses to format if the
+source changes during backup. It runs `cargo fmt --all` followed by
+`cargo fmt --all -- --check`, retains logs and before/after source identities,
+and verifies that the source inventory and Git-visible non-Rust file bytes
+(including migrations and lockfiles) remain unchanged. No automatic rollback
+occurs after a failure: inspect the report and backup first. This is not a backup
+of ignored source files, and other writers must be stopped during formatting.
+
+Expected status: `source-format-passed-native-not-run`. The action completed
+successfully in `native-storage-format-145eb268d2484e4c82beb04498afd059`. It does not build Worldwright, delete
+caches, relax test assertions or retroactively update old evidence. Following a
+successful repair, start a fresh native collection for the formatted source.
+
 ## Native collection after a successful preflight
 
 ```powershell
@@ -131,3 +168,66 @@ or assertions to make them pass. Logs and partial reports identify the exact pha
 Passing native collection remains non-DB prerequisite evidence. Manual Windows
 Ctrl+C/same-workspace recovery, live migrations/restore/retention exercises,
 independent R1-R6 adoption and the final release decisions are not granted by it.
+
+## Focused Clippy diagnosis before another full native run
+
+Run `signoff-0809150c142a47df858c6101e655310b` passed the retained SDK regression
+and reached Clippy. The recorded error was large_enum_variant: Studio's Serve
+variant carried at least 208 bytes inline while other variants carried no data.
+The CLI now boxes ServeOptions; parser construction, dispatch unboxing and the
+existing bind assertion were updated. CLI flags, errors, token-source exclusivity,
+workspace behavior and -D warnings remain unchanged. This fix awaits execution.
+
+Use a scoped diagnostic instead of repeatedly rebuilding/running every suite
+while discovering lint issues:
+
+```powershell
+& 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-R6-Python\Scripts\python.exe' -B `
+    'E:\Hold\Worldwright\scripts\native-storage.py' lint
+```
+
+This runs format-check and the native collector's exact Clippy package scope:
+Studio, server, operations, console and release, with all targets/features,
+locked/offline dependencies, the native host/local target cache, and -D warnings.
+It does not run helper suites, native tests, browser checks, source-format apply,
+network setup or automatic fixes. A new native-storage-lint evidence directory
+retains logs, tool identities and before/after source identity; changes during
+execution fail. Expected success is native-lint-passed-not-acceptance.
+The command has been source-reviewed but not executed here. After it passes,
+a fresh full native collection is still required; the diagnostic cannot close
+R6 or stand in for same-source complete acceptance evidence.
+
+### Focused lint follow-up
+
+The format check passed in `native-storage-lint-04360c5d20254a09ae704b46e9716b9c`.
+Clippy then reported two server ptr_arg findings, for bounded_file and
+stream_digest taking &PathBuf. Both private helpers now take &Path; existing
+PathBuf callers borrow through normal deref coercion. Their bodies, private-file
+checks, bounds, hashing and error behavior are unchanged. No lint suppression or
+threshold change was made. The correction needs another `native-storage.py lint`
+run; no cache reset, preparation or full acceptance rerun is needed at this stage.
+
+## Retained runtime binaries versus mutable Cargo outputs
+
+The native collector now retains the three built executables in its fresh
+`native/binaries/` directory. These are exclusive byte copies, not Cargo-style
+hard links. Each source/copy digest is checked during retention; unchanged byte
+copies remain the subjects of the report and the actual browser/preview run.
+No late cache hash replaces a tested-subject hash. Each file remains subject to
+the existing 64 MiB evidence bound; no limit was raised or verification removed.
+
+The final collector and read-only evidence validator check retained bytes, reject
+linked/escaping/missing/changed subjects, and match browser paths and hashes to
+the retained records. `--check-local` verifies the local retained files along
+with current source/config/tool identities. Retained binaries are part of the
+normal evidence inventory. Original cache paths and post-Cargo hashes are separate
+observations; normal cache regeneration does not invalidate retained subjects.
+Six regression cases cover cache rebuild independence, retained-file mutation,
+exclusive output, source mutation during copy, path escape and hard-link rejection.
+Those new tests and the updated complete collection have not yet executed.
+
+This is local test evidence, not an installed desktop distribution or signer
+approval. Native test executables are still built/run by Cargo from the recorded
+source; their identity is not falsely equated to the browser executable. Keep
+all original failed reports. Rerun the same `--native --allow-dirty` command for
+a fresh same-source collection; do not clear or copy the target cache again.

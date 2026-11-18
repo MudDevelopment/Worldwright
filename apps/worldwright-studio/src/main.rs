@@ -29,6 +29,7 @@ async fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(Command::Serve(options)) => {
+            let options = *options;
             match Workspace::open_or_create(&options.workspace, options.content.as_deref()) {
                 Ok(workspace) => match worldwright_studio::web::serve(options, workspace).await {
                     Ok(()) => ExitCode::SUCCESS,

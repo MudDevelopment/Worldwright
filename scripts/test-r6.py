@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import r6_support as support
+import r6_subjects as subjects
 
 spec = importlib.util.spec_from_file_location('r6_evidence', Path(__file__).with_name('r6-evidence.py'))
 evidence = importlib.util.module_from_spec(spec)
@@ -136,6 +137,58 @@ class R6Tests(unittest.TestCase):
             self.assertIn('worldwright-server', constants)
         self.assertTrue(any(isinstance(v.func, ast.Name) and v.func.id == 'suite' and v.args
                             and isinstance(v.args[0], ast.Constant) and v.args[0].value == 'server-r6' for v in calls))
+
+    def retained_fixture(self):
+        source = self.root / 'cache' / 'app.exe'
+        source.parent.mkdir()
+        source.write_bytes(b'original executable fixture')
+        output = self.root / 'retained'; output.mkdir()
+        records = subjects.retain_binaries({'app': source}, output)
+        return source, output, records
+
+    def test_retained_copy_survives_cache_rebuild(self):
+        source, output, records = self.retained_fixture()
+        copy = Path(records['app']['path'])
+        self.assertFalse(source.samefile(copy))
+        self.assertEqual(copy.stat().st_nlink, 1)
+        source.write_bytes(b'rebuilt cache fixture')
+        subjects.verify_retained(output, records, check_local=True)
+        self.assertFalse(subjects.cache_observations(records)['app']['matches_retained'])
+        self.assertEqual(copy.read_bytes(), b'original executable fixture')
+
+    def test_retained_copy_tamper_is_rejected(self):
+        _, output, records = self.retained_fixture()
+        Path(records['app']['path']).write_bytes(b'changed subject')
+        with self.assertRaisesRegex(ValueError, 'retained binary changed'):
+            subjects.verify_retained(output, records)
+
+    def test_retention_never_overwrites_existing_subject_directory(self):
+        source, output, records = self.retained_fixture()
+        before = Path(records['app']['path']).read_bytes()
+        with self.assertRaises(ValueError): subjects.retain_binaries({'app': source}, output)
+        self.assertEqual(Path(records['app']['path']).read_bytes(), before)
+
+    def test_source_change_during_retention_fails(self):
+        source = self.root / 'app.exe'; source.write_bytes(b'first')
+        output = self.root / 'retained'; output.mkdir()
+        original_new_file = subjects.new_file
+        def concurrent_change(path, data):
+            original_new_file(path, data)
+            source.write_bytes(b'second')
+        with patch.object(subjects, 'new_file', side_effect=concurrent_change):
+            with self.assertRaisesRegex(ValueError, 'changed during retention'):
+                subjects.retain_binaries({'app': source}, output)
+
+    def test_retained_path_escape_is_rejected(self):
+        _, output, records = self.retained_fixture()
+        records['app']['retained_relative_path'] = '../app.exe'
+        with self.assertRaises(ValueError): subjects.verify_retained(output, records)
+
+    def test_hardlinked_retained_subject_is_rejected(self):
+        _, output, records = self.retained_fixture()
+        os.link(records['app']['path'], self.root / 'alias.exe')
+        with self.assertRaisesRegex(ValueError, 'linked or nonregular'):
+            subjects.verify_retained(output, records)
 
     def test_known_secret_is_redacted(self):
         with patch.dict(os.environ, {'R6_TEST_TOKEN': 'test-only-redaction-canary'}):

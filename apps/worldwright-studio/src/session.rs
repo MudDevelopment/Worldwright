@@ -1,8 +1,12 @@
 //! Cooperative, fail-closed exclusion for the supported Studio serve path.
 //! A crash leaves a sentinel: an operator must establish that all writers have
 //! stopped before archiving/removing it. PID reuse is never treated as proof.
-use std::{fs::{self, File, OpenOptions}, io::{Read, Write}, path::PathBuf};
 use crate::workspace::Workspace;
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 pub(crate) struct StudioSession {
     path: PathBuf,
@@ -16,7 +20,12 @@ impl StudioSession {
         let path = workspace.session_path();
         let mut nonce = [0_u8; 16];
         getrandom::fill(&mut nonce).map_err(|_| "Studio session randomness unavailable")?;
-        let identity = format!("worldwright-studio-session-v1\npid={}\nnonce={:032x}\n", std::process::id(), u128::from_be_bytes(nonce)).into_bytes();
+        let identity = format!(
+            "worldwright-studio-session-v1\npid={}\nnonce={:032x}\n",
+            std::process::id(),
+            u128::from_be_bytes(nonce)
+        )
+        .into_bytes();
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -31,13 +40,19 @@ impl StudioSession {
         }
         let mut file = options.open(&path).map_err(|_| "Studio workspace is in use or its session sentinel needs operator recovery; see docs/R5_ACCEPTANCE.md")?;
         // On incomplete creation leave the sentinel and fail closed.
-        file.write_all(&identity).and_then(|()| file.sync_all())
+        file.write_all(&identity)
+            .and_then(|()| file.sync_all())
             .map_err(|_| "Studio session sentinel write failed; preserve workspace for recovery")?;
         #[cfg(unix)]
         File::open(path.parent().ok_or("Studio session parent unavailable")?)
             .and_then(|directory| directory.sync_all())
             .map_err(|_| "Studio session directory sync failed; preserve workspace for recovery")?;
-        Ok(Self { path, file: Some(file), identity, release_on_drop: true })
+        Ok(Self {
+            path,
+            file: Some(file),
+            identity,
+            release_on_drop: true,
+        })
     }
 
     pub(crate) fn preserve(&mut self) {
@@ -47,7 +62,9 @@ impl StudioSession {
 
 impl Drop for StudioSession {
     fn drop(&mut self) {
-        if !self.release_on_drop || std::thread::panicking() { return; }
+        if !self.release_on_drop || std::thread::panicking() {
+            return;
+        }
         // Windows keeps a nonshared handle until shutdown. Unix additionally
         // checks inode identity. This is not a lock against hostile same-user code.
         let owned = self.file.as_ref().and_then(|file| file.metadata().ok());
@@ -62,13 +79,17 @@ impl Drop for StudioSession {
                     owned.dev() == named.dev() && owned.ino() == named.ino() && named.nlink() == 1
                 }
                 #[cfg(not(unix))]
-                { owned.len() == named.len() }
+                {
+                    owned.len() == named.len()
+                }
             }
             _ => false,
         };
         let mut bytes = Vec::new();
-        let intact = same && File::open(&self.path)
-            .and_then(|file| file.take(256).read_to_end(&mut bytes)).is_ok()
+        let intact = same
+            && File::open(&self.path)
+                .and_then(|file| file.take(256).read_to_end(&mut bytes))
+                .is_ok()
             && bytes == self.identity;
         if intact && fs::remove_file(&self.path).is_ok() {
             #[cfg(unix)]
@@ -83,7 +104,14 @@ impl Drop for StudioSession {
 mod tests {
     use super::*;
     fn workspace() -> (Workspace, PathBuf) {
-        let root = std::env::temp_dir().join(format!("worldwright-session-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!(
+            "worldwright-session-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         (Workspace::open_or_create(&root, None).unwrap(), root)
     }
     #[test]
@@ -100,7 +128,9 @@ mod tests {
     // Invoked as an exact child test by the crash regression, not evidence by itself.
     #[test]
     fn session_process_helper() {
-        let Some(root) = std::env::var_os("WORLDWRIGHT_R5_SESSION_TEST_ROOT") else { return; };
+        let Some(root) = std::env::var_os("WORLDWRIGHT_R5_SESSION_TEST_ROOT") else {
+            return;
+        };
         let root = PathBuf::from(root);
         let workspace = Workspace::open_or_create(&root, None).unwrap();
         let session = StudioSession::acquire(&workspace).unwrap();
@@ -113,22 +143,40 @@ mod tests {
     fn r5_session_cross_process_kill_preserves_exclusion_until_operator_recovery() {
         struct Child(std::process::Child);
         impl Drop for Child {
-            fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
         }
         let (workspace, root) = workspace();
-        let mut child = Child(std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "session::tests::session_process_helper", "--nocapture"])
-            .env("WORLDWRIGHT_R5_SESSION_TEST_ROOT", &root)
-            .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null())
-            .spawn().unwrap());
+        let mut child = Child(
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "session::tests::session_process_helper",
+                    "--nocapture",
+                ])
+                .env("WORLDWRIGHT_R5_SESSION_TEST_ROOT", &root)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while !root.join("child-ready").exists() {
-            assert!(child.0.try_wait().unwrap().is_none(), "session child exited before acquiring");
-            assert!(std::time::Instant::now() < deadline, "session child did not become ready");
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "session child exited before acquiring"
+            );
+            assert!(
+                std::time::Instant::now() < deadline,
+                "session child did not become ready"
+            );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(StudioSession::acquire(&workspace).is_err());
-        child.0.kill().unwrap(); child.0.wait().unwrap();
+        child.0.kill().unwrap();
+        child.0.wait().unwrap();
         assert!(workspace.session_path().exists());
         assert!(StudioSession::acquire(&workspace).is_err());
         // This isolated test has reaped its exact child, establishing the manual
@@ -142,7 +190,8 @@ mod tests {
     fn r5_session_preserves_sentinel_when_cleanup_is_uncertain() {
         let (workspace, root) = workspace();
         let mut session = StudioSession::acquire(&workspace).unwrap();
-        session.preserve(); drop(session);
+        session.preserve();
+        drop(session);
         assert!(StudioSession::acquire(&workspace).is_err());
         fs::remove_dir_all(root).unwrap();
     }

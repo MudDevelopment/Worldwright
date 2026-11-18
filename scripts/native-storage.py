@@ -1,6 +1,7 @@
 """Prepare cached native tooling and run repository-local preflight.
 prepare copies existing caches; check runs offline probes; format explicitly
 backs up Git-visible Rust sources and applies/checks the pinned formatter.
+lint runs a focused format/Clippy diagnostic using the native gate's exact scope.
 No command downloads tools or grants release approval.
 """
 from pathlib import Path
@@ -159,6 +160,7 @@ def format_source(collector):
     protected = {item['path']: sha(local.ROOT / item['path']) for item in before['inventory'] if item['path'] not in rust}
     collector.report['rust_backup_files'] = len(rust)
     collector.report['rust_backup_bytes'] = total
+    require(source_identity()['source_sha256'] == before['source_sha256'], 'source changed while preparing formatter backup; no formatting started')
     cargo = tools['binaries']['cargo']['path']
     try:
         collector.phase('format-apply', [cargo, 'fmt', '--all'], 300)
@@ -177,9 +179,33 @@ def format_source(collector):
     collector.report['status'] = 'source-format-passed-native-not-run'
 
 
+def lint_source(collector):
+    tools = native.configure_native()
+    collector.report['native_paths'] = tools
+    collector.report['scope'] = 'format-and-native-clippy-diagnostic-only'
+    before = source_identity()
+    new_file(collector.output / 'source-before.json', encode(before))
+    cargo = tools['binaries']['cargo']['path']
+    common = ['--locked', '--offline', '--target', tools['host'], '--target-dir', tools['target']]
+    try:
+        collector.phase('format-check', [cargo, 'fmt', '--all', '--', '--check'], 180)
+        collector.phase('clippy', [cargo, 'clippy', '-p', 'worldwright-studio', '-p', 'worldwright-server',
+            '-p', 'worldwright-operations', '-p', 'worldwright-console', '-p', 'worldwright-release',
+            '--all-targets', '--all-features', *common, '--', '-D', 'warnings'], 1800)
+    finally:
+        after = source_identity()
+        new_file(collector.output / 'source-after.json', encode(after))
+        collector.report['source_sha256'] = before['source_sha256']
+        collector.report['source_unchanged'] = before == after
+        require(before == after, 'source changed during lint diagnostic')
+    require(native.configuration_inventory() == tools['cargo_configurations'], 'Cargo config changed during lint')
+    require(all(sha(Path(item['path'])) == item['sha256'] for item in tools['binaries'].values()), 'native tool changed during lint')
+    collector.report['status'] = 'native-lint-passed-not-acceptance'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('prepare', 'check', 'format'))
+    parser.add_argument('operation', choices=('prepare', 'check', 'format', 'lint'))
     parser.add_argument('--source-cargo-home', type=Path)
     parser.add_argument('--source-rustup-home', type=Path)
     parser.add_argument('--output', type=Path)
@@ -203,6 +229,7 @@ def main():
         acquired = True
         if args.operation == 'prepare': prepare(collector, source_cargo, source_rustup)
         elif args.operation == 'format': format_source(collector)
+        elif args.operation == 'lint': lint_source(collector)
         else: preflight(collector)
     except (Exception, KeyboardInterrupt) as error:
         collector.fail(error)
@@ -210,7 +237,7 @@ def main():
     finally:
         if acquired: lock.unlink()
         collector.finish()
-    return 0 if collector.report['status'] in ('native-storage-prepared-preflight-required', 'native-storage-preflight-passed-not-acceptance', 'source-format-passed-native-not-run') else 1
+    return 0 if collector.report['status'] in ('native-storage-prepared-preflight-required', 'native-storage-preflight-passed-not-acceptance', 'source-format-passed-native-not-run', 'native-lint-passed-not-acceptance') else 1
 
 
 if __name__ == '__main__':

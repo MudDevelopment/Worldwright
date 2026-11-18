@@ -109,8 +109,10 @@ fn retained_sdk_api_v1_fixture_builds_from_relocated_private_bundle() {
         consumer.join("content/world.json"),
     )
     .unwrap();
+    // Keep the bundled SDK in its own workspace, as the project generator does.
+    // The root consumer is implicit; an explicit "." member overrides exclusion.
     fs::write(consumer.join("Cargo.toml"), format!(
-        "[workspace]\n[package]\nname = \"sdk-api-v1-consumer\"\nversion = \"0.0.0\"\nedition = \"2024\"\nrust-version = \"{}\"\npublish = false\n[dependencies]\nworldwright-sdk = {{ path = \"sdk/crates/worldwright-sdk\" }}\n",
+        "[workspace]\nmembers = []\nexclude = [\"sdk\"]\nresolver = \"3\"\n\n[package]\nname = \"sdk-api-v1-consumer\"\nversion = \"0.0.0\"\nedition = \"2024\"\nrust-version = \"{}\"\npublish = false\n[dependencies]\nworldwright-sdk = {{ path = \"sdk/crates/worldwright-sdk\" }}\n",
         worldwright_sdk::COMPATIBILITY.minimum_rust)).unwrap();
     let host_output = Command::new("rustc").arg("-vV").output().unwrap();
     assert!(host_output.status.success());
@@ -167,6 +169,13 @@ fn retained_sdk_api_v1_fixture_builds_from_relocated_private_bundle() {
     let metadata: serde_json::Value = serde_json::from_slice(&metadata.stdout).unwrap();
     let packages = metadata["packages"].as_array().unwrap();
     let consumer_root = consumer.canonicalize().unwrap();
+    assert_eq!(metadata["workspace_members"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        PathBuf::from(metadata["workspace_root"].as_str().unwrap())
+            .canonicalize()
+            .unwrap(),
+        consumer_root
+    );
     let mut local_names = Vec::new();
     for package in packages {
         if package["source"].is_null() {

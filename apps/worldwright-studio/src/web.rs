@@ -88,7 +88,10 @@ pub async fn serve(options: ServeOptions, ws: Workspace) -> Result<(), String> {
     let stop_result = tokio::task::spawn_blocking(move || shutdown_preview.stop()).await;
     if !matches!(stop_result, Ok(Ok(_))) {
         session.preserve();
-        return Err("preview shutdown failed; workspace session sentinel retained for operator recovery".into());
+        return Err(
+            "preview shutdown failed; workspace session sentinel retained for operator recovery"
+                .into(),
+        );
     }
     match result {
         Err(error) => Err(error),
@@ -144,11 +147,20 @@ pub(crate) fn router(state: AppState) -> Router {
             post(package).layer(DefaultBodyLimit::max(4096)),
         )
         .route("/api/v1/artifacts", get(artifacts))
-        .route("/api/v1/artifacts/{digest}/identity", get(artifact_identity))
+        .route(
+            "/api/v1/artifacts/{digest}/identity",
+            get(artifact_identity),
+        )
         .route("/api/v1/publication-auth", get(publication_auth))
         .route("/api/v1/publication-recovery", get(publication_recovery))
-        .route("/api/v1/publications/{request}/recover", post(recover_publication))
-        .route("/api/v1/publications/{request}/reconcile", post(reconcile_publication))
+        .route(
+            "/api/v1/publications/{request}/recover",
+            post(recover_publication),
+        )
+        .route(
+            "/api/v1/publications/{request}/reconcile",
+            post(reconcile_publication),
+        )
         .route("/api/v1/publications", post(publish).get(publications))
         .route("/api/v1/publications/{request}", post(refresh_publication))
         .route("/api/v1/preview", get(preview_status))
@@ -379,54 +391,86 @@ async fn artifact_identity(State(state): State<AppState>, Path(digest): Path<Str
     match tokio::task::spawn_blocking(move || state.workspace.artifact_identity(&digest)).await {
         Ok(Ok(identity)) => json_response(StatusCode::OK, &identity),
         Ok(Err(error)) => map_workspace_error(error),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "artifact identity failed"),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "artifact identity failed",
+        ),
     }
 }
 
 async fn publication_auth(State(state): State<AppState>) -> Response {
-    json_response(StatusCode::OK, &json!({
-        "schema_version": 1,
-        "configured": state.publication.is_some(),
-        "renewal": match state.publication.as_ref() {
-            Some(client) if client.renewable() => "token_file",
-            Some(_) => "restart_with_token_env",
-            None => "disabled",
-        },
-        "automatic_retry": false,
-    }))
+    json_response(
+        StatusCode::OK,
+        &json!({
+            "schema_version": 1,
+            "configured": state.publication.is_some(),
+            "renewal": match state.publication.as_ref() {
+                Some(client) if client.renewable() => "token_file",
+                Some(_) => "restart_with_token_env",
+                None => "disabled",
+            },
+            "automatic_retry": false,
+        }),
+    )
 }
 
 async fn publication_recovery(State(state): State<AppState>) -> Response {
     match tokio::task::spawn_blocking(move || state.workspace.publication_recovery()).await {
         Ok(Ok(records)) => json_response(StatusCode::OK, &records),
         Ok(Err(error)) => map_workspace_error(error),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "publication recovery listing failed"),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "publication recovery listing failed",
+        ),
     }
 }
 
-async fn recover_publication(State(state): State<AppState>, Path(request): Path<String>, body: Bytes) -> Response {
+async fn recover_publication(
+    State(state): State<AppState>,
+    Path(request): Path<String>,
+    body: Bytes,
+) -> Response {
     if serde_json::from_slice::<serde_json::Value>(&body).ok() != Some(json!({})) {
         return error(StatusCode::BAD_REQUEST, "empty recovery object required");
     }
     match tokio::task::spawn_blocking(move || {
-        let _gate = state.publication_gate.try_lock()
-            .map_err(|_| PublishFailure::conflict("another publication operation is in progress"))?;
-        state.workspace.recover_publication_record(&request).map_err(|_| PublishFailure::internal())
-    }).await {
+        let _gate = state.publication_gate.try_lock().map_err(|_| {
+            PublishFailure::conflict("another publication operation is in progress")
+        })?;
+        state
+            .workspace
+            .recover_publication_record(&request)
+            .map_err(|_| PublishFailure::internal())
+    })
+    .await
+    {
         Ok(Ok(record)) => json_response(StatusCode::OK, &record),
         Ok(Err(failure)) => failure.into_response(),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "publication recovery failed"),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "publication recovery failed",
+        ),
     }
 }
 
-async fn reconcile_publication(State(state): State<AppState>, Path(request): Path<String>, body: Bytes) -> Response {
+async fn reconcile_publication(
+    State(state): State<AppState>,
+    Path(request): Path<String>,
+    body: Bytes,
+) -> Response {
     if serde_json::from_slice::<serde_json::Value>(&body).ok() != Some(json!({})) {
-        return error(StatusCode::BAD_REQUEST, "empty reconciliation object required");
+        return error(
+            StatusCode::BAD_REQUEST,
+            "empty reconciliation object required",
+        );
     }
     match tokio::task::spawn_blocking(move || perform_reconcile(&state, &request)).await {
         Ok(Ok(record)) => json_response(StatusCode::OK, &record),
         Ok(Err(failure)) => failure.into_response(),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "publication reconciliation failed"),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "publication reconciliation failed",
+        ),
     }
 }
 
@@ -475,12 +519,19 @@ fn perform_publish(
         .publication
         .as_ref()
         .ok_or(PublishFailure::disabled())?;
-    let _gate = state.publication_gate.try_lock()
+    let _gate = state
+        .publication_gate
+        .try_lock()
         .map_err(|_| PublishFailure::conflict("another publication operation is in progress"))?;
-    let local_records = state.workspace.publication_records()
-        .map_err(|_| PublishFailure::conflict("local publication history requires recovery before another submission"))?;
+    let local_records = state.workspace.publication_records().map_err(|_| {
+        PublishFailure::conflict(
+            "local publication history requires recovery before another submission",
+        )
+    })?;
     if local_records.len() >= 100 {
-        return Err(PublishFailure::conflict("local publication history capacity reached"));
+        return Err(PublishFailure::conflict(
+            "local publication history capacity reached",
+        ));
     }
     validate_text(&request.reason, 512).map_err(|_| PublishFailure::invalid())?;
     validate_text(&request.change_summary, 1024).map_err(|_| PublishFailure::invalid())?;
@@ -569,7 +620,9 @@ fn perform_refresh(
         .publication
         .as_ref()
         .ok_or(PublishFailure::disabled())?;
-    let _gate = state.publication_gate.try_lock()
+    let _gate = state
+        .publication_gate
+        .try_lock()
         .map_err(|_| PublishFailure::conflict("another publication operation is in progress"))?;
     let previous = state
         .workspace
@@ -596,39 +649,70 @@ fn perform_refresh(
 
 /// Explicitly adopt a known server request after a lost initial response.
 /// Uses only the existing authorized status GET: never submit/review/activate.
-fn perform_reconcile(state: &AppState, request: &str) -> Result<worldwright_operations::PublicationView, PublishFailure> {
-    let client = state.publication.as_ref().ok_or(PublishFailure::disabled())?;
-    let _gate = state.publication_gate.try_lock()
+fn perform_reconcile(
+    state: &AppState,
+    request: &str,
+) -> Result<worldwright_operations::PublicationView, PublishFailure> {
+    let client = state
+        .publication
+        .as_ref()
+        .ok_or(PublishFailure::disabled())?;
+    let _gate = state
+        .publication_gate
+        .try_lock()
         .map_err(|_| PublishFailure::conflict("another publication operation is in progress"))?;
-    let records = state.workspace.publication_records()
-        .map_err(|_| PublishFailure::conflict("recover local publication history before reconciliation"))?;
+    let records = state.workspace.publication_records().map_err(|_| {
+        PublishFailure::conflict("recover local publication history before reconciliation")
+    })?;
     let previous = records.iter().find(|view| view.request_id == request);
     if previous.is_none() && records.len() >= 100 {
-        return Err(PublishFailure::conflict("local publication history capacity reached"));
+        return Err(PublishFailure::conflict(
+            "local publication history capacity reached",
+        ));
     }
-    let view = client.status(request).map_err(PublishFailure::from_client)?;
+    let view = client
+        .status(request)
+        .map_err(PublishFailure::from_client)?;
     validate_publication_view(&view).map_err(|_| PublishFailure::invalid_response())?;
     if view.request_id != request {
         return Err(PublishFailure::invalid_response());
     }
-    let context = view.review_context.as_ref().ok_or(PublishFailure::invalid_response())?;
-    let artifact = state.workspace.artifact(&view.artifact_digest)
-        .map_err(|_| PublishFailure::conflict("verified local artifact required for reconciliation"))?;
-    let receipt = state.workspace.preview_receipt(&view.artifact_digest)
-        .map_err(|_| PublishFailure::conflict("matching successful local preview required for reconciliation"))?;
+    let context = view
+        .review_context
+        .as_ref()
+        .ok_or(PublishFailure::invalid_response())?;
+    let artifact = state
+        .workspace
+        .artifact(&view.artifact_digest)
+        .map_err(|_| {
+            PublishFailure::conflict("verified local artifact required for reconciliation")
+        })?;
+    let receipt = state
+        .workspace
+        .preview_receipt(&view.artifact_digest)
+        .map_err(|_| {
+            PublishFailure::conflict(
+                "matching successful local preview required for reconciliation",
+            )
+        })?;
     if artifact.release_id != view.release_id
         || artifact.draft_revision != context.draft_revision
         || artifact.payload_digest != context.snapshot_sha256
         || artifact.artifact_digest != context.preview_artifact_sha256
         || receipt.completed_at != context.preview_completed_at
     {
-        return Err(PublishFailure::conflict("remote review context does not match local artifact and preview"));
+        return Err(PublishFailure::conflict(
+            "remote review context does not match local artifact and preview",
+        ));
     }
     if previous.is_some() {
         state.workspace.update_publication_record(&view)
     } else {
         state.workspace.insert_publication_record(&view)
-    }.map_err(|_| PublishFailure::conflict("local publication history conflicts with reconciliation"))?;
+    }
+    .map_err(|_| {
+        PublishFailure::conflict("local publication history conflicts with reconciliation")
+    })?;
     Ok(view)
 }
 
@@ -836,10 +920,21 @@ mod tests {
         )
     }
 
-    fn r5_status_server(state: &mut AppState, view: &worldwright_operations::PublicationView, status: u16, request_id: &str) -> thread::JoinHandle<()> {
+    fn r5_status_server(
+        state: &mut AppState,
+        view: &worldwright_operations::PublicationView,
+        status: u16,
+        request_id: &str,
+    ) -> thread::JoinHandle<()> {
         let listener = StdTcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
-        state.publication = Some(PublicationClient::new(format!("http://{}", listener.local_addr().unwrap()), "test-token".into()).unwrap());
+        state.publication = Some(
+            PublicationClient::new(
+                format!("http://{}", listener.local_addr().unwrap()),
+                "test-token".into(),
+            )
+            .unwrap(),
+        );
         let body = serde_json::to_vec(view).unwrap();
         let expected = format!("GET /api/v1/operator/releases/{request_id} HTTP/1.1\r\n");
         thread::spawn(move || {
@@ -848,19 +943,30 @@ mod tests {
                 match listener.accept() {
                     Ok((stream, _)) => break stream,
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        assert!(std::time::Instant::now() < deadline, "status request missing");
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "status request missing"
+                        );
                         thread::sleep(std::time::Duration::from_millis(5));
                     }
                     Err(error) => panic!("fixture accept failed: {error}"),
                 }
             };
-            stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
-            stream.set_write_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+            // Windows can inherit the listener's nonblocking mode on accept.
+            // Use bounded blocking I/O for this fixture's request/response stream.
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
             let mut bytes = Vec::new();
             let mut chunk = [0_u8; 512];
             while !bytes.windows(4).any(|part| part == b"\r\n\r\n") {
                 let count = stream.read(&mut chunk).unwrap();
-                assert!(count > 0); bytes.extend_from_slice(&chunk[..count]);
+                assert!(count > 0);
+                bytes.extend_from_slice(&chunk[..count]);
                 assert!(bytes.len() < 8192);
             }
             let text = String::from_utf8(bytes).unwrap();
@@ -877,29 +983,53 @@ mod tests {
         for case in 0..9 {
             let (mut state, root) = state();
             let snapshot = state.workspace.latest().unwrap();
-            let artifact = state.workspace.package(PackageRequest {
-                revision: snapshot.revision, snapshot_sha256: snapshot.snapshot_sha256.clone(),
-                release_id: "reconcile-test".into(), builder_identity: "test".into(), game: Some("expedition".into()),
-            }).unwrap();
+            let artifact = state
+                .workspace
+                .package(PackageRequest {
+                    revision: snapshot.revision,
+                    snapshot_sha256: snapshot.snapshot_sha256.clone(),
+                    release_id: "reconcile-test".into(),
+                    builder_identity: "test".into(),
+                    game: Some("expedition".into()),
+                })
+                .unwrap();
             if case != 7 {
-                state.workspace.write_preview_receipt(&artifact.artifact_digest, &crate::preview::PreviewReceipt {
-                    schema_version: 1, artifact_digest: artifact.artifact_digest.clone(),
-                    payload_digest: artifact.payload_digest.clone(), draft_revision: artifact.draft_revision,
-                    completed_at: 123, result: "succeeded".into(),
-                }).unwrap();
+                state
+                    .workspace
+                    .write_preview_receipt(
+                        &artifact.artifact_digest,
+                        &crate::preview::PreviewReceipt {
+                            schema_version: 1,
+                            artifact_digest: artifact.artifact_digest.clone(),
+                            payload_digest: artifact.payload_digest.clone(),
+                            draft_revision: artifact.draft_revision,
+                            completed_at: 123,
+                            result: "succeeded".into(),
+                        },
+                    )
+                    .unwrap();
             }
             let request_id = "00000000000000000000000000000022";
             let mut view = worldwright_operations::PublicationView {
-                request_id: request_id.into(), world_id: "00000000000000000000000000000001".into(),
-                release_id: artifact.release_id.clone(), artifact_digest: artifact.artifact_digest.clone(),
+                request_id: request_id.into(),
+                world_id: "00000000000000000000000000000001".into(),
+                release_id: artifact.release_id.clone(),
+                artifact_digest: artifact.artifact_digest.clone(),
                 kind: worldwright_release::PublicationKind::Activate,
-                target: worldwright_release::DeploymentTarget::Staging, expected_current: None,
-                requested_by: "builder".into(), status: worldwright_release::PublicationStatus::Requested,
-                reviewed_by: None, review_reason: None, activation_executor: None,
+                target: worldwright_release::DeploymentTarget::Staging,
+                expected_current: None,
+                requested_by: "builder".into(),
+                status: worldwright_release::PublicationStatus::Requested,
+                reviewed_by: None,
+                review_reason: None,
+                activation_executor: None,
                 review_context: Some(worldwright_operations::StudioReviewContext {
-                    schema_version: 1, draft_revision: artifact.draft_revision,
-                    snapshot_sha256: artifact.payload_digest.clone(), validation_diagnostic_count: 0,
-                    preview_artifact_sha256: artifact.artifact_digest.clone(), preview_completed_at: 123,
+                    schema_version: 1,
+                    draft_revision: artifact.draft_revision,
+                    snapshot_sha256: artifact.payload_digest.clone(),
+                    validation_diagnostic_count: 0,
+                    preview_artifact_sha256: artifact.artifact_digest.clone(),
+                    preview_completed_at: 123,
                     change_summary: "Exact previewed artifact".into(),
                 }),
             };
@@ -912,12 +1042,20 @@ mod tests {
                 6 => view.review_context.as_mut().unwrap().preview_completed_at += 1,
                 _ => {}
             }
-            let server = r5_status_server(&mut state, &view, if case == 8 { 401 } else { 200 }, request_id);
+            let server = r5_status_server(
+                &mut state,
+                &view,
+                if case == 8 { 401 } else { 200 },
+                request_id,
+            );
             let result = perform_reconcile(&state, request_id);
             server.join().unwrap();
             if case == 0 {
                 assert_eq!(result.unwrap(), view);
-                assert_eq!(state.workspace.publication_records().unwrap(), vec![view.clone()]);
+                assert_eq!(
+                    state.workspace.publication_records().unwrap(),
+                    vec![view.clone()]
+                );
                 // Repeated explicit reconciliation updates the same record; no submit.
                 view.status = worldwright_release::PublicationStatus::Approved;
                 view.reviewed_by = Some("independent-reviewer".into());
@@ -931,7 +1069,9 @@ mod tests {
             } else {
                 assert!(result.is_err(), "case {case} must reject");
                 assert!(state.workspace.publication_records().unwrap().is_empty());
-                if case == 8 { assert_eq!(result.unwrap_err().status, StatusCode::UNAUTHORIZED); }
+                if case == 8 {
+                    assert_eq!(result.unwrap_err().status, StatusCode::UNAUTHORIZED);
+                }
             }
             std::fs::remove_dir_all(root).unwrap();
         }
@@ -940,10 +1080,21 @@ mod tests {
     #[test]
     fn r5_publication_gate_rejects_parallel_operations_without_queueing() {
         let (mut state, root) = state();
-        state.publication = Some(PublicationClient::new("http://127.0.0.1:1".into(), "test".into()).unwrap());
+        state.publication =
+            Some(PublicationClient::new("http://127.0.0.1:1".into(), "test".into()).unwrap());
         let guard = state.publication_gate.lock().unwrap();
-        assert_eq!(perform_reconcile(&state, "00000000000000000000000000000022").unwrap_err().status, StatusCode::CONFLICT);
-        assert_eq!(perform_refresh(&state, "00000000000000000000000000000022").unwrap_err().status, StatusCode::CONFLICT);
+        assert_eq!(
+            perform_reconcile(&state, "00000000000000000000000000000022")
+                .unwrap_err()
+                .status,
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            perform_refresh(&state, "00000000000000000000000000000022")
+                .unwrap_err()
+                .status,
+            StatusCode::CONFLICT
+        );
         drop(guard);
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -954,13 +1105,31 @@ mod tests {
         let app = router(state);
         for (origin, body, expected) in [
             ("http://attacker.invalid", "{}", StatusCode::FORBIDDEN),
-            ("http://127.0.0.1:3010", "{\"approve\":true}", StatusCode::BAD_REQUEST),
-            ("http://127.0.0.1:3010", "{}", StatusCode::SERVICE_UNAVAILABLE),
+            (
+                "http://127.0.0.1:3010",
+                "{\"approve\":true}",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                "http://127.0.0.1:3010",
+                "{}",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
         ] {
-            let response = app.clone().oneshot(axum::http::Request::builder().method("POST")
-                .uri("/api/v1/publications/00000000000000000000000000000022/reconcile")
-                .header("host", "127.0.0.1:3010").header("origin", origin)
-                .header("content-type", "application/json").body(Body::from(body)).unwrap()).await.unwrap();
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/publications/00000000000000000000000000000022/reconcile")
+                        .header("host", "127.0.0.1:3010")
+                        .header("origin", origin)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
             assert_eq!(response.status(), expected);
         }
         std::fs::remove_dir_all(root).unwrap();
@@ -1005,35 +1174,98 @@ mod tests {
     async fn r5_read_models_and_recovery_keep_host_origin_and_body_gates() {
         let (state, root) = state();
         let app = router(state.clone());
-        let response = app.clone().oneshot(axum::http::Request::builder()
-            .uri("/api/v1/publication-auth").header("host", "127.0.0.1:3010")
-            .body(Body::empty()).unwrap()).await.unwrap();
+        let response = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/publication-auth")
+                    .header("host", "127.0.0.1:3010")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let value: serde_json::Value = serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
-        assert_eq!(value, json!({"schema_version":1,"configured":false,"renewal":"disabled","automatic_retry":false}));
-        for path in ["/api/v1/publication-auth", "/api/v1/publication-recovery", "/api/v1/artifacts/invalid/identity"] {
-            let response = app.clone().oneshot(axum::http::Request::builder().uri(path)
-                .header("host", "attacker.invalid").body(Body::empty()).unwrap()).await.unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(
+            value,
+            json!({"schema_version":1,"configured":false,"renewal":"disabled","automatic_retry":false})
+        );
+        for path in [
+            "/api/v1/publication-auth",
+            "/api/v1/publication-recovery",
+            "/api/v1/artifacts/invalid/identity",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .uri(path)
+                        .header("host", "attacker.invalid")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
             assert_eq!(response.status(), StatusCode::MISDIRECTED_REQUEST);
         }
         let path = "/api/v1/publications/00000000000000000000000000000016/recover";
-        for (origin, body, expected) in [("http://attacker.invalid", "{}", StatusCode::FORBIDDEN), ("http://127.0.0.1:3010", "{\"unexpected\":true}", StatusCode::BAD_REQUEST)] {
-            let response = app.clone().oneshot(axum::http::Request::builder().method("POST").uri(path)
-                .header("host", "127.0.0.1:3010").header("origin", origin).header("content-type", "application/json")
-                .body(Body::from(body)).unwrap()).await.unwrap();
+        for (origin, body, expected) in [
+            ("http://attacker.invalid", "{}", StatusCode::FORBIDDEN),
+            (
+                "http://127.0.0.1:3010",
+                "{\"unexpected\":true}",
+                StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method("POST")
+                        .uri(path)
+                        .header("host", "127.0.0.1:3010")
+                        .header("origin", origin)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
             assert_eq!(response.status(), expected);
         }
         let snapshot = state.workspace.latest().unwrap();
         for game in ["reference", "expedition"] {
-            let record = state.workspace.package(PackageRequest {
-                revision: snapshot.revision, snapshot_sha256: snapshot.snapshot_sha256.clone(),
-                release_id: format!("identity-{game}"), builder_identity: "r5-test".into(), game: Some(game.into()),
-            }).unwrap();
-            let response = app.clone().oneshot(axum::http::Request::builder()
-                .uri(format!("/api/v1/artifacts/{}/identity", record.artifact_digest))
-                .header("host", "127.0.0.1:3010").body(Body::empty()).unwrap()).await.unwrap();
+            let record = state
+                .workspace
+                .package(PackageRequest {
+                    revision: snapshot.revision,
+                    snapshot_sha256: snapshot.snapshot_sha256.clone(),
+                    release_id: format!("identity-{game}"),
+                    builder_identity: "r5-test".into(),
+                    game: Some(game.into()),
+                })
+                .unwrap();
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .uri(format!(
+                            "/api/v1/artifacts/{}/identity",
+                            record.artifact_digest
+                        ))
+                        .header("host", "127.0.0.1:3010")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
             assert_eq!(response.status(), StatusCode::OK);
-            let identity: serde_json::Value = serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+            let identity: serde_json::Value =
+                serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                    .unwrap();
             assert_eq!(identity["game"], game);
             assert_eq!(identity["artifact_digest"], record.artifact_digest);
             assert_eq!(identity["payload_digest"], snapshot.snapshot_sha256);

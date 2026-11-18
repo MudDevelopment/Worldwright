@@ -22,7 +22,7 @@ def main():
             'synthetic_tests_only':True,'supported_private_beta_authorized':False,'started_at':int(time.time()),'phases':[]}
     subjects=['scripts/r7.py','scripts/r7_core.py','scripts/r7-check.py','scripts/test-r7.py','scripts/r3_io.py',
               'scripts/migration-repair.py','scripts/supply-chain.py','scripts/test-release-followthrough.py','scripts/release-evidence.py',
-              'scripts/r6_support.py','scripts/r6-native.py','scripts/r6-evidence.py','scripts/test-r6.py',
+              'scripts/r6_support.py','scripts/r6-native.py','scripts/r6-evidence.py','scripts/test-r6.py','scripts/r6_subjects.py',
               'scripts/worldwright_local.py','scripts/test-worldwright-local.py','scripts/collect-worldwright-signoff.py',
               'scripts/native_paths.py','scripts/native-storage.py','scripts/test-native-paths.py','scripts/r6-browser.py']
     def inventory(): return [{'path':p,'sha256_lf_text':c.sha(c.raw(c.ROOT/p).replace(b'\r\n',b'\n'))} for p in subjects]
@@ -48,7 +48,7 @@ def main():
         report['tests_passed']=35
         for name,script,count,key in [('native-path-helpers','test-native-paths.py',16,'native_path_tests_passed'),
                                       ('local-storage','test-worldwright-local.py',8,'local_storage_tests_passed'),
-                                      ('r6-helper-v2','test-r6.py',16,'r6_helper_tests_passed'),
+                                      ('r6-helper-v2','test-r6.py',22,'r6_helper_tests_passed'),
                                       ('release-followthrough','test-release-followthrough.py',11,'followthrough_tests_passed')]:
             text=phase(name,[sys.executable,str(c.ROOT/'scripts'/script)]).decode('utf-8','replace').replace('\r\n','\n')
             c.require(re.findall(r'^Ran (\d+) tests? in ',text,re.M)==[str(count)] and '\nOK\n' in text and '(skipped=' not in text,'extra-suite-count-or-skips:'+name)
