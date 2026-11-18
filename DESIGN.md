@@ -19,6 +19,48 @@
 >
 > **Document boundary:** README covers product usage; this file owns behavioral contracts and rationale; ARCHITECTURE owns component and process placement. ROADMAP_v2 owns current priorities, release-track dependency order, blocking decisions and exit evidence; ROAD-MAP retains historical milestone scope. Detailed local contracts remain in [RUNTIME.md](docs/RUNTIME.md), [CORE_INTERFACES.md](docs/CORE_INTERFACES.md), [PROTOCOL_V1.md](docs/PROTOCOL_V1.md), and the content schema. [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) remain proposed policies pending adoption; [DEFINITIONS.md](DEFINITIONS.md) covers terminology. Disagreements require explicit reconciliation, not silent promotion of a roadmap example into an implemented contract.
 
+## Python security profiles — November 18, 2026
+
+Python advisory remediation is isolated from Rust/compiler/migration changes.
+R2 now pins PyJWT2.15.1 and Psycopg3.3.9; R2/R7 share cryptography50.0.2. Exact
+installed-version expectations are parsed from owning requirements by
+`python_dependencies.py`, with conflict rejection and security floors. This
+preserves strict reproducibility checks without a stale second version table.
+The top-level pins are exact; a candidate's transitive resolution is captured,
+not yet represented as a hash-locked Python distribution.
+
+`python-security.py` creates a new repository-local candidate without upgrading
+the old accepted environment. Its survey discovers Git-visible Python tests,
+uses one subprocess per unittest module with structured counts/skips, runs the
+known standalone fixtures, performs published package-advisory queries, and
+executes native collection plus full-workspace all-target tests/doctests. Failures
+from independent suites are retained without aborting all later tests. Retained
+native subjects are revalidated after the additional workspace tests.
+
+Blocked Linux/DB tests and skipped/ignored cases are not positive evidence. Exit
+2 distinguishes executed checks passing with incomplete coverage from exit0's
+complete requested coverage and exit1's failure. Release approval is a separate
+condition and is never inferred. The first Windows survey installed the candidate,
+passed the eight initial security regressions and native collection/integrity, but
+failed broader Python and CLI checks. Corrections remain unexecuted. No auth,
+algorithm, signature-domain, role, or certificate-verification policy is relaxed.
+
+The first-run corrections preserve the validators' contracts: fixture log bytes
+are exact LF rather than text-mode translated; synthetic mode inventories record
+the host's real stat mode, without weakening Linux mode checks or claiming DACL
+proof. R0 collection and R4 collect now use shared local-only output/environment
+guards; their actual native/live prerequisites remain required. The loopback R2
+CA/leaf include strict X.509 key identifiers, constraints/usages and serverAuth
+EKU. TLS clients retain trust/hostname checks and explicitly test strict validation.
+
+The CLI package parser consumes each option/value pair exactly once. Removing an
+extra index increment in `--game` restores order independence; both supported
+games are tested at all five option positions. The existing real-preview test
+remains unchanged. No persisted contract, Rust dependency or compiler pin changes.
+The survey now retains both successful and failed libtest summary lines; process
+failure already prevented a false pass. See docs/PYTHON_SECURITY_UPDATE.md for
+evidence paths, unresolved coverage and the rerun command.
+
 ## Repository-local tool collection — November 17, 2026
 
 The current Windows working copy requires all generated project data under

@@ -757,3 +757,31 @@ against signed inventory. Use trusted controlled directories; this does not
 certify hostile same-user filesystem races or Windows DACL isolation. R7 grants
 neither public publication nor production rollout. R6 runtime/OS/recovery work
 and all missing actual release evidence remain open.
+
+## Python advisory remediation profile — November 18, 2026
+
+The reviewed Python requirement targets are PyJWT2.15.1 and cryptography50.0.2,
+covering the fixed-version boundaries for the 21 Python alerts in the retained
+Dependabot snapshot. Source requirements and the exact installed-version guard
+are aligned; the old accepted environment is not modified automatically. These
+changes installed successfully in the candidate; the original eight security
+regressions and native collection passed. The first full survey nevertheless
+failed broader fixture/collector and CLI tests. PyPI reported no active advisories
+for 20 installed distributions at query time, with cryptography OpenSSL4.0.3 and
+stdlib OpenSSL3.5.9 recorded. A fresh Dependabot scan and successful corrected-source
+execution remain required; this is not proof that the repository is vulnerability-free.
+
+The R2 disposable CA/leaf fixture now supplies SKI/AKI, critical constraints/key
+usage and leaf serverAuth EKU instead of weakening strict TLS validation to accept
+the old incomplete chain. Added tests explicitly require strict validation and
+reject an untrusted CA and wrong hostname. These corrections have not yet run.
+No production trust anchor, auth policy or approval requirement changes.
+
+The new survey preserves RS256 algorithm restrictions, trusted key ownership,
+Ed25519 domain separation, signature/expiry/revocation checks, TLS verification,
+and independent approval requirements. Synthetic keys/tokens are used in tests.
+No bypass or unsupported-claim allowance is introduced to keep old behavior green.
+Published PyPI advisory metadata is a bounded point-in-time feed; unavailable
+metadata is unverified, and unknown private distribution names are not disclosed
+to that public service. Backend versions and skipped/blocked coverage are retained.
+See docs/PYTHON_SECURITY_UPDATE.md and VULNERABILITY.md for scope and limitations.

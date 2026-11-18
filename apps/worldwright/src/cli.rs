@@ -360,7 +360,6 @@ fn parse_package(values: &[OsString]) -> Result<Command, String> {
                     .parse()
                     .map_err(|_| "invalid game".to_owned())?;
                 game_seen = true;
-                index += 1;
             }
             "--output" | "--release-id" | "--source-revision" | "--builder" => {
                 return Err(format!("duplicate option {option}"));
@@ -511,6 +510,58 @@ mod tests {
                 && source_revision == "revision"
                 && builder_identity == "builder"
         ));
+    }
+
+    #[test]
+    fn package_game_option_consumes_exactly_one_value() {
+        for game in ["reference", "expedition"] {
+            let expected_game = game.parse::<worldwright_release::GameContract>().unwrap();
+            let options = [
+                "--builder",
+                "builder",
+                "--source-revision",
+                "revision",
+                "--release-id",
+                "release-1",
+                "--output",
+                "world with spaces.wr",
+            ];
+            for index in (0..=options.len()).step_by(2) {
+                let mut args = vec!["content", "package", "world.json"];
+                args.extend_from_slice(&options[..index]);
+                args.extend_from_slice(&["--game", game]);
+                args.extend_from_slice(&options[index..]);
+                let command = parse_args(&args).unwrap();
+                assert!(matches!(
+                    command,
+                    Command::ContentPackage { game: actual, output, .. }
+                        if actual == expected_game
+                            && output == PathBuf::from("world with spaces.wr")
+                ));
+            }
+        }
+        let base = [
+            "content",
+            "package",
+            "world.json",
+            "--builder",
+            "builder",
+            "--source-revision",
+            "revision",
+            "--release-id",
+            "release-1",
+            "--output",
+            "world.wr",
+        ];
+        for invalid in [
+            vec!["--game"],
+            vec!["--game", "unknown"],
+            vec!["--game", "reference", "--game", "expedition"],
+        ] {
+            let mut args = base.to_vec();
+            args.extend(invalid);
+            assert!(parse_args(&args).is_err(), "{args:?}");
+        }
     }
 
     #[test]

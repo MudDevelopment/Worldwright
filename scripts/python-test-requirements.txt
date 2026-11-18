@@ -1,0 +1,10 @@
+# Comprehensive non-DB Python test environment. No application runtime change.
+# Security pins remain explicit in their owning requirements for Dependabot.
+-r r1-requirements.txt
+-r r2-requirements.txt
+-r r5-requirements.txt
+-r r6-requirements.txt
+-r r7-requirements.txt
+-r ../deploy/helm/worldwright/tests/requirements.txt
+# Optional PostgreSQL/parser review tooling is intentionally not installed here.
+# Its platform/DB prerequisites are recorded as blocked coverage, not a pass.

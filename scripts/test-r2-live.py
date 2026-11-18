@@ -30,7 +30,9 @@ class ProviderTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.provider=load('r2-provider').Provider(self.temp.name,'http://127.0.0.1:1/api/v1/oidc/callback')
-        self.opener=build_opener(ProxyHandler({}),HTTPSHandler(context=ssl.create_default_context(cafile=str(self.provider.ca_path))),Redirect())
+        self.context=ssl.create_default_context(cafile=str(self.provider.ca_path))
+        self.context.verify_flags |= ssl.VERIFY_X509_STRICT
+        self.opener=build_opener(ProxyHandler({}),HTTPSHandler(context=self.context),Redirect())
     def tearDown(self): self.provider.close(); self.temp.cleanup()
     def request(self,path,data=None,headers=None):
         request=Request(self.provider.issuer+path,data=data,headers=headers or {})
@@ -51,6 +53,16 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(status,200); self.assertEqual(metadata['issuer'],self.provider.issuer)
         status,_,jwks=self.request('/jwks')
         self.assertEqual(status,200); self.assertNotIn('d',jwks['keys'][0])
+    def test_strict_tls_rejects_untrusted_ca_and_wrong_hostname(self):
+        self.assertEqual(self.context.verify_mode,ssl.CERT_REQUIRED)
+        self.assertTrue(self.context.check_hostname)
+        self.assertTrue(self.context.verify_flags & ssl.VERIFY_X509_STRICT)
+        port=self.provider.server.server_address[1]
+        for context,hostname in ((ssl.create_default_context(),'localhost'),(self.context,'wrong.example.invalid')):
+            with self.subTest(hostname=hostname),socket.create_connection(('127.0.0.1',port),timeout=3) as raw:
+                with self.assertRaises(ssl.SSLCertVerificationError):
+                    with context.wrap_socket(raw,server_hostname=hostname):
+                        self.fail('invalid TLS peer accepted')
     def test_exact_s256_and_one_shot_code(self):
         code,verifier=self.authorization(); status,_,token=self.token(code,verifier)
         self.assertEqual(status,200)

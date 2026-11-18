@@ -15,7 +15,7 @@ import jwt
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 
 class Provider:
@@ -111,9 +111,33 @@ class Provider:
         ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Worldwright R2 disposable CA')])
         now = datetime.now(timezone.utc)
-        ca = x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(ca_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-timedelta(minutes=1)).not_valid_after(now+timedelta(days=1)).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True).sign(ca_key, hashes.SHA256())
+        # Supply a complete chain for strict X.509 verification; never relax the client.
+        ca_ski = x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key())
+        authority = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(ca_ski)
+        ca = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+              .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
+              .not_valid_before(now-timedelta(minutes=1)).not_valid_after(now+timedelta(days=1))
+              .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+              .add_extension(x509.KeyUsage(digital_signature=False, content_commitment=False,
+                  key_encipherment=False, data_encipherment=False, key_agreement=False,
+                  key_cert_sign=True, crl_sign=True, encipher_only=False, decipher_only=False), critical=True)
+              .add_extension(ca_ski, critical=False).add_extension(authority, critical=False)
+              .sign(ca_key, hashes.SHA256()))
         leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        leaf = x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')])).issuer_name(name).public_key(leaf_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-timedelta(minutes=1)).not_valid_after(now+timedelta(days=1)).add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]), critical=False).sign(ca_key, hashes.SHA256())
+        leaf = (x509.CertificateBuilder()
+                .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')]))
+                .issuer_name(name).public_key(leaf_key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now-timedelta(minutes=1)).not_valid_after(now+timedelta(days=1))
+                .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+                .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=False,
+                    key_encipherment=True, data_encipherment=False, key_agreement=False,
+                    key_cert_sign=False, crl_sign=False, encipher_only=False, decipher_only=False), critical=True)
+                .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+                .add_extension(x509.SubjectKeyIdentifier.from_public_key(leaf_key.public_key()), critical=False)
+                .add_extension(authority, critical=False)
+                .add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]), critical=False)
+                .sign(ca_key, hashes.SHA256()))
         self.ca_path = self.directory/'fixture-ca.pem'
         self.ca_path.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
         cert_path, key_path = self.directory/'fixture-cert.pem', self.directory/'fixture-key.pem'

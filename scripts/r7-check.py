@@ -24,7 +24,8 @@ def main():
               'scripts/migration-repair.py','scripts/supply-chain.py','scripts/test-release-followthrough.py','scripts/release-evidence.py',
               'scripts/r6_support.py','scripts/r6-native.py','scripts/r6-evidence.py','scripts/test-r6.py','scripts/r6_subjects.py',
               'scripts/worldwright_local.py','scripts/test-worldwright-local.py','scripts/collect-worldwright-signoff.py',
-              'scripts/native_paths.py','scripts/native-storage.py','scripts/test-native-paths.py','scripts/r6-browser.py']
+              'scripts/native_paths.py','scripts/native-storage.py','scripts/test-native-paths.py','scripts/r6-browser.py',
+              'scripts/python_dependencies.py','scripts/python-security.py','scripts/run-python-unit.py','scripts/test-python-security.py']
     def inventory(): return [{'path':p,'sha256_lf_text':c.sha(c.raw(c.ROOT/p).replace(b'\r\n',b'\n'))} for p in subjects]
     def phase(name,command,expected=0,timeout=120):
         print('R7 tool phase: '+name+' (limit '+str(timeout)+' seconds)',flush=True)

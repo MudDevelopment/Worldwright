@@ -1,5 +1,24 @@
 # Worldwright
 
+Dependency-security review: [VULNERABILITY.md](VULNERABILITY.md) catalogs and
+statically assesses all 24 exported Dependabot alerts across five packages,
+including per-alert remediation, critical PyJWT scope, the earlier rpassword
+rollback and dependency-pin conflicts. Python remediation is now installed in
+source: PyJWT2.15.1, cryptography50.0.2, aligned Psycopg3.3.9, and a requirements-derived
+version guard. Candidate installation succeeded; the first survey passed the eight
+security regressions and native collection, but exposed Python fixture/collector
+issues and a CLI parser bug. Corrections are installed; verification is pending.
+Rerun the existing candidate using [PYTHON_SECURITY_UPDATE.md](docs/PYTHON_SECURITY_UPDATE.md):
+
+```powershell
+& 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-Python-Security\Scripts\python.exe' -B 'E:\Hold\Worldwright\scripts\python-security.py' run
+```
+
+This reuses the prepared environment without reinstalling, runs discovered Python
+tests plus native/workspace checks, and records blocked/skipped coverage explicitly.
+The first evidence is retained at `.worldwright-local/evidence/python-security-tests-608e98952e564273aae955cfb65f805b/`.
+It is not a pass for the corrected source or a complete-suite/alert-closure claim.
+
 > **Local storage policy — November 17, 2026:** For this working copy, all
 > assistant-created project files, evidence, virtual environments, build caches,
 > browser caches and temporary work must remain under `E:\Hold\Worldwright`.
@@ -11,13 +30,15 @@
 > compilation. Prepare existing cached Rust/Cargo files and run that preflight
 > first using [NATIVE_STORAGE.md](docs/NATIVE_STORAGE.md). No automatic downloads,
 > source-cache deletion, Cargo clean, old-workspace modification or release approval
-> occur. `r6-check.ps1` now delegates to this wrapper; other old launchers and R0
-> external-path recipes are not covered by this adaptation.
+> occur. `r6-check.ps1` delegates to this wrapper. R0 collection and R4 collect
+> now also require new output beneath `.worldwright-local/`; their old external
+> output recipes are superseded. This does not validate their remaining live
+> prerequisites or adapt all other historical launchers.
 >
-> Run with the rebuilt environment (no activation or external cache required):
+> After the new candidate is prepared and verified, run the collector with it:
 >
 > ```powershell
-> & 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-R6-Python\Scripts\python.exe' -B 'E:\Hold\Worldwright\scripts\collect-worldwright-signoff.py' --repo 'E:\Hold\Worldwright' --tools-only --allow-dirty
+> & 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-Python-Security\Scripts\python.exe' -B 'E:\Hold\Worldwright\scripts\collect-worldwright-signoff.py' --repo 'E:\Hold\Worldwright' --tools-only --allow-dirty
 > ```
 >
 > Expected successful wrapper status: `tool-evidence-collected-native-pending`.
@@ -31,10 +52,10 @@
 > while later Cargo commands could rebuild them. It now retains independent byte
 > copies under `native/binaries/`, runs browser workflows against those copies and
 > verifies their identities afterward. Cache differences are recorded separately,
-> not used to rewrite tested-subject hashes. Six added regressions (92 helper tests
-> total) and this collector correction await execution. The old failed report stays
-> unchanged. Run a fresh `--native` collection; no preparation, formatting repair,
-> full cache rebuild or cache clearing is needed.
+> not used to rewrite tested-subject hashes. That correction and the complete
+> 92-helper/native collection passed in `signoff-7a8a174d880346b2afd9198b01fd1f6f`.
+> It is retained evidence for the old source/environment, not a test of the new
+> Python pins. Use the security-update survey for this increment; do not reset caches.
 > Existing evidence is not rewritten to claim coverage of newer source. The moved
 > R5 workspace is not opened by the collectors. No release gate closes automatically.
 

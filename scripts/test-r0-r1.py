@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -30,7 +31,7 @@ class Contracts(unittest.TestCase):
         self.root = Path(self.temp.name); self.root.chmod(0o700)
         self.file = self.root/'fixture'; self.file.write_bytes(b'synthetic integrity data'); self.file.chmod(0o644)
         self.manifest = {'schema_version':1, 'distribution':'private-acceptance-only', 'files':[
-            {'path':'fixture', 'bytes':self.file.stat().st_size, 'mode':0o644, 'sha256':hashlib.sha256(self.file.read_bytes()).hexdigest()}]}
+            {'path':'fixture', 'bytes':self.file.stat().st_size, 'mode':stat.S_IMODE(self.file.stat().st_mode), 'sha256':hashlib.sha256(self.file.read_bytes()).hexdigest()}]}
         self.save()
     def save(self):
         (self.root/'package-manifest.json').write_text(json.dumps(self.manifest))

@@ -4,6 +4,7 @@ import argparse,json,os,shutil,sys,time
 from r4_common import ROOT,CASES,read,write_new,sha,require,plan_check,signed,beta_report,load,contained,compare
 from r3_io import record_phase,secret_values
 from r4_monitor import Monitor
+import worldwright_local as local
 PHASES={'r3-prerequisites','rustc','fmt','build-load','load-version','integrity-list','integrity-pg','deployment-before','smoke','beta','scenarios','deployment-after'}
 def r3_command(path):
     args=read(path); expected={'collection','image','adoption','r2-arguments','approval-public-key'}
@@ -17,7 +18,8 @@ def check_deployment(value,plan):
     require(value['spec']['template']['spec']['containers'][0]['image'].count('@sha256:')==1,'actual immutable deployment image')
     return {'uid':value['metadata']['uid'],'generation':value['metadata']['generation'],'image_reference':value['spec']['template']['spec']['containers'][0]['image']}
 def collect(args):
-    output=args.output.resolve(); require(not output.exists() and not output.is_relative_to(ROOT),'new external private output directory required'); output.mkdir(mode=0o700)
+    local.configure_tools_environment()
+    output=local.new_output(args.output); output.mkdir(mode=0o700)
     report={'schema_version':1,'kind':'r4-collection','status':'failed','full_r4_closed':False,'phases':[]}; monitor=None
     def phase(name,command,timeout=1800,retain=True):
         result=record_phase(report,output,name,command,timeout,cwd=ROOT,sensitive=secret_values(),retain=retain)

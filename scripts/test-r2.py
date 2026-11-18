@@ -61,12 +61,17 @@ class EvidenceTests(unittest.TestCase):
   self.value={'schema_version':1,'kind':'real-process-faults','status':'passed','reviewer':'synthetic-unit-only',**self.source,'artifact_sha256':'c'*64,'log_sha256':hashlib.sha256(self.log.read_bytes()).hexdigest(),
    'cases':[{'case':name,'status':'passed'} for name in sorted(r2.PROCESS_REQUIRED)],
    'schema_cleanup':'verified','fixture_sha256':'e'*64,'child_logs':[{'name':'ww_r2_'+('f'*32)+'-1.log','sha256':self.value_log_hash()}]}
-  (self.root/('ww_r2_'+('f'*32)+'-1.log')).write_text('unit fixture child log\n')
+  (self.root/('ww_r2_'+('f'*32)+'-1.log')).write_bytes(b'unit fixture child log\n')
  def value_log_hash(self): return hashlib.sha256(b'unit fixture child log\n').hexdigest()
  def tearDown(self): self.temp.cleanup()
  def save(self): self.path.write_text(json.dumps(self.value))
  def test_synthetic_complete_shape_only(self):
   self.save(); self.assertEqual(r2.external(self.path,r2.PROCESS_REQUIRED,self.source,'real-process-faults')['reviewer'],'synthetic-unit-only')
+ def test_child_log_newline_change_is_not_normalized(self):
+  self.save()
+  (self.root/('ww_r2_'+('f'*32)+'-1.log')).write_bytes(b'unit fixture child log\r\n')
+  with self.assertRaisesRegex(ValueError,'child log missing/modified'):
+   r2.external(self.path,r2.PROCESS_REQUIRED,self.source,'real-process-faults')
  def test_missing_cleanup_or_child_log_fails(self):
   for field in ('schema_cleanup','child_logs'):
    saved=self.value.pop(field); self.save()

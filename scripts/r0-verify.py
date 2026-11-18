@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import tomllib
+import worldwright_local as local
 
 ROOT = Path(__file__).resolve().parents[1]
 OVERRIDES = ('CARGO_BUILD_TARGET', 'CARGO_TARGET_DIR', 'RUSTUP_TOOLCHAIN', 'RUSTC', 'RUSTDOC', 'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTDOCFLAGS', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'RUSTC_BOOTSTRAP')
@@ -58,9 +59,8 @@ def main() -> int:
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--allow-dirty', action='store_true')
     args = parser.parse_args()
-    output = args.output.resolve()
-    if output.exists() or output.is_symlink() or output.is_relative_to(ROOT):
-        parser.error('new evidence directory outside the checkout required')
+    local.configure_tools_environment()
+    output = local.new_output(args.output)
     os.umask(0o077)
     output.mkdir(mode=0o700)
     report = {'schema_version': 1, 'track': 'R0', 'status': 'failed', 'host_os': platform.system(), 'host_os_version': platform.version(), 'python_version': platform.python_version(), 'phases': [], 'overrides': {name: bool(os.environ.get(name)) for name in OVERRIDES}}

@@ -5,7 +5,7 @@ param([string]$Python = 'python', [switch]$AllowDirty, [string]$BrowserExecutabl
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if ($Python -eq 'python') {
-    $Python = Join-Path $repo '.worldwright-local\python\Worldwright-R6-Python\Scripts\python.exe'
+    $Python = Join-Path $repo '.worldwright-local\python\Worldwright-Python-Security\Scripts\python.exe'
 }
 $oldBytecode = $env:PYTHONDONTWRITEBYTECODE
 $oldColor = $env:CARGO_TERM_COLOR

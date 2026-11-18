@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import uuid
+import python_dependencies as python_deps
 
 
 def write_json(path, value):
@@ -132,17 +133,14 @@ def main(argv=None):
         if ignored.returncode != 0 or tracked.returncode != 0 or tracked.stdout:
             report['prerequisite_failure'] = '.worldwright-local must be Git-ignored and contain no tracked files; nothing is automatically untracked.'
             raise ValueError('Runtime storage is not excluded from source identity')
-        dependencies = {}
-        for name in ('playwright', 'psutil', 'cryptography'):
-            try:
-                dependencies[name] = importlib.metadata.version(name)
-            except importlib.metadata.PackageNotFoundError:
-                report['prerequisite_failure'] = 'Missing Python package: ' + name
-                raise
+        try:
+            dependencies = python_deps.require_installed('collector')
+        except (ValueError, importlib.metadata.PackageNotFoundError) as error:
+            report['prerequisite_failure'] = str(error)
+            raise
         report['python'] = sys.version
         report['dependencies'] = dependencies
-        if dependencies != {'playwright': '1.56.0', 'psutil': '7.2.2', 'cryptography': '46.0.6'}:
-            raise ValueError('Dependency pins differ; install the repository R6 and R7 requirements with approval')
+        report['dependency_policy'] = python_deps.policy_inventory('collector')
         from playwright.sync_api import sync_playwright
         if args.browser_executable:
             browser_path = local.local_path(args.browser_executable)
