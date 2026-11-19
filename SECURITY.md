@@ -785,3 +785,29 @@ Published PyPI advisory metadata is a bounded point-in-time feed; unavailable
 metadata is unverified, and unknown private distribution names are not disclosed
 to that public service. Backend versions and skipped/blocked coverage are retained.
 See docs/PYTHON_SECURITY_UPDATE.md and VULNERABILITY.md for scope and limitations.
+
+## Operator-approved enterprise trust in the isolated acceptance distro
+
+The operator explicitly approved importing the verified enterprise CA issuer chain for the observed RSTA-CA anchor (DER SHA256 93d1dbce2c583b226bbd80c6d4480ce99bf8c9de6f9bca25f2929ecc38f05741) into Worldwright-Acceptance-24.04 only. This is an OS/client trust change inside its repository-backed disk, not a production server identity/auth change or release approval. It enables standard TLS clients in that distro to validate certificates under the approved enterprise CA; its scope is not domain-restricted to the diagnostic hosts.
+
+The new repair uses existing Windows public certificates only, validates a unique full chain to a self-signed root already server-auth trusted by Windows, and tests hostname-checked TLS with partial-chain behavior disabled before root installation. Public PEM transport is hash-checked, then validated by OpenSSL from a root-owned guest staging directory. No Windows roots, unrelated distros, WSL global configuration or private keys are modified/exported. An incomplete or ambiguous issuer chain fails closed. This operation does not claim revocation freshness beyond the existing trust inputs or replace independent security review.
+
+The distro store receives only the resolved issuer-chain certificates in an owned directory. The Node/Playwright worker additionally uses the root-owned, fingerprint-bound CA bundle through NODE_EXTRA_CA_CERTS, extending rather than replacing public roots. Python/Cargo retain normal system trust. All seven Linux HTTPS checks must pass before resuming tooling, and Node performs its own seven-host verification after installation. Neither signature/checksum checks nor TLS hostname/chain checks are disabled. Same-identity retries preserve existing state; differing trust contents are not silently replaced. Repair code and six synthetic policy tests are installed, not yet executed on the host. See docs/WSL_POSTGRESQL_ACCEPTANCE.md for the explicit command, paths and evidence boundaries.
+
+### Native database failure remediation scope
+
+The scoped enterprise CA repair and seven-host HTTPS verification succeeded in
+wsl-trust-repair-92903598a2be4655aff514f481afc99f; subsequent compilation and ordinary
+Linux tests passed. The cryptography serial-number warning occurred during Windows
+store enumeration and did not stop that successful repair. It is not the cause of
+the17 native adapter failures; no warning or certificate-policy bypass is added.
+
+The installed persistence corrections preserve the maintenance/pending CHECK and
+FK constraints, the production-request gate, distinct executor binding, and
+current-authority requirements. Activation updates are reordered within the existing
+transaction to obey the invariant at every statement. Epoch-zero quarantine rejects
+old leases as StaleWriter without admitting a writer or weakening session checks.
+Fixture changes enforce the documented reward intent and explicit authorized admin
+takeover. Failed native tests and cleanup residues remain failures, with retained
+evidence and stopped disposable database files. Corrected-source execution remains
+pending; independent release/security approval is not implied.

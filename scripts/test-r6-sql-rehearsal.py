@@ -1,4 +1,4 @@
-"""Isolated PostgreSQL rehearsal of a PROPOSED baseline and actual literal SQL.
+"""Isolated PostgreSQL rehearsal of current baseline and actual literal SQL.
 Never connects to deployment databases; never changes repository migrations.
 Not Rust/SQLx, live restore, Windows, policy adoption, or R7 release acceptance.
 """
@@ -14,7 +14,7 @@ spec=importlib.util.spec_from_file_location('repair',ROOT/'scripts/migration-rep
 def main():
     repair.require(__debug__, 'run rehearsal without Python -O; assertions must execute')
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
-    out=repair.output(args.output);report={'schema_version':1,'kind':'proposed-baseline-sql-rehearsal','status':'failed','cases':[],
+    out=repair.output(args.output);report={'schema_version':1,'kind':'current-baseline-sql-rehearsal-with-historical-negative','status':'failed','cases':[],
         'native_rust_executed':False,'migration_repair_applied_to_repository':False,'release_authorized':False}
     files=sorted((ROOT/'migrations').glob('*.sql'));before={p.name:hashlib.sha384(p.read_bytes()).hexdigest() for p in files}
     def passed(name,**details):
@@ -22,7 +22,8 @@ def main():
     server=None;tmp=None
     try:
         assert len(files)==9,'review migration inventory change'
-        old,fixed=repair.proposal();pglast.parse_sql(fixed.decode())
+        old,fixed=repair.proposal();assert (ROOT/'migrations'/repair.TARGET).read_bytes()==fixed,'fresh baseline must be applied first'
+        pglast.parse_sql(fixed.decode())
         q=constants(ROOT/'crates/worldwright-persistence/src/operational_queries.rs')
         assert len(q)==20,len(q)
         for name,value in q.items():pglast.parse_sql(value)
@@ -37,7 +38,7 @@ def main():
             failure=None
             for p in files:
                 try:
-                    with conn.transaction():conn.execute(p.read_text())
+                    with conn.transaction():conn.execute(old.decode() if p.name==repair.TARGET else p.read_text())
                 except psycopg.errors.SyntaxError as error:
                     failure={'migration':p.name,'sqlstate':error.sqlstate};break
             assert failure=={'migration':repair.TARGET,'sqlstate':'42601'},failure
@@ -45,7 +46,7 @@ def main():
             conn.execute('CREATE SCHEMA proposal_check');conn.execute('SET search_path=proposal_check,public')
             for p in files:
                 with conn.transaction():conn.execute(fixed.decode() if p.name==repair.TARGET else p.read_text())
-            passed('nine-proposed-migrations-apply-not-repository-repair',migration_count=len(files))
+            passed('nine-current-migrations-apply-with-historical-negative-retained',migration_count=len(files))
             for name,value in q.items():
                 if value.lstrip().startswith('LOCK '):
                     with conn.transaction():conn.execute(value)
@@ -104,7 +105,7 @@ def main():
             passed('retention-operation-uniqueness')
         assert before=={p.name:hashlib.sha384(p.read_bytes()).hexdigest() for p in files}
         passed('repository-migration-bytes-unchanged')
-        report['status']='rehearsal-passed-original-migration-still-blocked'
+        report['status']='rehearsal-passed-current-baseline'
     except Exception as error:
         report['failure_type']=type(error).__name__;report['failure']=str(error)[:1500]
     finally:
@@ -113,5 +114,5 @@ def main():
         report['cleanup']='completed';report['migration_hashes']=before
         repair.write(out/'rehearsal.json',report)
     print(report['status'],out/'rehearsal.json')
-    return 0 if report['status']=='rehearsal-passed-original-migration-still-blocked' else 1
+    return 0 if report['status']=='rehearsal-passed-current-baseline' else 1
 if __name__=='__main__':raise SystemExit(main())

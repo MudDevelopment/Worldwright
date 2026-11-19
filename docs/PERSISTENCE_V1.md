@@ -10,11 +10,14 @@ remain nullable. The M7 PostgreSQL acceptance test is ignored and compile-only.
 
 ## Status and scope
 
-**Current status:** M4 and the M5 content-release persistence extension are
-implemented awaiting live PostgreSQL verification. Eight M4 database tests and
-eight M5 database tests compile but have not run. Current Windows evidence is
-200 test-binary tests passed, 0 failed, 16 ignored, with 2 doctests passed
-separately.
+**Current status:** `linux-next-10a5464cf79748ef8fa994f8c7bf39ca` executed all34 native
+PostgreSQL adapter tests successfully, with zero failures or ignored cases in
+that targeted run. All nine migrations, nine supplementary SQL tests and13 role
+tests also passed. This exercises the activation-ordering, zero-epoch fencing and
+contract-aligned fixture corrections. The stage subsequently failed in the runner's
+final cleanup inventory query, not application tests; that query fix awaits rerun.
+The owned cluster stopped successfully. Independent acceptance and remaining
+server/live/manual coverage are not implied. Earlier counts below are historical.
 
 This document is the implementation contract for Milestone 4. The schema is defined by `migrations/20261020000100_durable_gameplay.sql`. PostgreSQL is authoritative only when the server is started in explicit durable mode. Existing local mode remains available and continues to use the bounded JSON account registry and process-local sessions.
 
@@ -214,7 +217,7 @@ WHERE world_id = $1
 FOR UPDATE
 ```
 
-The returned epoch and writer ID must exactly equal the in-process lease. A mismatch returns `StaleWriter`; the world owner stops durable admission, becomes not-ready, and closes active routes with `writer_fenced`.
+The returned epoch and writer ID must exactly equal the in-process lease. A mismatch returns `StaleWriter`; the world owner stops durable admission, becomes not-ready, and closes active routes with `writer_fenced`. Epoch zero is valid for a seeded/restored world without an active writer: it mismatches an active lease and must return `StaleWriter`, not `InvalidData`. Negative persisted epochs remain corrupt data. The same classification applies to inventory, game-state and release-read/activation fence paths.
 
 ## Durable identity and sessions
 
@@ -365,7 +368,7 @@ for each component:
     exact component bytes
 ```
 
-Reward components are `claim_reward`, reward key, big-endian generation, big-endian credit amount, and item definition ID. Transfer components are `transfer_item`, the 16-byte item ID, and the recipient username. The request ID and trusted actor IDs scope the receipt key and are not repeated in the fingerprint.
+Reward components are `claim_reward`, reward key, big-endian generation, big-endian credit amount, and item definition ID. A newly generated candidate item ID or operation ID is not reward intent: same-request retries return the original stored item/operation, without minting another item. The native replay test now varies both generated IDs and uses a changed generation for the true conflicting-intent case. Transfer components are `transfer_item`, the 16-byte item ID, and the recipient username. The request ID and trusted actor IDs scope the receipt key and are not repeated in the fingerprint.
 
 ## Claim reward transaction
 

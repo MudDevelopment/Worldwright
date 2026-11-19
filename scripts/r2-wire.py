@@ -83,6 +83,9 @@ class CommitProxy:
         upstream = None
         try:
             upstream = socket.create_connection(self.upstream, timeout=10)
+            # Relay each PostgreSQL frame promptly on both legs, including before arming.
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            upstream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             client.settimeout(20)
             upstream.settimeout(20)
             with self.lock:

@@ -185,7 +185,7 @@ CREATE TABLE worldwright_operator_audit (
     target_id TEXT NOT NULL,
     reason TEXT NOT NULL,
     outcome TEXT NOT NULL,
-    authorization JSONB NOT NULL,
+    "authorization" JSONB NOT NULL,
     before_state JSONB,
     after_state JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -264,8 +264,8 @@ CREATE TABLE worldwright_operator_audit (
         outcome IN ('started', 'confirmed', 'failed')
     ),
     CONSTRAINT worldwright_operator_audit_authorization_valid CHECK (
-        jsonb_typeof(authorization) = 'object'
-        AND octet_length(authorization::TEXT) <= 2048
+        jsonb_typeof("authorization") = 'object'
+        AND octet_length("authorization"::TEXT) <= 2048
     ),
     CONSTRAINT worldwright_operator_audit_before_valid CHECK (
         before_state IS NULL

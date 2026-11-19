@@ -18,6 +18,8 @@ separate evidence classes. No command here closes R1 or approves distribution.
 | Browser resume | Actual Chromium callback, command, cookie-only GET probe, reload, logout | Playable attachment without a password POST, HttpOnly cookie not exposed, rejected callbacks never mint a cookie |
 | Idle clock/RNG | Lock-latency DB test, timer rollback test, real overdue idle restart, owner RNG unit | Equal deadlines, persistence latency not extending deadlines, expired schedules applied once, rejected/replayed candidates rewind RNG, no constant fallback |
 
+The disposable wire proxy enables TCP_NODELAY on both relay sockets. Unarmed traffic must support normal attachment without extending server deadlines; a successful attachment is not a COMMIT interception or a recovery result.
+
 ## Native/live collection
 
 Use a complete checkout and the pinned Rust 1.85.1 toolchain. Bootstrap is an

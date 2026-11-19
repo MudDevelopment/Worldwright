@@ -7,8 +7,29 @@ rollback and dependency-pin conflicts. Python remediation is now installed in
 source: PyJWT2.15.1, cryptography50.0.2, aligned Psycopg3.3.9, and a requirements-derived
 version guard. Candidate installation succeeded; the first survey passed the eight
 security regressions and native collection, but exposed Python fixture/collector
-issues and a CLI parser bug. Corrections are installed; verification is pending.
-Rerun the existing candidate using [PYTHON_SECURITY_UPDATE.md](docs/PYTHON_SECURITY_UPDATE.md):
+issues and a CLI parser bug. The corrected-source Windows run
+`python-security-tests-edcc3ff6ad6f4e49b92a1a10a3ff8eb8` passed all available checks,
+including nine security regressions; Linux/DB and independent acceptance remain open.
+The separate repository-backed WSL distro is now provisioned and verified.
+The next command is `linux-next-stage.py --fresh-databases-only` using the existing
+Windows security Python. It applies the authorized fresh baseline with preserved
+history bytes, installs pinned Linux tools, copies verified source to ext4, and
+runs Linux build/tests plus disposable PostgreSQL coverage. See
+[WSL_POSTGRESQL_ACCEPTANCE.md](docs/WSL_POSTGRESQL_ACCEPTANCE.md) for the full command,
+write scope and evidence paths. The first successful helper/source pass applied the
+fresh baseline, then stopped at Linux HTTPS issuer validation before any tool install.
+The scoped CA repair and Linux tool setup succeeded. Linux build, scoped Clippy,
+regular workspace tests, doctests, launcher tests and22 supplementary SQL/role
+tests passed. In run linux-next-10a5464cf79748ef8fa994f8c7bf39ca, all34 native
+PostgreSQL tests and all22 supplementary SQL/role tests passed. The remaining
+failure was the runner's parameterized cleanup query, now corrected with a
+regression guard. Cleanup/final-report verification is still pending. Rerun
+`scripts/linux-next-stage.py --fresh-databases-only --reuse-tools` using the existing
+Windows security Python. This validates cached tools/browser without installers,
+fetches or apt, then incrementally rebuilds and tests against a new disposable
+cluster. Do not repeat trust repair or provisioning. The failed cluster/evidence
+is retained and stopped. Full database and independent acceptance remain open.
+For later source-change revalidation, use [PYTHON_SECURITY_UPDATE.md](docs/PYTHON_SECURITY_UPDATE.md):
 
 ```powershell
 & 'E:\Hold\Worldwright\.worldwright-local\python\Worldwright-Python-Security\Scripts\python.exe' -B 'E:\Hold\Worldwright\scripts\python-security.py' run
@@ -17,7 +38,8 @@ Rerun the existing candidate using [PYTHON_SECURITY_UPDATE.md](docs/PYTHON_SECUR
 This reuses the prepared environment without reinstalling, runs discovered Python
 tests plus native/workspace checks, and records blocked/skipped coverage explicitly.
 The first evidence is retained at `.worldwright-local/evidence/python-security-tests-608e98952e564273aae955cfb65f805b/`.
-It is not a pass for the corrected source or a complete-suite/alert-closure claim.
+That first failed report is unchanged; the later available-checks pass is separate.
+Neither is a complete-suite/alert-closure claim or proof for subsequent source changes.
 
 > **Local storage policy — November 17, 2026:** For this working copy, all
 > assistant-created project files, evidence, virtual environments, build caches,

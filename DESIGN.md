@@ -42,8 +42,10 @@ Blocked Linux/DB tests and skipped/ignored cases are not positive evidence. Exit
 complete requested coverage and exit1's failure. Release approval is a separate
 condition and is never inferred. The first Windows survey installed the candidate,
 passed the eight initial security regressions and native collection/integrity, but
-failed broader Python and CLI checks. Corrections remain unexecuted. No auth,
-algorithm, signature-domain, role, or certificate-verification policy is relaxed.
+failed broader Python and CLI checks. The later Windows survey
+`python-security-tests-edcc3ff6ad6f4e49b92a1a10a3ff8eb8` passed available checks for
+the corrected source (nine security regressions), with Linux/DB coverage incomplete.
+No auth, algorithm, signature-domain, role, or certificate-verification policy is relaxed.
 
 The first-run corrections preserve the validators' contracts: fixture log bytes
 are exact LF rather than text-mode translated; synthetic mode inventories record
@@ -60,6 +62,46 @@ remains unchanged. No persisted contract, Rust dependency or compiler pin change
 The survey now retains both successful and failed libtest summary lines; process
 failure already prevented a false pass. See docs/PYTHON_SECURITY_UPDATE.md for
 evidence paths, unresolved coverage and the rerun command.
+
+## WSL2 acceptance separation — November 18, 2026
+
+Database scope is fresh isolated tests only; independent reviewers are established.
+Initial inspection used existing Ubuntu24.04 WSL2, but observed failed POSIX modes
+on DrvFS and a C:-backed Linux root. The operator approved a separate Ubuntu24.04
+acceptance distro backed entirely under the repository, leaving existing distros
+unchanged.
+`wsl-acceptance-preflight.py` inventories the actual distro and backing directory,
+verifies mapped script/evidence identity, probes only new local permission/link
+files, and captures tool availability without provisioning or connecting to a DB.
+It runs seven pure helper tests first. DrvFS/failed POSIX probes block blind use of
+the Windows-mounted checkout; a root user cannot prove non-root permission denial.
+A preflight result never sets acceptance true. The probe is not an OS sandbox.
+
+`provision-acceptance-wsl.py` verifies the official rootfs signature and exact
+image checksum before explicit-location WSL2 import, then checks registered disk
+placement before new-distro setup. It configures a non-root ext4 workspace and
+foundational OS/PG packages without creating a database cluster. Existing distros
+are not modified; the existing Ubuntu24.04 gpgv is used only for public signature
+verification with repository-local scratch paths. Pending mutating phases block
+blind retries and no independent approvals are generated.
+
+The first transfer timed out before import, preserving a roughly340MiB partial.
+Recovery now hashes retained partials first; a complete match avoids an image
+request. Otherwise an exact validated HTTP206 range continues into a new file,
+preserving the original prefix. Signed SHA256 of the entire reconstructed image
+remains the final authority. Metadata downloads cannot use image resumption.
+The socket timeout is120seconds and transfer deadline30minutes; there is no
+unbounded retry or fallback to weakened verification. Fourteen helper regressions
+include mocked complete/partial/corrupt/timeout paths; the new recovery code has
+not yet been executed on the host.
+
+Fresh-baseline migration repair remains a distinct byte-preserving, reviewed
+operation; no applied checksum/history reconciliation is authorized. Existing
+proposal/negative fixtures must be reconciled with the corrected current baseline,
+not silently discarded. Private signers remain outside collector tooling; confirmed
+reviewer availability does not equal signed closure. Host setup, all 35 ignored
+cases, real desktop/manual observations and six same-tuple closures remain open.
+See docs/WSL_POSTGRESQL_ACCEPTANCE.md for the installed command and sequence.
 
 ## Repository-local tool collection — November 17, 2026
 
@@ -1700,3 +1742,89 @@ packages, feature/target scope and -D warnings as the formal native collector.
 It preserves source/tool identities and uses existing repository-local caches,
 but does not replace tests or authorize a release. It exists to shorten the
 fix/check loop without silently resuming old evidence across source changes.
+
+## Linux next-stage execution — November 18, 2026
+
+Verified isolated-distro provisioning supersedes the earlier download/setup-pending status. `linux-next-stage.py --fresh-databases-only` is the Windows bridge; `linux-stage-worker.py` owns non-root ext4 tool/build/PG execution. Host state/registered disk/guest ownership are checked before source transition. No existing distro is reprovisioned.
+
+`fresh_baseline.py` uses a preserved, SHA384-pinned historical migration and a strict nine-file inventory. The only permitted source change quotes the three authorization identifiers. It is explicit fresh-database-only and idempotent for the exact corrected bytes; any other baseline is refused. The host records backups and old/new digests before archiving current source. Review helpers still do not apply repairs or authorize existing-history reconciliation. Historical syntax-negative fixtures now read the preserved old SQL, while current full-migration tests exercise actual corrected source. Expiry SQL's obsolete eight-file guard is replaced with the exact reviewed nine-file inventory, not an unbounded count.
+
+Source transport preserves real Git HEAD/history via a local bundle plus hash-bound dirty source overlay. Only the established R6 text normalization is applied; SQL/log bytes remain exact. The Linux copy is not assigned a synthetic clean commit. Owned source resync refuses unrecorded modifications and backs up previous source before replacing it, without touching caches or evidence.
+
+Rust1.85.1 is installed from its versioned archive and HTTPS-published SHA256; Node24.22.3 uses the official release's pinned Linux-x64 digest. This is not detached-signature validation of these tools. The Windows venv/toolchain remains untouched. A separate Linux venv uses existing security requirements. Playwright determines actual browser OS dependencies; only that package-install step is privileged in the owned new distro. Build/test programs explicitly use the non-root user and local real Rust binaries. Fetch is locked; subsequent builds/tests are offline.
+
+The DB phase owns its fresh PG16 data directory, loopback port, private random SCRAM password and test database. It requires a pristine new cluster, applies current migrations, discovers34 native persistence tests and executes them serially, followed by expiry/COMMIT and synthetic-role suites. It checks schema/database/role cleanup and stops its own cluster; it never assumes a default service or guesses a deployment URL. The orchestrated server ignored test and other live/manual/independent gates remain distinct pending work. Known password/URL values are redacted from phase logs; raw PG logs and password/data files are not exported to host logs.
+
+Reports and redacted phase logs are exported from the ext4 evidence tree to the current Windows evidence bundle, with hashes, so subsequent review does not require mounting the VHD through the file tool. No independent approval or GO flag is generated. All newly installed next-stage code is source-reviewed only until the operator executes it; failed/time-limited WSL clients require actual Linux process/lock inspection before retry.
+
+### Fresh-baseline identifier matching correction
+
+The first next-stage host attempt (linux-next-9fde7e3d69654f4e8e2829472cc59d81) failed in local helper tests before canonical mutation or guest work. The new helper had regressed the previously reviewed standalone-word transform into substring count/replace, wrongly including authorization_version and constraint names. The fix restores byte-level standalone matching on the SHA384-pinned original. Hash verification remains mandatory and has its own diagnostic; there is no checksum rebasing or SQL/log normalization. The same six-test gate now also verifies an independently spelled-out three-site patch and preservation of longer identifiers. This is an implementation bug fix, not a relaxed test/spec; the corrected helper awaits execution. README command/storage contract remains unchanged.
+
+### Verified snapshot/fresh baseline; Linux trust prerequisite
+
+Host evidence linux-next-c7a67f2f54d1484789ae5422f8eb3235 confirms the six helper checks, ownership check, exact three-site fresh baseline and verified source snapshot. Corrected target SHA384 is 0c654cf48f5f48e8f74cddc01bc551ce7c02fed9bbb2bb7ddea32bffdb89bc2fefb89ece503d4db2ab81c4d343e4dc69; the other eight hashes stayed unchanged. No DB history reconciliation occurred. Linux tools failed at HTTPS issuer validation before an installation phase, not during compilation or extraction; no worker lock remains in the exported observation.
+
+wsl-tls-check.py adds read-only acquisition-trust diagnosis. Certificate and hostname checking remain mandatory on both platforms. Windows public chains come from SSLSocket.get_verified_chain after a successful handshake; candidate anchors are additionally matched against server-auth-trusted CA entries in the existing Windows ROOT store. Only public PEM and metadata are exported beneath repository evidence. Linux reports unchanged default trust paths and loaded CA hashes. No new trust is installed, inferred from a failed handshake, or granted to a downloaded certificate. Direct probes do not represent authenticated HTTP-proxy transport. The exact issuer/fingerprint and trust scope need review before any trust-store adaptation. This new diagnostic awaits host execution and does not rerun source mutation, provisioning, compiler setup or database tests.
+
+### Approved acceptance-distro enterprise CA chain repair
+
+The diagnostic wsl-tls-1095c66fe87d4825817b6c28b19121f8 established the five-host Windows-vs-Linux trust difference and the exact RSTA-CA DER SHA256 93d1dbce2c583b226bbd80c6d4480ce99bf8c9de6f9bca25f2929ecc38f05741. RSTA is a trusted-store anchor with a distinct drsmaster-ca issuer, not a self-signed root. The operator approved narrowly scoped trust adaptation and automatic resumption after HTTPS verification.
+
+enterprise_ca.py resolves the exact approved anchor through existing Windows public ROOT/CA entries to a unique valid self-signed server-auth-trusted root, checking certificate signatures, CA/key-usage/validity/path-length constraints. This bounded preliminary resolver is followed by actual TLS path/hostname verification, not represented as a full X.509 validator. No certificate retrieval or name-only trust decision occurs. Missing/ambiguous paths stop; no intermediate-only partial-chain fallback.
+
+repair-wsl-trust.py --approve-rsta-chain --resume runs six policy tests, verifies full-chain Windows TLS, validates distro ownership/backing/worker exclusion, transfers hash-bound public PEMs, validates a root-owned staged chain with OpenSSL and updates only the acceptance distro's CA store. Existing differing files are rejected; equal files are idempotent. A root-owned /etc/worldwright-enterprise receipt binds exact ordered certificate fingerprints and bundle hash. Linux HTTPS must pass for all seven download hosts before the existing next stage is invoked. Root files live on the approved E:-backed guest disk; no Windows or other-distro trust mutation.
+
+The Linux worker verifies that receipt, file ownership/modes/backing and bundle hashes before setting process-local NODE_EXTRA_CA_CERTS. Node's bundled public roots remain active, and a real seven-host Node TLS probe checks authorized hostname-verified connections before browser downloads. The privileged Playwright dependency subprocess receives the same explicit bundle path. No NODE_TLS_REJECT_UNAUTHORIZED=0, insecure curl/pip flags or SSL partial-chain workaround is introduced. The trust receipt is setup provenance, never a signed release acceptance. Code is installed but execution of this repair/its tests remains pending.
+
+### First native PostgreSQL failures — explicit contract decisions
+
+Trust repair92903598a2be4655aff514f481afc99f completed with the RSTA/drsmaster chain
+and seven verified Linux HTTPS hosts. Linux next-stage6151b52e7ac94161a99671116edd06cf
+then passed format/check/scoped Clippy/build, regular workspace tests/doctests,
+selected Python helpers,12 real-binary launcher tests, nine supplementary SQL tests
+and13 role tests. The34 native adapter tests produced17 passes/17 failures. The
+owned cluster stopped successfully. The final cleanup exception was subsequent,
+not the primary test failure. No current corrected-source pass is inferred.
+
+Fourteen failures shared a real begin_activation_inner bug: maintenance became true
+before a pending activation existed. The existing immediate CHECK/FK constraints
+remain unchanged. Begin now retains constraint-valid idle state while updating
+writer authority and inserting the activation record, then updates both world
+pointer and maintenance together under the same row lock/transaction. An existing
+native test now injects an update failure and asserts complete rollback before a
+successful begin/complete; this does not alter the34-test inventory.
+
+Restore fencing exposed another implementation bug: valid epoch0 quarantine was
+converted with a positive-only decoder and returned InvalidData. Operations,
+game-state, release-read and release fencing now decode a nonnegative epoch before
+comparing it with the positive active lease. Zero mismatch is StaleWriter; negatives
+remain InvalidData. Existing writer-fencing and R6 restore tests retain/strengthen
+that required classification.
+
+Two stale fixtures were judged against existing contracts, not rewritten to mirror
+arbitrary outputs: reward replay ignores server-generated candidate item/operation
+IDs (documented intent fingerprint), so the test varies both IDs for replay and
+changes generation for a real conflict. Legacy production submissions are refused
+at submission, not activation. The M6 case, previously blocked at begin, also had
+an inconsistent admin-abort step: it now asserts different-executor refusal and
+uses the existing authorized recovery/takeover API before aborting its own plan.
+No production gate, session/claim requirement, executor binding, DB constraint,
+receipt fingerprint or migration hash changes in this pass.
+
+Worker reports now retain the live failure list, exact native failed-case names
+and result counts before cleanup. Cleanup records remaining schemas/databases/roles
+and attribution to captured failed-test creation markers; it still fails for any
+leftovers and never deletes them automatically. Old failed data is preserved in its
+stopped run-specific cluster, not reused as a passing baseline.
+
+--reuse-tools adds offline cache verification (exact binary hashes/versions, Python
+pins/pip-check, actual cached Chromium launch and locked metadata), skipping tool
+installs, browser downloads, Cargo fetch and apt. Checks/builds still execute using
+incremental artifacts and a fresh owned DB cluster. The verification action keeps
+the existing linux-tools evidence naming for export compatibility. New code and
+fixture changes have not yet been host-executed.
+
+### Cleanup placeholder correction after the34-test pass
+
+linux-next-10a5464cf79748ef8fa994f8c7bf39ca / linux-checks-3a255738075147f88672751a3059088a passed all34 native persistence tests,9 supplementary SQL tests and13 role tests. The remaining error was harness-only: a database residue SELECT mixed LIKE 'worldwright_test%' with Psycopg %s parameters. Psycopg parses literal percent signs whenever bound parameters are supplied. The pattern is now a bound value alongside the excluded database name; the search scope and cleanup failure criteria are unchanged. The existing six-test stage gate now statically rejects unescaped percent syntax in parameterized literal worker queries and requires this exact bound-pattern query. No Rust/application/migration/trust/cache changes. The cluster stopped successfully, and old passing test logs remain intact; cleanup/final-source reporting still need actual execution before whole-stage success.

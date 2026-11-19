@@ -467,7 +467,7 @@ impl PostgresStore {
         let Some((epoch, writer, incarnation, active, pending, maintenance)) = row else {
             return Err(PersistenceError::StaleWriter);
         };
-        if u64_from_i64(epoch, true)? != lease.epoch()
+        if u64_from_i64(epoch, false)? != lease.epoch()
             || writer != Some(uuid_of(lease.writer()))
             || incarnation != uuid_of(lease.incarnation())
             || digest(active)? != Some(expected_release)
@@ -856,8 +856,10 @@ impl PostgresStore {
         if kind == PublicationKind::Rollback && current.known_good != Some(target_digest) {
             return Err(PersistenceError::InvalidTransition);
         }
+        // Keep the idle row constraint-valid until the activation FK target exists.
+        // The world lock and transaction fence concurrent readers/writers throughout.
         let writer_row: Option<(uuid::Uuid, i64)> = sqlx::query_as(
-            "UPDATE worldwright_worlds SET writer_epoch = writer_epoch + 1, active_writer_id = $2, release_maintenance = TRUE, updated_at = clock_timestamp() WHERE world_id = $1 AND writer_epoch < 9223372036854775807 RETURNING authority_incarnation, writer_epoch",
+            "UPDATE worldwright_worlds SET writer_epoch = writer_epoch + 1, active_writer_id = $2, updated_at = clock_timestamp() WHERE world_id = $1 AND writer_epoch < 9223372036854775807 RETURNING authority_incarnation, writer_epoch",
         )
         .bind(world_uuid)
         .bind(uuid_of(writer))
@@ -910,7 +912,7 @@ impl PostgresStore {
         .execute(&mut *tx)
         .await?;
         let changed = sqlx::query(
-            "UPDATE worldwright_worlds SET pending_activation_id = $2 WHERE world_id = $1 AND pending_activation_id IS NULL",
+            "UPDATE worldwright_worlds SET pending_activation_id = $2, release_maintenance = TRUE WHERE world_id = $1 AND pending_activation_id IS NULL AND release_maintenance = FALSE",
         )
         .bind(world_uuid)
         .bind(uuid_of(activation))
@@ -1630,7 +1632,7 @@ async fn fence_release(
     let Some((epoch, writer, incarnation)) = row else {
         return Err(PersistenceError::StaleWriter);
     };
-    if u64_from_i64(epoch, true)? != lease.epoch()
+    if u64_from_i64(epoch, false)? != lease.epoch()
         || writer != Some(uuid_of(lease.writer()))
         || incarnation != uuid_of(lease.incarnation())
     {

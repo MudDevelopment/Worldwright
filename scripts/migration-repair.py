@@ -6,6 +6,8 @@ import json
 import os
 import re
 import time
+import worldwright_local as local
+from fresh_baseline import baseline_bytes
 from urllib.parse import urlsplit,parse_qs
 ROOT=Path(__file__).resolve().parents[1]
 TARGET='20261106000100_operational_control.sql'
@@ -20,15 +22,14 @@ def write(path,value):
         stream.write(data);stream.flush();os.fsync(stream.fileno())
 
 def output(path):
-    path=Path(path).resolve();require(not path.exists() and not path.is_relative_to(ROOT.resolve()),'new external output directory required')
+    local.configure_tools_environment();path=local.new_output(path)
     path.mkdir(mode=0o700);return path
 
 def proposal(root=ROOT):
     path=Path(root)/'migrations'/TARGET
     require(path.is_file() and not path.is_symlink() and path.stat().st_size<=1024*1024,'bounded original migration required')
-    data=path.read_bytes();require(hashlib.sha384(data).hexdigest()==EXPECTED,'original migration hash differs; stop for baseline/history review')
-    text=data.decode('utf-8');require(len(re.findall(r'\bauthorization\b',text))==3,'unexpected identifier sites')
-    fixed=re.sub(r'\bauthorization\b','"authorization"',text).encode()
+    data,fixed=baseline_bytes(root)
+    require(path.read_bytes() in (data,fixed),'current migration differs from both reviewed baselines; stop for history review')
     return data,fixed
 
 def disposition(history):

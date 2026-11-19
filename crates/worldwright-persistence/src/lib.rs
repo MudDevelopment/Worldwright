@@ -466,6 +466,16 @@ mod database_tests {
                 .await
                 .is_ok()
         );
+        // A valid zero-epoch quarantine still fences a formerly active lease.
+        sqlx::query("UPDATE worldwright_worlds SET writer_epoch = 0, active_writer_id = NULL WHERE world_id = $1")
+            .bind(types::uuid_of(lease_b.world()))
+            .execute(db.store.pool_for_test())
+            .await
+            .unwrap();
+        assert!(matches!(
+            db.store.inventory_with_lease(lease_b, &actor).await,
+            Err(PersistenceError::StaleWriter)
+        ));
         db.finish().await;
     }
 
@@ -507,7 +517,7 @@ mod database_tests {
                 &actor,
                 "welcome",
                 OperationId::from_u128(99).unwrap(),
-                reward(1, "welcome", 1),
+                reward(99, "welcome", 1),
             )
             .await
             .unwrap();
@@ -536,7 +546,7 @@ mod database_tests {
                     &actor,
                     "welcome",
                     OperationId::from_u128(2).unwrap(),
-                    reward(2, "welcome", 1)
+                    reward(2, "welcome", 2)
                 )
                 .await,
             Err(PersistenceError::ReceiptConflict)
@@ -1613,6 +1623,56 @@ mod database_tests {
             .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
             .await
             .expect("review");
+        // Force the final world-pointer update to fail after the activation row
+        // has been inserted. Epoch, pending state and activation must roll back.
+        sqlx::query("CREATE FUNCTION test_reject_pending() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic activation failure'; END; $$")
+            .execute(db.store.pool_for_test())
+            .await
+            .unwrap();
+        sqlx::query("CREATE TRIGGER test_reject_pending BEFORE UPDATE ON worldwright_worlds FOR EACH ROW WHEN (NEW.pending_activation_id IS NOT NULL) EXECUTE FUNCTION test_reject_pending()")
+            .execute(db.store.pool_for_test())
+            .await
+            .unwrap();
+        assert!(matches!(
+            db.store
+                .begin_activation(
+                    request,
+                    worldwright_core::ids::ActivationId::from_u128(19).unwrap(),
+                    WriterId::from_u128(2).unwrap(),
+                    "operator",
+                )
+                .await,
+            Err(PersistenceError::Database(_))
+        ));
+        let unchanged = db.store.release_state(world).await.unwrap();
+        assert_eq!(unchanged.pending(), None);
+        assert!(!unchanged.maintenance());
+        let writer: (i64, Option<uuid::Uuid>) = sqlx::query_as(
+            "SELECT writer_epoch, active_writer_id FROM worldwright_worlds WHERE world_id = $1",
+        )
+        .bind(types::uuid_of(world))
+        .fetch_one(db.store.pool_for_test())
+        .await
+        .unwrap();
+        assert_eq!(writer, (0, None));
+        let activations: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM worldwright_release_activations")
+                .fetch_one(db.store.pool_for_test())
+                .await
+                .unwrap();
+        assert_eq!(activations, 0);
+        assert_eq!(
+            db.store.publication(request).await.unwrap().status(),
+            PublicationStatus::Approved
+        );
+        sqlx::query("DROP TRIGGER test_reject_pending ON worldwright_worlds")
+            .execute(db.store.pool_for_test())
+            .await
+            .unwrap();
+        sqlx::query("DROP FUNCTION test_reject_pending()")
+            .execute(db.store.pool_for_test())
+            .await
+            .unwrap();
         let plan = db
             .store
             .begin_activation(
@@ -1623,6 +1683,12 @@ mod database_tests {
             )
             .await
             .expect("begin");
+        let pending = db.store.release_state(world).await.unwrap();
+        assert_eq!(
+            pending.pending(),
+            Some(ActivationId::from_u128(20).unwrap())
+        );
+        assert!(pending.maintenance());
         db.store.complete_activation(plan).await.expect("complete");
         let active = db.store.active_artifact(world).await.expect("active");
         assert_eq!(active.digest(), digest);
@@ -1637,46 +1703,42 @@ mod database_tests {
         let world = WorldId::from_u128(1).unwrap();
         let artifact = release_artifact("release-production");
         let request = worldwright_core::ids::PublicationId::from_u128(30).unwrap();
-        db.store
-            .submit_publication(
-                request,
-                world,
-                &artifact,
-                PublicationKind::Activate,
-                DeploymentTarget::Production,
-                Some(worldwright_release::Sha256Digest::from_bytes(b"wrong")),
-                "requester",
-            )
-            .await
-            .expect_err("stale expected release must fail");
-        let request = worldwright_core::ids::PublicationId::from_u128(31).unwrap();
-        db.store
-            .submit_publication(
-                request,
-                world,
-                &artifact,
-                PublicationKind::Activate,
-                DeploymentTarget::Production,
-                None,
-                "requester",
-            )
-            .await
-            .expect("publication");
-        db.store
-            .review_publication(request, "reviewer", ReviewDecision::Approve, "approve")
-            .await
-            .expect("review");
         assert!(matches!(
             db.store
-                .begin_activation(
+                .submit_publication(
                     request,
-                    worldwright_core::ids::ActivationId::from_u128(32).unwrap(),
-                    WriterId::from_u128(2).unwrap(),
-                    "operator",
+                    world,
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Staging,
+                    Some(worldwright_release::Sha256Digest::from_bytes(b"wrong")),
+                    "requester",
+                )
+                .await,
+            Err(PersistenceError::ExpectedReleaseConflict)
+        ));
+        let request = worldwright_core::ids::PublicationId::from_u128(31).unwrap();
+        // Legacy unauthenticated production requests are refused at submission,
+        // not deferred until activation. The auth-v1 gate is not weakened.
+        assert!(matches!(
+            db.store
+                .submit_publication(
+                    request,
+                    world,
+                    &artifact,
+                    PublicationKind::Activate,
+                    DeploymentTarget::Production,
+                    None,
+                    "requester",
                 )
                 .await,
             Err(PersistenceError::ProductionGateRequired)
         ));
+        assert!(matches!(
+            db.store.publication(request).await,
+            Err(PersistenceError::NotFound)
+        ));
+        assert!(release_audit_actions(&db, world).await.is_empty());
         db.finish().await;
     }
 
@@ -2387,10 +2449,32 @@ mod database_tests {
                 .await,
             Err(PersistenceError::RecoveryConflict)
         ));
+        // A different administrator must take over through authorized recovery;
+        // the original executor binding is not bypassed by ManageOperators.
+        assert!(matches!(
+            db.store
+                .fail_activation_authorized(
+                    &admin,
+                    plan,
+                    "operator_aborted",
+                    OperationId::from_u128(39).unwrap(),
+                )
+                .await,
+            Err(PersistenceError::OperatorDenied)
+        ));
+        let recovered = db
+            .store
+            .recover_activation_authorized(
+                &admin,
+                WriterId::from_u128(503).unwrap(),
+                OperationId::from_u128(40).unwrap(),
+            )
+            .await
+            .expect("authorized administrator takeover");
         db.store
             .fail_activation_authorized(
                 &admin,
-                plan,
+                recovered,
                 "operator_aborted",
                 OperationId::from_u128(27).unwrap(),
             )

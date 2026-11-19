@@ -210,3 +210,22 @@ restarting the same workspace. Keep the permanent marker and journals intact;
 only the operational session sentinel may be removed after all writers are
 confirmed stopped and evidence preserved. Full execution matrix:
 [R5_CHECK_PLAN.md](../R5_CHECK_PLAN.md). Native/live/independent gates remain open.
+
+## Native PostgreSQL statement-order correction
+
+The first34-test native adapter run exposed14 failures at activation begin: the
+implementation set release_maintenance=true in one statement while pending_activation_id
+was still NULL, violating the existing worldwright_release_maintenance_shape CHECK.
+That constraint is authoritative and is not relaxed. Under the existing world-row
+lock and transaction, begin now advances writer authority while retaining valid idle
+state, inserts the activation FK target, then sets pending_activation_id and
+release_maintenance=true together. Errors roll the entire transaction back. Native
+coverage now includes an injected final-update failure asserting no epoch, activation,
+pending-state or publication-status residue before a successful retry.
+
+Legacy unauthenticated production publication is already refused at submission;
+the stale test now checks this earlier gate instead of expecting a request to exist.
+A different administrator cannot abort another executor's authorized plan directly.
+The M6 fixture now proves that refusal, performs authorized recovery/takeover, and
+then aborts the newly owned plan. Production controls and executor binding stay intact.
+These corrections await a new execution; prior failure evidence is unchanged.

@@ -15,6 +15,8 @@ import uuid
 from urllib.parse import urlsplit, urlunsplit, urlencode, unquote
 import psycopg
 from psycopg import sql
+from fresh_baseline import inventory
+import worldwright_local as local
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -63,7 +65,7 @@ class ExpirySqlTests(unittest.TestCase):
                 cursor.execute("SET statement_timeout='5s'")
                 cursor.execute("SET lock_timeout='2s'")
             cls.migrations = {path.name:hashlib.sha384(path.read_bytes()).hexdigest() for path in sorted((ROOT/'migrations').glob('*.sql'))}
-            if len(cls.migrations) != 8: raise ValueError('expected reviewed eight-file inventory; review changed inventory')
+            if cls.migrations != inventory(ROOT): raise ValueError('reviewed nine-file inventory mismatch')
             # Authentication fixtures need these exact source migrations only.
             # The separate FullMigrationTests below MUST run the complete inventory.
             for name in ('20261020000100_durable_gameplay.sql', '20261118000300_oidc_identity.sql'):
@@ -186,7 +188,7 @@ class FullMigrationTests(unittest.TestCase):
                     cursor.execute(sql.SQL('SET search_path TO {}').format(sql.Identifier(schema)))
                     cursor.execute("SET statement_timeout='5s'")
                 migrations=sorted((ROOT/'migrations').glob('*.sql'))
-                self.assertEqual(len(migrations),8)
+                self.assertEqual(tuple(p.name for p in migrations),tuple(inventory(ROOT)))
                 for migration in migrations:
                     print('WORLDWRIGHT_R2_MIGRATION='+migration.name,flush=True)
                     with db.transaction(),db.cursor() as cursor:
@@ -203,9 +205,7 @@ if __name__=='__main__':
     result=unittest.main(verbosity=2,exit=False).result
     report_path=os.environ.get('WORLDWRIGHT_R2_SQL_REPORT')
     if report_path:
-        path=Path(report_path).resolve()
-        if path.exists() or path.is_relative_to(ROOT) or not path.parent.is_dir():
-            raise ValueError('new supplementary report outside checkout required')
+        path=local.new_output(report_path)
         value={'schema_version':1,'kind':'supplementary-postgresql-fixture-sql','status':'passed' if result.wasSuccessful() and not result.skipped else 'failed','full_r2_closed':False,
             'scope':'actual fixture SQL/real PostgreSQL wire tests; NOT compiled Rust/SQLx/current-owner or approved-provider acceptance',
             'database':getattr(ExpirySqlTests,'identity',None),'tests_run':result.testsRun,'passed':result.testsRun-len(result.errors)-len(result.failures)-len(result.skipped),

@@ -8,10 +8,13 @@ repair=load('migration-repair');supply=load('supply-chain')
 class ReviewTests(unittest.TestCase):
     def test_proposal_does_not_edit_source(self):
         path=ROOT/'migrations'/repair.TARGET;before=path.read_bytes();old,new=repair.proposal()
-        self.assertEqual(old,before);self.assertNotEqual(new,old);self.assertEqual(new.count(b'"authorization"'),3);self.assertEqual(path.read_bytes(),before)
+        self.assertIn(before,(old,new));self.assertNotEqual(new,old);self.assertEqual(new.count(b'"authorization"'),3);self.assertEqual(path.read_bytes(),before)
+        self.assertEqual(hashlib.sha384(old).hexdigest(),repair.EXPECTED)
     def test_changed_original_is_not_automatically_repaired(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'migrations';p.mkdir();(p/repair.TARGET).write_bytes((ROOT/'migrations'/repair.TARGET).read_bytes()+b'\n')
+            history=Path(d)/'tests/fixtures/migration-history';history.mkdir(parents=True)
+            (history/repair.TARGET).write_bytes((ROOT/'tests/fixtures/migration-history'/repair.TARGET).read_bytes())
             with self.assertRaises(ValueError):repair.proposal(Path(d))
     def test_every_history_disposition_requires_review(self):
         self.assertEqual(repair.disposition(None),'history-inventory-required')

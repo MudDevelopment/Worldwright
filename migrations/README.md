@@ -40,3 +40,9 @@ No source migration/checksum is edited by the preflight. Confirm applied history
 and obtain an authorized immutable-migration/baseline repair decision before
 repairing this blocker; a later additive migration cannot fix preceding syntax.
 Actual evidence is in `docs/verification/r2-acceptance-ledger.md`.
+
+## Authorized fresh baseline transition (November 18, 2026)
+
+The operator confirmed there are no existing databases to preserve and selected fresh isolated testing. `scripts/linux-next-stage.py --fresh-databases-only` now applies the reviewed three-site quoted `authorization` correction through `scripts/fresh_baseline.py`, with exact original SHA384 verification, old/new evidence, strict nine-file inventory and no other migration-byte changes. The helper refuses any unknown baseline. This code is installed; execution/application is pending until that command runs successfully.
+
+The original bytes are preserved at `tests/fixtures/migration-history/20261106000100_operational_control.sql` (SHA384 `6ddb32cf0e6f68bb1c0de353b58400896a90c664d0afc6c4401995fb2a8cf221d75f099c9ee16f4f794a394691e0998a`). Historical negative tests use that fixture; current migrations must apply successfully in fresh native PostgreSQL tests. Old evidence remains unchanged. This is a breaking baseline/checksum transition for any old database, NOT an upgrade path: discovering any existing applied history requires stopping for separately approved reconciliation. No `_sqlx_migrations` checksum repair is performed by the next-stage runner.

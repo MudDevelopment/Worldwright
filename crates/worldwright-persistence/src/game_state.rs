@@ -405,7 +405,7 @@ async fn lock_game_world(
     .fetch_optional(&mut **tx)
     .await?;
     let row = row.ok_or(PersistenceError::StaleWriter)?;
-    if u64_from_i64(row.0, true)? != lease.epoch()
+    if u64_from_i64(row.0, false)? != lease.epoch()
         || row.1 != Some(uuid_of(lease.writer()))
         || row.2 != uuid_of(lease.incarnation())
     {

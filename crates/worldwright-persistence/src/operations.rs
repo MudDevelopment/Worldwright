@@ -341,7 +341,8 @@ impl crate::store::PostgresStore {
         let Some((epoch, writer, incarnation)) = row else {
             return Err(PersistenceError::StaleWriter);
         };
-        if u64_from_i64(epoch, true)? != lease.epoch
+        // Zero is a valid seeded/restored no-writer state, not corrupt data.
+        if u64_from_i64(epoch, false)? != lease.epoch
             || writer != Some(uuid_of(lease.writer))
             || incarnation != uuid_of(lease.incarnation())
         {
